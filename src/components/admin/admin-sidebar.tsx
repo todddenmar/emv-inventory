@@ -13,6 +13,7 @@ import {
   Store,
   ArrowRightLeft,
   Layout,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -24,6 +25,7 @@ export const adminNavItems = [
   { href: "/admin/transfers", label: "Transfers", icon: ArrowRightLeft, masterOnly: false },
   { href: "/admin/branches", label: "Branches", icon: Store, masterOnly: true },
   { href: "/admin/homepage", label: "Homepage", icon: Layout, masterOnly: true },
+  { href: "/admin/settings", label: "Settings", icon: Settings, masterOnly: true },
   { href: "/admin/products", label: "Products", icon: Package, masterOnly: true },
   { href: "/admin/categories", label: "Categories", icon: Tags, masterOnly: true },
   { href: "/admin/orders", label: "Orders", icon: ShoppingBag, masterOnly: false },

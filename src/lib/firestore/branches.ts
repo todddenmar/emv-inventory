@@ -29,6 +29,11 @@ export async function getBranches(activeOnly = false): Promise<Branch[]> {
   return snapshot.docs.map((d) => d.data());
 }
 
+/** Active branches for public footer / store locator */
+export async function getPublicBranches(): Promise<Branch[]> {
+  return getBranches(true);
+}
+
 export async function getBranch(id: string): Promise<Branch | null> {
   const snap = await getDoc(doc(branchesRef(), id));
   return snap.exists() ? snap.data() : null;

@@ -46,6 +46,7 @@ import {
   updateBranch,
 } from "@/lib/firestore/branches";
 import { assignUserBranch, getManagers } from "@/lib/firestore/users";
+import { parseCoordinate } from "@/lib/location";
 import type { AppUser, Branch } from "@/types";
 
 export default function AdminBranchesPage() {
@@ -60,6 +61,8 @@ export default function AdminBranchesPage() {
     name: "",
     code: "",
     address: "",
+    latitude: "",
+    longitude: "",
     phone: "",
     managerId: "",
     isOnlineShop: false,
@@ -97,6 +100,8 @@ export default function AdminBranchesPage() {
       name: "",
       code: "",
       address: "",
+      latitude: "",
+      longitude: "",
       phone: "",
       managerId: "",
       isOnlineShop: false,
@@ -110,6 +115,8 @@ export default function AdminBranchesPage() {
       name: branch.name,
       code: branch.code,
       address: branch.address,
+      latitude: branch.latitude != null ? String(branch.latitude) : "",
+      longitude: branch.longitude != null ? String(branch.longitude) : "",
       phone: branch.phone ?? "",
       managerId: branch.managerId ?? "",
       isOnlineShop: branch.isOnlineShop,
@@ -126,11 +133,34 @@ export default function AdminBranchesPage() {
 
     setSubmitting(true);
     try {
+      const latitude = parseCoordinate(form.latitude);
+      const longitude = parseCoordinate(form.longitude);
+
+      if (
+        (form.latitude.trim() && latitude == null) ||
+        (form.longitude.trim() && longitude == null)
+      ) {
+        toast.error("Coordinates must be valid numbers");
+        setSubmitting(false);
+        return;
+      }
+
+      if (
+        (latitude != null && longitude == null) ||
+        (latitude == null && longitude != null)
+      ) {
+        toast.error("Provide both latitude and longitude, or leave both empty");
+        setSubmitting(false);
+        return;
+      }
+
       const manager = managers.find((m) => m.uid === form.managerId);
       const payload = {
         name: form.name.trim(),
         code: form.code.trim().toUpperCase(),
         address: form.address.trim(),
+        latitude,
+        longitude,
         phone: form.phone.trim() || null,
         managerId: form.managerId || null,
         managerName: manager?.displayName || manager?.email || null,
@@ -216,6 +246,30 @@ export default function AdminBranchesPage() {
                   setForm({ ...form, address: e.target.value })
                 }
               />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="branch-latitude">Latitude (optional)</Label>
+                <Input
+                  id="branch-latitude"
+                  value={form.latitude}
+                  onChange={(e) =>
+                    setForm({ ...form, latitude: e.target.value })
+                  }
+                  placeholder="14.5995"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="branch-longitude">Longitude (optional)</Label>
+                <Input
+                  id="branch-longitude"
+                  value={form.longitude}
+                  onChange={(e) =>
+                    setForm({ ...form, longitude: e.target.value })
+                  }
+                  placeholder="120.9842"
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="branch-phone">Phone (optional)</Label>

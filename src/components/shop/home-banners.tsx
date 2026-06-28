@@ -11,15 +11,23 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 import { BannerSkeleton } from "@/components/shop/home-skeletons";
+import { BrandLogo } from "@/components/layout/brand-logo";
+import { cn } from "@/lib/utils";
 import type { HomeBanner } from "@/types";
 
 interface HomeBannersProps {
   banners: HomeBanner[];
   loading?: boolean;
+  variant?: "default" | "home";
 }
 
-export function HomeBanners({ banners, loading }: HomeBannersProps) {
+export function HomeBanners({
+  banners,
+  loading,
+  variant = "default",
+}: HomeBannersProps) {
   const [api, setApi] = useState<CarouselApi>();
+  const isHome = variant === "home";
 
   useEffect(() => {
     if (!api || banners.length <= 1) return;
@@ -27,30 +35,61 @@ export function HomeBanners({ banners, loading }: HomeBannersProps) {
     return () => clearInterval(timer);
   }, [api, banners.length]);
 
-  if (loading) return <BannerSkeleton />;
+  if (loading) return <BannerSkeleton variant={variant} />;
 
   if (banners.length === 0) return null;
 
   return (
-    <section className="relative px-1">
+    <section className={cn("relative", !isHome && "px-1")}>
       <Carousel setApi={setApi} opts={{ loop: banners.length > 1 }}>
         <CarouselContent>
           {banners.map((banner) => {
             const content = (
-              <div className="relative aspect-[21/9] overflow-hidden rounded-xl sm:aspect-[3/1]">
+              <div
+                className={cn(
+                  "relative overflow-hidden",
+                  isHome
+                    ? "aspect-[4/3] rounded-3xl border-2 border-brand-black/15 shadow-xl"
+                    : "aspect-[21/9] rounded-xl sm:aspect-[3/1]"
+                )}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={banner.imageUrl}
                   alt={banner.title}
                   className="h-full w-full object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent" />
+                <div
+                  className={cn(
+                    "absolute inset-0",
+                    isHome
+                      ? "bg-gradient-to-t from-brand-black/80 via-brand-black/20 to-transparent"
+                      : "bg-gradient-to-r from-black/60 via-black/30 to-transparent"
+                  )}
+                />
+                {!isHome && (
+                  <div className="absolute left-4 top-4 sm:left-6 sm:top-6">
+                    <BrandLogo size="md" showName={false} className="drop-shadow-lg" />
+                  </div>
+                )}
                 <div className="absolute inset-0 flex flex-col justify-end p-5 sm:p-8">
-                  <h2 className="max-w-xl text-xl font-bold text-white sm:text-3xl">
+                  <h2
+                    className={cn(
+                      "max-w-xl font-bold",
+                      isHome
+                        ? "text-xl text-brand-yellow sm:text-2xl"
+                        : "text-xl text-white sm:text-3xl"
+                    )}
+                  >
                     {banner.title}
                   </h2>
                   {banner.subtitle && (
-                    <p className="mt-1 max-w-lg text-sm text-white/90 sm:text-base">
+                    <p
+                      className={cn(
+                        "mt-1 max-w-lg text-sm sm:text-base",
+                        isHome ? "text-brand-yellow/80" : "text-white/90"
+                      )}
+                    >
                       {banner.subtitle}
                     </p>
                   )}
@@ -73,8 +112,22 @@ export function HomeBanners({ banners, loading }: HomeBannersProps) {
         </CarouselContent>
         {banners.length > 1 && (
           <>
-            <CarouselPrevious className="left-3 border-0 bg-background/80" />
-            <CarouselNext className="right-3 border-0 bg-background/80" />
+            <CarouselPrevious
+              className={cn(
+                "left-3 border-0",
+                isHome
+                  ? "bg-brand-black/80 text-brand-yellow hover:bg-brand-black"
+                  : "bg-background/80"
+              )}
+            />
+            <CarouselNext
+              className={cn(
+                "right-3 border-0",
+                isHome
+                  ? "bg-brand-black/80 text-brand-yellow hover:bg-brand-black"
+                  : "bg-background/80"
+              )}
+            />
           </>
         )}
       </Carousel>

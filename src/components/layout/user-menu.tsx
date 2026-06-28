@@ -19,11 +19,13 @@ import { cn } from "@/lib/utils";
 interface UserMenuProps {
   compact?: boolean;
   showAdminLink?: boolean;
+  className?: string;
 }
 
 export function UserMenu({
   compact = false,
   showAdminLink = true,
+  className,
 }: UserMenuProps) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -46,10 +48,11 @@ export function UserMenu({
       <DropdownMenuTrigger
         render={
           <Button
-            variant="outline"
+            variant="ghost"
             size={compact ? "icon" : "sm"}
             className={cn(
-              compact ? "size-9 shrink-0 p-1" : "h-auto gap-2.5 py-1.5 pl-1.5 pr-3"
+              compact ? "size-9 shrink-0 p-1" : "h-auto gap-2.5 py-1.5 pl-1.5 pr-3",
+              className
             )}
           >
             <UserAvatar

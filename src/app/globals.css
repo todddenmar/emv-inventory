@@ -46,9 +46,13 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-black: var(--brand-black);
 }
 
 :root {
+  --brand-yellow: #f4c430;
+  --brand-black: #0a0a0a;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -115,6 +119,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer utilities {
+  .home-pill {
+    @apply rounded-full;
+  }
 }
 
 @layer base {

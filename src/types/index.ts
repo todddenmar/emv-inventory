@@ -17,12 +17,36 @@ export interface Branch {
   name: string;
   code: string;
   address: string;
+  latitude: number | null;
+  longitude: number | null;
   phone: string | null;
   managerId: string | null;
   managerName: string | null;
   isActive: boolean;
   isOnlineShop: boolean;
   createdAt: Date;
+  updatedAt: Date;
+}
+
+export type SocialPlatform =
+  | "facebook"
+  | "instagram"
+  | "twitter"
+  | "tiktok"
+  | "youtube"
+  | "website";
+
+export interface SocialLink {
+  platform: SocialPlatform;
+  url: string;
+  label: string | null;
+}
+
+export interface SiteSettings {
+  footerAddress: string;
+  footerPhone: string | null;
+  footerEmail: string | null;
+  socialLinks: SocialLink[];
   updatedAt: Date;
 }
 

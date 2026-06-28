@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
-  Package,
   ShoppingCart,
   User,
   LayoutDashboard,
@@ -21,24 +21,40 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { UserMenu } from "@/components/layout/user-menu";
 import { useAuthStore, useIsStaff } from "@/stores/auth-store";
 import { useCartStore } from "@/stores/cart-store";
 import { cn } from "@/lib/utils";
 
-function CartButton({ className }: { className?: string }) {
+function CartButton({
+  className,
+  homeStyle,
+}: {
+  className?: string;
+  homeStyle?: boolean;
+}) {
   const totalItems = useCartStore((s) => s.totalItems());
 
   return (
     <LinkButton
       href="/cart"
-      variant="outline"
+      variant="ghost"
       size="icon"
-      className={cn("relative shrink-0", className)}
+      className={cn(
+        "relative shrink-0",
+        homeStyle && "text-brand-yellow hover:bg-brand-yellow/10 hover:text-brand-yellow",
+        className
+      )}
     >
       <ShoppingCart className="h-4 w-4" />
       {totalItems > 0 && (
-        <Badge className="absolute -right-2 -top-2 h-5 min-w-5 px-1 text-xs">
+        <Badge
+          className={cn(
+            "absolute -right-2 -top-2 h-5 min-w-5 px-1 text-xs",
+            homeStyle && "bg-brand-yellow text-brand-black"
+          )}
+        >
           {totalItems}
         </Badge>
       )}
@@ -48,6 +64,8 @@ function CartButton({ className }: { className?: string }) {
 }
 
 export function SiteHeader() {
+  const pathname = usePathname();
+  const isHome = pathname === "/";
   const [menuOpen, setMenuOpen] = useState(false);
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
@@ -63,30 +81,64 @@ export function SiteHeader() {
 
   const closeMenu = () => setMenuOpen(false);
 
-  return (
-    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-16 items-center justify-between gap-3 px-4">
-        <Link href="/" className="flex min-w-0 items-center gap-2 font-semibold">
-          <Package className="h-5 w-5 shrink-0" />
-          <span className="truncate">El Mio Vicente</span>
-        </Link>
+  const navButtonClass = isHome
+    ? "text-brand-yellow hover:bg-brand-yellow/10 hover:text-brand-yellow"
+    : undefined;
 
-        {/* Desktop navigation */}
-        <nav className="hidden items-center gap-2 md:flex">
+  const signInClass = isHome
+    ? "rounded-full bg-brand-yellow text-brand-black hover:bg-brand-yellow/90"
+    : undefined;
+
+  return (
+    <header
+      className={cn(
+        "z-50",
+        isHome
+          ? "fixed inset-x-0 top-0 bg-transparent px-4 pt-4"
+          : "sticky top-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-14 items-center justify-between gap-3 sm:h-16",
+          isHome
+            ? "container mx-auto rounded-full border border-brand-yellow/20 bg-brand-black px-4 shadow-lg shadow-black/40 sm:px-6"
+            : "container mx-auto px-4"
+        )}
+      >
+        <BrandLogo
+          href="/"
+          size="sm"
+          priority
+          nameClassName={isHome ? "text-brand-yellow" : undefined}
+        />
+
+        <nav className="hidden items-center gap-1 md:flex">
           {navLinks.map((link) => (
-            <LinkButton key={link.href} href={link.href} variant="ghost">
+            <LinkButton
+              key={link.href}
+              href={link.href}
+              variant="ghost"
+              className={navButtonClass}
+            >
               {link.label}
             </LinkButton>
           ))}
 
-          <CartButton />
+          <CartButton homeStyle={isHome} />
 
           {!loading && (
             <>
               {user ? (
-                <UserMenu />
+                <UserMenu
+                  className={
+                    isHome
+                      ? "text-brand-yellow hover:bg-brand-yellow/10 [&_p]:text-brand-yellow [&_.text-muted-foreground]:text-brand-yellow/70"
+                      : undefined
+                  }
+                />
               ) : (
-                <LinkButton href="/login" size="sm">
+                <LinkButton href="/login" size="sm" className={signInClass}>
                   Sign in
                 </LinkButton>
               )}
@@ -94,22 +146,28 @@ export function SiteHeader() {
           )}
         </nav>
 
-        {/* Mobile actions */}
         <div className="flex items-center gap-2 md:hidden">
-          <CartButton />
+          <CartButton homeStyle={isHome} />
 
-          {!loading && (
-            <>
-              {user ? (
-                <UserMenu compact />
-              ) : null}
-            </>
-          )}
+          {!loading && user ? (
+            <UserMenu
+              compact
+              className={
+                isHome
+                  ? "text-brand-yellow hover:bg-brand-yellow/10"
+                  : undefined
+              }
+            />
+          ) : null}
 
           <Button
             variant="outline"
             size="icon"
-            className="shrink-0"
+            className={cn(
+              "shrink-0",
+              isHome &&
+                "border-brand-yellow/30 bg-transparent text-brand-yellow hover:bg-brand-yellow/10"
+            )}
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
           >
@@ -118,11 +176,15 @@ export function SiteHeader() {
         </div>
       </div>
 
-      {/* Mobile menu sheet */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="left" className="w-72">
+        <SheetContent
+          side="left"
+          className={cn("w-72", isHome && "border-brand-yellow/20 bg-brand-black")}
+        >
           <SheetHeader>
-            <SheetTitle>Menu</SheetTitle>
+            <SheetTitle className={isHome ? "text-brand-yellow" : undefined}>
+              Menu
+            </SheetTitle>
           </SheetHeader>
           <nav className="flex flex-col gap-1 px-4">
             {navLinks.map((link) => {
@@ -132,9 +194,19 @@ export function SiteHeader() {
                   key={link.href}
                   href={link.href}
                   onClick={closeMenu}
-                  className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+                  className={cn(
+                    "flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
+                    isHome
+                      ? "text-brand-yellow hover:bg-brand-yellow/10"
+                      : "hover:bg-muted"
+                  )}
                 >
-                  <Icon className="h-4 w-4 text-muted-foreground" />
+                  <Icon
+                    className={cn(
+                      "h-4 w-4",
+                      isHome ? "text-brand-yellow/70" : "text-muted-foreground"
+                    )}
+                  />
                   {link.label}
                 </Link>
               );
@@ -143,9 +215,19 @@ export function SiteHeader() {
             <Link
               href="/cart"
               onClick={closeMenu}
-              className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+              className={cn(
+                "flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
+                isHome
+                  ? "text-brand-yellow hover:bg-brand-yellow/10"
+                  : "hover:bg-muted"
+              )}
             >
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              <ShoppingCart
+                className={cn(
+                  "h-4 w-4",
+                  isHome ? "text-brand-yellow/70" : "text-muted-foreground"
+                )}
+              />
               Cart
             </Link>
 
@@ -153,9 +235,19 @@ export function SiteHeader() {
               <Link
                 href="/login"
                 onClick={closeMenu}
-                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+                className={cn(
+                  "flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
+                  isHome
+                    ? "text-brand-yellow hover:bg-brand-yellow/10"
+                    : "hover:bg-muted"
+                )}
               >
-                <User className="h-4 w-4 text-muted-foreground" />
+                <User
+                  className={cn(
+                    "h-4 w-4",
+                    isHome ? "text-brand-yellow/70" : "text-muted-foreground"
+                  )}
+                />
                 Sign in
               </Link>
             )}
@@ -164,9 +256,19 @@ export function SiteHeader() {
               <Link
                 href="/admin"
                 onClick={closeMenu}
-                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+                className={cn(
+                  "flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
+                  isHome
+                    ? "text-brand-yellow hover:bg-brand-yellow/10"
+                    : "hover:bg-muted"
+                )}
               >
-                <LayoutDashboard className="h-4 w-4 text-muted-foreground" />
+                <LayoutDashboard
+                  className={cn(
+                    "h-4 w-4",
+                    isHome ? "text-brand-yellow/70" : "text-muted-foreground"
+                  )}
+                />
                 Admin dashboard
               </Link>
             )}

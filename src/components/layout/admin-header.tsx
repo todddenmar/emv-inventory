@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, Package, Store } from "lucide-react";
+import { Menu, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { UserMenu } from "@/components/layout/user-menu";
 import { AdminNavLinks } from "@/components/admin/admin-sidebar";
 import { useAuthStore } from "@/stores/auth-store";
@@ -33,16 +34,12 @@ export function AdminHeader() {
           >
             <Menu className="h-4 w-4" />
           </Button>
-          <Link
-            href="/admin"
-            className="flex min-w-0 items-center gap-2 font-semibold"
-          >
-            <Package className="h-5 w-5 shrink-0" />
-            <span className="truncate">El Mio Vicente</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <BrandLogo href="/admin" size="sm" priority />
             <Badge variant="secondary" className="hidden sm:inline-flex">
               Admin
             </Badge>
-          </Link>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">

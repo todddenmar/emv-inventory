@@ -4,6 +4,8 @@ import "./globals.css";
 import { AuthProvider } from "@/components/providers/auth-provider";
 import { AppProviders } from "@/components/providers/app-providers";
 import { AppHeader } from "@/components/layout/app-header";
+import { AppFooter } from "@/components/layout/app-footer";
+import { BRAND_NAME } from "@/components/layout/brand-logo";
 
 const figtree = Figtree({
   variable: "--font-figtree",
@@ -11,8 +13,16 @@ const figtree = Figtree({
 });
 
 export const metadata: Metadata = {
-  title: "El Mio Vicente",
+  title: BRAND_NAME,
   description: "Inventory management and online ordering",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/images/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/images/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/images/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -30,6 +40,7 @@ export default function RootLayout({
           <AppProviders>
             <AppHeader />
             <main className="flex-1">{children}</main>
+            <AppFooter />
           </AppProviders>
         </AuthProvider>
       </body>

@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HomeBanners } from "@/components/shop/home-banners";
+import { Package, Truck, Banknote, Star } from "lucide-react";
+import { HomeHero } from "@/components/shop/home-hero";
 import { CategoriesSection } from "@/components/shop/categories-section";
 import { ProductsSection } from "@/components/shop/products-section";
 import { TestimonialsCarousel } from "@/components/shop/testimonials-carousel";
 import { HomePageSkeleton } from "@/components/shop/home-skeletons";
-import { LinkButton } from "@/components/ui/link-button";
 import { getActiveBanners, getActiveTestimonials } from "@/lib/firestore/homepage";
 import { getProducts } from "@/lib/firestore/products";
 import { getCategories } from "@/lib/firestore/categories";
@@ -15,6 +15,13 @@ import { getBranchInventory } from "@/lib/firestore/inventory";
 import { mergeProductsWithInventory } from "@/lib/inventory";
 import type { Category, HomeBanner, Testimonial } from "@/types";
 import type { ProductWithStock } from "@/lib/inventory";
+
+const HIGHLIGHTS = [
+  { icon: Package, label: "Quality products", value: "Curated" },
+  { icon: Truck, label: "Door delivery", value: "Fast" },
+  { icon: Banknote, label: "Cash on delivery", value: "Easy" },
+  { icon: Star, label: "Happy customers", value: "Trusted" },
+];
 
 export default function HomePage() {
   const [loading, setLoading] = useState(true);
@@ -54,33 +61,60 @@ export default function HomePage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-6">
-        <HomePageSkeleton />
-      </div>
-    );
+    return <HomePageSkeleton />;
   }
 
   return (
-    <div className="container mx-auto space-y-10 px-4 py-6">
-      <HomeBanners banners={banners} />
+    <div className="bg-white text-foreground">
+      <HomeHero banners={banners} />
 
-      <section className="rounded-xl border bg-muted/30 p-6 text-center sm:p-8">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Welcome to El Mio Vicente
-        </h1>
-        <p className="mx-auto mt-2 max-w-xl text-muted-foreground">
-          Quality products delivered to your door. Pay cash on delivery — simple
-          and convenient.
-        </p>
-        <LinkButton href="/shop" className="mt-4">
-          Browse all products
-        </LinkButton>
+      <section className="bg-white py-12 sm:py-16">
+        <div className="container mx-auto px-4">
+          <p className="mb-8 text-center text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Why shop with us
+          </p>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-6">
+            {HIGHLIGHTS.map(({ icon: Icon, label, value }) => (
+              <div
+                key={label}
+                className="flex flex-col items-center rounded-2xl border border-brand-yellow/25 bg-brand-yellow/10 px-4 py-6 text-center"
+              >
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-black text-brand-yellow">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <p className="text-xl font-bold text-brand-black">{value}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
-      <CategoriesSection categories={categories} />
-      <ProductsSection products={products} categories={categories} />
-      <TestimonialsCarousel testimonials={testimonials} />
+      <section className="bg-white py-12 sm:py-16">
+        <div className="container mx-auto px-4">
+          <CategoriesSection categories={categories} variant="home" />
+        </div>
+      </section>
+
+      <section className="bg-white py-12 sm:py-16">
+        <div className="container mx-auto px-4">
+          <ProductsSection
+            products={products}
+            categories={categories}
+            variant="home"
+          />
+        </div>
+      </section>
+
+      <section className="rounded-t-[2rem] bg-brand-black py-14 text-brand-yellow sm:rounded-t-[2.5rem] sm:py-20">
+        <div className="container mx-auto px-4">
+          <TestimonialsCarousel
+            testimonials={testimonials}
+            variant="home"
+            dark
+          />
+        </div>
+      </section>
     </div>
   );
 }

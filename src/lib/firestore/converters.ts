@@ -5,7 +5,7 @@ import {
   SnapshotOptions,
   Timestamp,
 } from "firebase/firestore";
-import type { AppUser, Branch, BranchInventory, BranchTransfer, Category, HomeBanner, InventoryLog, Invite, Order, Product, ProductImage, ProductSpec, Testimonial } from "@/types";
+import type { AppUser, Branch, BranchInventory, BranchTransfer, Category, HomeBanner, InventoryLog, Invite, Order, Product, ProductImage, ProductSpec, SiteSettings, SocialLink, SocialPlatform, Testimonial } from "@/types";
 import { resolveSlug } from "@/lib/slug";
 
 function toDate(value: Timestamp | Date | undefined | null): Date {
@@ -72,6 +72,8 @@ export const branchConverter: FirestoreDataConverter<Branch> = {
       name: branch.name,
       code: branch.code,
       address: branch.address,
+      latitude: branch.latitude,
+      longitude: branch.longitude,
       phone: branch.phone,
       managerId: branch.managerId,
       managerName: branch.managerName,
@@ -91,6 +93,8 @@ export const branchConverter: FirestoreDataConverter<Branch> = {
       name: data.name,
       code: data.code ?? "",
       address: data.address ?? "",
+      latitude: typeof data.latitude === "number" ? data.latitude : null,
+      longitude: typeof data.longitude === "number" ? data.longitude : null,
       phone: data.phone ?? null,
       managerId: data.managerId ?? null,
       managerName: data.managerName ?? null,
@@ -435,6 +439,53 @@ export const branchTransferConverter: FirestoreDataConverter<BranchTransfer> = {
       createdBy: data.createdBy,
       createdByName: data.createdByName ?? null,
       createdAt: toDate(data.createdAt),
+    };
+  },
+};
+
+const SOCIAL_PLATFORMS: SocialPlatform[] = [
+  "facebook",
+  "instagram",
+  "twitter",
+  "tiktok",
+  "youtube",
+  "website",
+];
+
+function parseSocialLinks(raw: unknown): SocialLink[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item) => item && typeof item.url === "string" && item.url.trim())
+    .map((item) => ({
+      platform: SOCIAL_PLATFORMS.includes(item.platform)
+        ? item.platform
+        : "website",
+      url: item.url.trim(),
+      label: item.label?.trim() || null,
+    }));
+}
+
+export const siteSettingsConverter: FirestoreDataConverter<SiteSettings> = {
+  toFirestore(settings: SiteSettings): DocumentData {
+    return {
+      footerAddress: settings.footerAddress,
+      footerPhone: settings.footerPhone,
+      footerEmail: settings.footerEmail,
+      socialLinks: settings.socialLinks,
+      updatedAt: settings.updatedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): SiteSettings {
+    const data = snapshot.data(options);
+    return {
+      footerAddress: data.footerAddress ?? "",
+      footerPhone: data.footerPhone ?? null,
+      footerEmail: data.footerEmail ?? null,
+      socialLinks: parseSocialLinks(data.socialLinks),
+      updatedAt: toDate(data.updatedAt),
     };
   },
 };

@@ -12,25 +12,47 @@ import {
   TestimonialsSectionSkeleton,
   TestimonialSkeleton,
 } from "@/components/shop/home-skeletons";
+import { cn } from "@/lib/utils";
 import type { Testimonial } from "@/types";
 
 interface TestimonialsCarouselProps {
   testimonials: Testimonial[];
   loading?: boolean;
+  variant?: "default" | "home";
+  dark?: boolean;
 }
 
 export function TestimonialsCarousel({
   testimonials,
   loading,
+  variant = "default",
+  dark = false,
 }: TestimonialsCarouselProps) {
-  if (loading) return <TestimonialsSectionSkeleton />;
+  const isHome = variant === "home";
+  const isDark = isHome && dark;
+
+  if (loading) {
+    return <TestimonialsSectionSkeleton variant={variant} dark={dark} />;
+  }
 
   if (testimonials.length === 0) {
     return (
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold sm:text-2xl">Happy customers</h2>
-        <TestimonialSkeleton />
-        <p className="text-center text-sm text-muted-foreground">
+        <h2
+          className={cn(
+            "text-2xl font-bold sm:text-3xl",
+            isDark ? "text-brand-yellow" : isHome && "text-brand-black"
+          )}
+        >
+          Happy customers
+        </h2>
+        <TestimonialSkeleton variant={variant} dark={dark} />
+        <p
+          className={cn(
+            "text-center text-sm",
+            isDark ? "text-brand-yellow/70" : "text-muted-foreground"
+          )}
+        >
           Customer stories will appear here soon.
         </p>
       </section>
@@ -38,8 +60,27 @@ export function TestimonialsCarousel({
   }
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold sm:text-2xl">Happy customers</h2>
+    <section className="space-y-6">
+      <div>
+        {isHome && (
+          <p
+            className={cn(
+              "mb-2 text-xs font-semibold uppercase tracking-widest",
+              isDark ? "text-brand-yellow/70" : "text-brand-yellow"
+            )}
+          >
+            Testimonials
+          </p>
+        )}
+        <h2
+          className={cn(
+            "text-2xl font-bold sm:text-3xl",
+            isDark ? "text-brand-yellow" : isHome && "text-brand-black"
+          )}
+        >
+          Happy customers
+        </h2>
+      </div>
       <div className="relative px-10 sm:px-12">
         <Carousel opts={{ align: "start", loop: testimonials.length > 1 }}>
           <CarouselContent>
@@ -48,9 +89,25 @@ export function TestimonialsCarousel({
                 key={item.id}
                 className="basis-full md:basis-1/2 lg:basis-1/3"
               >
-                <div className="flex h-full flex-col rounded-xl border bg-card p-5">
+                <div
+                  className={cn(
+                    "flex h-full flex-col rounded-2xl border p-5",
+                    isDark
+                      ? "border-brand-yellow/20 bg-brand-yellow/5"
+                      : isHome
+                        ? "border-brand-yellow/30 bg-white shadow-sm"
+                        : "bg-card"
+                  )}
+                >
                   <div className="flex items-start gap-4">
-                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn(
+                        "h-16 w-16 shrink-0 overflow-hidden rounded-full",
+                        isDark || isHome
+                          ? "ring-2 ring-brand-yellow/40"
+                          : "bg-muted"
+                      )}
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={item.customerImageUrl}
@@ -59,18 +116,46 @@ export function TestimonialsCarousel({
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold">{item.customerName}</p>
+                      <p
+                        className={cn(
+                          "font-semibold",
+                          isDark
+                            ? "text-brand-yellow"
+                            : isHome && "text-brand-black"
+                        )}
+                      >
+                        {item.customerName}
+                      </p>
                       {item.quote && (
-                        <p className="mt-2 text-sm text-muted-foreground line-clamp-3">
+                        <p
+                          className={cn(
+                            "mt-2 line-clamp-3 text-sm",
+                            isDark
+                              ? "text-brand-yellow/80"
+                              : "text-muted-foreground"
+                          )}
+                        >
                           <Quote className="mr-1 inline h-3 w-3" />
                           {item.quote}
                         </p>
                       )}
                     </div>
                   </div>
-                  <div className="mt-4 flex items-center gap-3 border-t pt-4">
-                    {(item.productImageUrl) && (
-                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted">
+                  <div
+                    className={cn(
+                      "mt-4 flex items-center gap-3 border-t pt-4",
+                      (isDark || isHome) && "border-brand-yellow/20"
+                    )}
+                  >
+                    {item.productImageUrl && (
+                      <div
+                        className={cn(
+                          "h-14 w-14 shrink-0 overflow-hidden rounded-lg",
+                          isDark || isHome
+                            ? "ring-1 ring-brand-yellow/30"
+                            : "bg-muted"
+                        )}
+                      >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={item.productImageUrl}
@@ -80,8 +165,24 @@ export function TestimonialsCarousel({
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground">Purchased</p>
-                      <p className="truncate text-sm font-medium">
+                      <p
+                        className={cn(
+                          "text-xs",
+                          isDark
+                            ? "text-brand-yellow/60"
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        Purchased
+                      </p>
+                      <p
+                        className={cn(
+                          "truncate text-sm font-medium",
+                          isDark
+                            ? "text-brand-yellow"
+                            : isHome && "text-brand-black"
+                        )}
+                      >
                         {item.productName}
                       </p>
                     </div>
@@ -92,8 +193,22 @@ export function TestimonialsCarousel({
           </CarouselContent>
           {testimonials.length > 1 && (
             <>
-              <CarouselPrevious className="left-0" />
-              <CarouselNext className="right-0" />
+              <CarouselPrevious
+                className={cn(
+                  "left-0 border-0",
+                  isDark
+                    ? "bg-brand-yellow/10 text-brand-yellow hover:bg-brand-yellow/20"
+                    : "border-brand-yellow/30 bg-white hover:bg-brand-yellow/10"
+                )}
+              />
+              <CarouselNext
+                className={cn(
+                  "right-0 border-0",
+                  isDark
+                    ? "bg-brand-yellow/10 text-brand-yellow hover:bg-brand-yellow/20"
+                    : "border-brand-yellow/30 bg-white hover:bg-brand-yellow/10"
+                )}
+              />
             </>
           )}
         </Carousel>
