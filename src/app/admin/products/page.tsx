@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Archive, ArchiveRestore } from "lucide-react";
+import Link from "next/link";
+import { LinkButton } from "@/components/ui/link-button";
+import {
+  Plus,
+  Pencil,
+  Archive,
+  ArchiveRestore,
+  Trash2,
+  MoreHorizontal,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +31,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Table,
   TableBody,
   TableCell,
@@ -30,16 +46,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ProductFormDialog } from "@/components/admin/product-form-dialog";
+import { Switch } from "@/components/ui/switch";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   archiveProduct,
+  deleteProduct,
   getProducts,
+  publishProduct,
   restoreProduct,
-  updateProduct,
+  unpublishProduct,
 } from "@/lib/firestore/products";
 import { getCategories } from "@/lib/firestore/categories";
 import { getProductThumbnailUrl } from "@/lib/products";
+import {
+  canPublishProduct,
+  isProductPublished,
+} from "@/lib/products-catalog";
+import { getProductPriceRange, getDefaultVariant } from "@/lib/product-variants";
 import { formatCurrency } from "@/lib/format";
 import type { Category, Product } from "@/types";
 
@@ -48,10 +71,10 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Product | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const categoryMap = Object.fromEntries(
     categories.map((c) => [c.id, c])
@@ -70,16 +93,6 @@ export default function AdminProductsPage() {
   useEffect(() => {
     loadData();
   }, []);
-
-  const openCreate = () => {
-    setEditing(null);
-    setDialogOpen(true);
-  };
-
-  const openEdit = (product: Product) => {
-    setEditing(product);
-    setDialogOpen(true);
-  };
 
   const handleArchive = async () => {
     if (!deleteId) return;
@@ -104,12 +117,48 @@ export default function AdminProductsPage() {
     }
   };
 
-  const toggleActive = async (product: Product) => {
+  const handlePermanentDelete = async () => {
+    if (!permanentDeleteId) return;
     try {
-      await updateProduct(product.id, { isActive: !product.isActive });
+      await deleteProduct(permanentDeleteId);
+      toast.success("Product permanently deleted");
+      loadData();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete product"
+      );
+    } finally {
+      setPermanentDeleteId(null);
+    }
+  };
+
+  const handleStatusToggle = async (product: Product, publish: boolean) => {
+    if (product.isArchived) return;
+
+    if (publish) {
+      const check = canPublishProduct(product);
+      if (!check.ok) {
+        toast.error(check.reason ?? "Complete the product before publishing");
+        return;
+      }
+    }
+
+    setTogglingId(product.id);
+    try {
+      if (publish) {
+        await publishProduct(product.id);
+        toast.success("Product published");
+      } else {
+        await unpublishProduct(product.id);
+        toast.success("Product moved to drafts");
+      }
       loadData();
     } catch {
-      toast.error("Failed to update product");
+      toast.error(
+        publish ? "Failed to publish product" : "Failed to unpublish product"
+      );
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -144,24 +193,17 @@ export default function AdminProductsPage() {
             {showArchived ? "Showing archived" : "Show archived"}
           </Button>
           {!showArchived && (
-            <Button onClick={openCreate}>
+            <LinkButton href="/admin/products/new">
               <Plus className="mr-2 h-4 w-4" />
               Add product
-            </Button>
+            </LinkButton>
           )}
         </div>
       </div>
 
-      <ProductFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        product={editing}
-        onSaved={loadData}
-      />
-
       <Card>
         <CardHeader>
-          <CardTitle>Inventory</CardTitle>
+          <CardTitle>Catalog</CardTitle>
           <CardDescription>
             {visibleProducts.length}{" "}
             {showArchived ? "archived" : "active"} products
@@ -182,12 +224,14 @@ export default function AdminProductsPage() {
                   <TableHead>Categories</TableHead>
                   <TableHead>Price</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-12 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visibleProducts.map((product) => {
                   const thumb = getProductThumbnailUrl(product);
+                  const published = isProductPublished(product);
+
                   return (
                     <TableRow key={product.id}>
                       <TableCell>
@@ -202,7 +246,9 @@ export default function AdminProductsPage() {
                               />
                             ) : null}
                           </div>
-                          <span className="font-medium">{product.name}</span>
+                          <span className="font-medium">
+                            {product.name.trim() || "Untitled draft"}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -214,47 +260,89 @@ export default function AdminProductsPage() {
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell>{formatCurrency(product.price)}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const range = getProductPriceRange(product);
+                          if (range.min !== range.max) {
+                            return `${formatCurrency(range.min)} – ${formatCurrency(range.max)}`;
+                          }
+                          return formatCurrency(getDefaultVariant(product).price);
+                        })()}
+                      </TableCell>
                       <TableCell>
                         {product.isArchived ? (
                           <Badge variant="secondary">Archived</Badge>
                         ) : (
-                          <Badge
-                            variant={product.isActive ? "default" : "secondary"}
-                            className="cursor-pointer"
-                            onClick={() => toggleActive(product)}
-                          >
-                            {product.isActive ? "Active" : "Hidden"}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={published}
+                              disabled={togglingId === product.id}
+                              onCheckedChange={(checked) =>
+                                handleStatusToggle(product, checked)
+                              }
+                              aria-label={
+                                published
+                                  ? "Published — switch to draft"
+                                  : "Draft — switch to published"
+                              }
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              {published ? "Published" : "Draft"}
+                            </span>
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {!product.isArchived && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEdit(product)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {product.isArchived ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRestore(product.id)}
-                          >
-                            <ArchiveRestore className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteId(product.id)}
-                          >
-                            <Archive className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Open menu</span>
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align="end">
+                            {!product.isArchived && (
+                              <DropdownMenuItem
+                                render={
+                                  <Link href={`/admin/products/${product.id}`}>
+                                    <Pencil className="h-4 w-4" />
+                                    Edit
+                                  </Link>
+                                }
+                              />
+                            )}
+                            {product.isArchived ? (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => handleRestore(product.id)}
+                                >
+                                  <ArchiveRestore className="h-4 w-4" />
+                                  Restore
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() =>
+                                    setPermanentDeleteId(product.id)
+                                  }
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete permanently
+                                </DropdownMenuItem>
+                              </>
+                            ) : (
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => setDeleteId(product.id)}
+                              >
+                                <Archive className="h-4 w-4" />
+                                Archive
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   );
@@ -277,6 +365,30 @@ export default function AdminProductsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleArchive}>Archive</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!permanentDeleteId}
+        onOpenChange={() => setPermanentDeleteId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete product permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. The product and its images will be removed
+              from the database.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handlePermanentDelete}
+            >
+              Delete permanently
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

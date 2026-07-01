@@ -17,6 +17,8 @@ import { getCategories } from "@/lib/firestore/categories";
 import { getOnlineShopBranch } from "@/lib/firestore/branches";
 import { getBranchInventory } from "@/lib/firestore/inventory";
 import { mergeProductsWithInventory } from "@/lib/inventory";
+import { stripHtml } from "@/lib/html";
+import { specsTextMatchesSearch } from "@/lib/specs";
 import { categoryPath } from "@/lib/seo";
 import type { Category } from "@/types";
 import { Search } from "lucide-react";
@@ -68,7 +70,7 @@ function ShopCatalogInner({
 
       const inventory = await getBranchInventory(shopBranch.id);
       setProducts(
-        mergeProductsWithInventory(catalog, inventory).filter((p) => p.isActive)
+        mergeProductsWithInventory(catalog, inventory)
       );
     }
 
@@ -84,17 +86,14 @@ function ShopCatalogInner({
   }, [legacyCategoryId, categories, router]);
 
   const filtered = products.filter((p) => {
+    const plainDescription = stripHtml(p.description);
     const matchesSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.description.toLowerCase().includes(search.toLowerCase()) ||
-      p.specs.some(
-        (s) =>
-          s.label.toLowerCase().includes(search.toLowerCase()) ||
-          s.value.toLowerCase().includes(search.toLowerCase())
-      );
+      plainDescription.toLowerCase().includes(search.toLowerCase()) ||
+      specsTextMatchesSearch(p.specsText, search);
     const matchesCategory =
       categoryId === "all" || p.categoryIds.includes(categoryId);
-    return matchesSearch && matchesCategory && p.stock > 0;
+    return matchesSearch && matchesCategory;
   });
 
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
@@ -112,7 +111,7 @@ function ShopCatalogInner({
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 pb-8 pt-24 sm:pt-28">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
         <p className="mt-1 text-muted-foreground">

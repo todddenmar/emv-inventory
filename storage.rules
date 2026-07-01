@@ -2,19 +2,14 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    function isStaff() {
-      return request.auth != null &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['master-admin', 'manager'];
-    }
-
-    match /products/{productId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if isStaff();
-    }
-
     function isMasterAdmin() {
       return request.auth != null &&
-        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'master-admin';
+        request.auth.token.role == 'master-admin';
+    }
+
+    match /products/{productId}/{fileName} {
+      allow read: if true;
+      allow write: if isMasterAdmin();
     }
 
     match /homepage/{allPaths=**} {

@@ -32,13 +32,19 @@ export function ProductsSection({
   const isHome = variant === "home";
   const isDark = isHome && dark;
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
-  const inStock = products.filter((p) => p.stock > 0).slice(0, 8);
+  const featured = [...products]
+    .sort((a, b) => {
+      if (a.anyInStock && !b.anyInStock) return -1;
+      if (!a.anyInStock && b.anyInStock) return 1;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 8);
 
   if (loading) {
     return <ProductsSectionSkeleton variant={variant} dark={dark} />;
   }
 
-  if (inStock.length === 0) {
+  if (featured.length === 0) {
     return (
       <section className="space-y-4">
         <h2
@@ -109,7 +115,7 @@ export function ProductsSection({
         ) : null}
       </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {inStock.map((product) => (
+        {featured.map((product) => (
           <ProductCard
             key={product.id}
             product={product}

@@ -39,12 +39,29 @@ Firebase will prompt you with a link when the index is first needed.
 ### 4. Deploy security rules
 
 ```bash
-firebase deploy --only firestore:rules
+npx firebase-tools deploy --only firestore:rules,storage
 ```
 
-Or paste `firestore.rules` into the Firebase Console → Firestore → Rules.
+Or paste `firestore.rules` and `storage.rules` into the Firebase Console (Firestore → Rules and Storage → Rules).
 
-### 5. Run locally
+Storage rules use Auth custom claims (`request.auth.token.role`), not Firestore lookups.
+
+### 5. Service account (for custom auth claims)
+
+Product and homepage image uploads require a `master-admin` claim on the signed-in user's token.
+
+1. Firebase Console → Project settings → **Service accounts** → **Generate new private key**
+2. Add to `.env.local`:
+
+```env
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project-id.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+Claims sync automatically on sign-in. After changing a user's role in Admin → Users, that user should refresh the page (or sign in again) for storage access to update.
+
+### 6. Run locally
 
 ```bash
 npm run dev

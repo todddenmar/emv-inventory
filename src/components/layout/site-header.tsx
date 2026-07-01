@@ -65,7 +65,11 @@ function CartButton({
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const isHome = pathname === "/";
+  const isBrandedHeader =
+    pathname === "/" ||
+    pathname.startsWith("/shop") ||
+    pathname.startsWith("/products/") ||
+    pathname.startsWith("/categories/");
   const [menuOpen, setMenuOpen] = useState(false);
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
@@ -81,11 +85,11 @@ export function SiteHeader() {
 
   const closeMenu = () => setMenuOpen(false);
 
-  const navButtonClass = isHome
+  const navButtonClass = isBrandedHeader
     ? "text-brand-yellow hover:bg-brand-yellow/10 hover:text-brand-yellow"
     : undefined;
 
-  const signInClass = isHome
+  const signInClass = isBrandedHeader
     ? "rounded-full bg-brand-yellow text-brand-black hover:bg-brand-yellow/90"
     : undefined;
 
@@ -93,7 +97,7 @@ export function SiteHeader() {
     <header
       className={cn(
         "z-50",
-        isHome
+        isBrandedHeader
           ? "fixed inset-x-0 top-0 bg-transparent px-4 pt-4"
           : "sticky top-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
       )}
@@ -101,7 +105,7 @@ export function SiteHeader() {
       <div
         className={cn(
           "flex h-14 items-center justify-between gap-3 sm:h-16",
-          isHome
+          isBrandedHeader
             ? "container mx-auto rounded-full border border-brand-yellow/20 bg-brand-black px-4 shadow-lg shadow-black/40 sm:px-6"
             : "container mx-auto px-4"
         )}
@@ -110,7 +114,7 @@ export function SiteHeader() {
           href="/"
           size="sm"
           priority
-          nameClassName={isHome ? "text-brand-yellow" : undefined}
+          nameClassName={isBrandedHeader ? "text-brand-yellow" : undefined}
         />
 
         <nav className="hidden items-center gap-1 md:flex">
@@ -125,14 +129,14 @@ export function SiteHeader() {
             </LinkButton>
           ))}
 
-          <CartButton homeStyle={isHome} />
+          <CartButton homeStyle={isBrandedHeader} />
 
           {!loading && (
             <>
               {user ? (
                 <UserMenu
                   className={
-                    isHome
+                    isBrandedHeader
                       ? "text-brand-yellow hover:bg-brand-yellow/10 [&_p]:text-brand-yellow [&_.text-muted-foreground]:text-brand-yellow/70"
                       : undefined
                   }
@@ -147,13 +151,13 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2 md:hidden">
-          <CartButton homeStyle={isHome} />
+          <CartButton homeStyle={isBrandedHeader} />
 
           {!loading && user ? (
             <UserMenu
               compact
               className={
-                isHome
+                isBrandedHeader
                   ? "text-brand-yellow hover:bg-brand-yellow/10"
                   : undefined
               }
@@ -165,7 +169,7 @@ export function SiteHeader() {
             size="icon"
             className={cn(
               "shrink-0",
-              isHome &&
+              isBrandedHeader &&
                 "border-brand-yellow/30 bg-transparent text-brand-yellow hover:bg-brand-yellow/10"
             )}
             onClick={() => setMenuOpen(true)}
@@ -179,10 +183,10 @@ export function SiteHeader() {
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent
           side="left"
-          className={cn("w-72", isHome && "border-brand-yellow/20 bg-brand-black")}
+          className={cn("w-72", isBrandedHeader && "border-brand-yellow/20 bg-brand-black")}
         >
           <SheetHeader>
-            <SheetTitle className={isHome ? "text-brand-yellow" : undefined}>
+            <SheetTitle className={isBrandedHeader ? "text-brand-yellow" : undefined}>
               Menu
             </SheetTitle>
           </SheetHeader>
@@ -196,7 +200,7 @@ export function SiteHeader() {
                   onClick={closeMenu}
                   className={cn(
                     "flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
-                    isHome
+                    isBrandedHeader
                       ? "text-brand-yellow hover:bg-brand-yellow/10"
                       : "hover:bg-muted"
                   )}
@@ -204,7 +208,7 @@ export function SiteHeader() {
                   <Icon
                     className={cn(
                       "h-4 w-4",
-                      isHome ? "text-brand-yellow/70" : "text-muted-foreground"
+                      isBrandedHeader ? "text-brand-yellow/70" : "text-muted-foreground"
                     )}
                   />
                   {link.label}
@@ -217,7 +221,7 @@ export function SiteHeader() {
               onClick={closeMenu}
               className={cn(
                 "flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
-                isHome
+                isBrandedHeader
                   ? "text-brand-yellow hover:bg-brand-yellow/10"
                   : "hover:bg-muted"
               )}
@@ -225,7 +229,7 @@ export function SiteHeader() {
               <ShoppingCart
                 className={cn(
                   "h-4 w-4",
-                  isHome ? "text-brand-yellow/70" : "text-muted-foreground"
+                  isBrandedHeader ? "text-brand-yellow/70" : "text-muted-foreground"
                 )}
               />
               Cart
@@ -237,7 +241,7 @@ export function SiteHeader() {
                 onClick={closeMenu}
                 className={cn(
                   "flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
-                  isHome
+                  isBrandedHeader
                     ? "text-brand-yellow hover:bg-brand-yellow/10"
                     : "hover:bg-muted"
                 )}
@@ -245,7 +249,7 @@ export function SiteHeader() {
                 <User
                   className={cn(
                     "h-4 w-4",
-                    isHome ? "text-brand-yellow/70" : "text-muted-foreground"
+                    isBrandedHeader ? "text-brand-yellow/70" : "text-muted-foreground"
                   )}
                 />
                 Sign in
@@ -258,7 +262,7 @@ export function SiteHeader() {
                 onClick={closeMenu}
                 className={cn(
                   "flex items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors",
-                  isHome
+                  isBrandedHeader
                     ? "text-brand-yellow hover:bg-brand-yellow/10"
                     : "hover:bg-muted"
                 )}
@@ -266,7 +270,7 @@ export function SiteHeader() {
                 <LayoutDashboard
                   className={cn(
                     "h-4 w-4",
-                    isHome ? "text-brand-yellow/70" : "text-muted-foreground"
+                    isBrandedHeader ? "text-brand-yellow/70" : "text-muted-foreground"
                   )}
                 />
                 Admin dashboard

@@ -42,6 +42,7 @@ import {
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getBranches } from "@/lib/firestore/branches";
 import { getAllUsers, updateUserAccess } from "@/lib/firestore/users";
+import { syncAuthClaims } from "@/lib/auth-claims";
 import type { AppUser, Branch, UserRole } from "@/types";
 
 const roleOptions: UserRole[] = ["customer", "manager", "master-admin"];
@@ -134,6 +135,7 @@ export default function AdminUsersPage() {
         },
         currentUser.uid
       );
+      await syncAuthClaims(editingUser.uid).catch(console.error);
       toast.success("User access updated");
       closeEdit();
       loadData();

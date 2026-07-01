@@ -4,6 +4,10 @@ export function productPath(slug: string): string {
   return `/products/${slug}`;
 }
 
+export function productVariantPath(slug: string, variantId: string): string {
+  return `/products/${slug}?variant=${encodeURIComponent(variantId)}`;
+}
+
 export function categoryPath(slug: string): string {
   return `/categories/${slug}`;
 }

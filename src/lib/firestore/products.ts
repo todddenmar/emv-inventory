@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -14,7 +15,9 @@ import {
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 import { productConverter } from "@/lib/firestore/converters";
+import { deleteProductImage } from "@/lib/storage/products";
 import { ensureUniqueSlug, slugify } from "@/lib/slug";
+import { isProductPublished } from "@/lib/products-catalog";
 import type { Product } from "@/types";
 
 function productsRef(): CollectionReference<Product> {
@@ -52,7 +55,7 @@ export async function getProducts(
     products = products.filter((p) => !p.isArchived);
   }
   if (activeOnly) {
-    products = products.filter((p) => p.isActive && !p.isArchived);
+    products = products.filter((p) => isProductPublished(p));
   }
   return products;
 }
@@ -72,6 +75,51 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
   return all.find((p) => p.slug === slug) ?? null;
 }
 
+export async function createDraftProduct(): Promise<string> {
+  const draftKey = `draft-${Date.now()}`;
+  const slug = await resolveProductSlug(draftKey, draftKey);
+  return createProduct({
+    name: "",
+    slug,
+    description: "",
+    price: 0,
+    compareAtPrice: null,
+    categoryIds: [],
+    options: [],
+    variants: [
+      {
+        id: crypto.randomUUID(),
+        sku: "",
+        price: 0,
+        compareAtPrice: null,
+        optionValues: {},
+        imageId: null,
+        position: 0,
+      },
+    ],
+    specsText: "",
+    specs: [],
+    images: [],
+    thumbnailImageId: null,
+    status: "draft",
+    isActive: false,
+  });
+}
+
+export async function publishProduct(id: string): Promise<void> {
+  await updateProduct(id, {
+    status: "published",
+    isActive: true,
+  });
+}
+
+export async function unpublishProduct(id: string): Promise<void> {
+  await updateProduct(id, {
+    status: "draft",
+    isActive: false,
+  });
+}
+
 export async function createProduct(
   data: Omit<
     Product,
@@ -82,6 +130,8 @@ export async function createProduct(
   const docRef = await addDoc(collection(getClientDb(), "products"), {
     ...data,
     slug,
+    status: data.status ?? "draft",
+    isActive: data.isActive ?? data.status === "published",
     isArchived: false,
     archivedAt: null,
     createdAt: serverTimestamp(),
@@ -117,6 +167,7 @@ export async function archiveProduct(id: string): Promise<void> {
   await updateDoc(doc(getClientDb(), "products", id), {
     isArchived: true,
     isActive: false,
+    status: "draft",
     archivedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -131,5 +182,17 @@ export async function restoreProduct(id: string): Promise<void> {
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  await archiveProduct(id);
+  const product = await getProduct(id);
+  if (!product) return;
+  if (!product.isArchived) {
+    throw new Error("Archive the product before deleting it permanently");
+  }
+
+  for (const image of product.images) {
+    if (image.storagePath) {
+      await deleteProductImage(image.storagePath).catch(console.error);
+    }
+  }
+
+  await deleteDoc(doc(getClientDb(), "products", id));
 }

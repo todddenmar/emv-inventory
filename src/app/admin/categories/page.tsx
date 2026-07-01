@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Pencil, Archive, ArchiveRestore, Loader2 } from "lucide-react";
+import { Plus, Pencil, Archive, ArchiveRestore, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +43,7 @@ import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   archiveCategory,
   createCategory,
+  deleteCategory,
   getCategories,
   resolveCategorySlug,
   restoreCategory,
@@ -59,6 +60,7 @@ export default function AdminCategoriesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [name, setName] = useState("");
   const resolveSlug = useCallback(
@@ -153,6 +155,21 @@ export default function AdminCategoriesPage() {
       toast.error("Failed to archive category");
     } finally {
       setDeleteId(null);
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (!permanentDeleteId) return;
+    try {
+      await deleteCategory(permanentDeleteId);
+      toast.success("Category permanently deleted");
+      loadCategories();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to delete category"
+      );
+    } finally {
+      setPermanentDeleteId(null);
     }
   };
 
@@ -292,13 +309,22 @@ export default function AdminCategoriesPage() {
                         </Button>
                       )}
                       {category.isArchived ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRestore(category.id)}
-                        >
-                          <ArchiveRestore className="h-4 w-4" />
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRestore(category.id)}
+                          >
+                            <ArchiveRestore className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setPermanentDeleteId(category.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
                       ) : (
                         <Button
                           variant="ghost"
@@ -329,6 +355,30 @@ export default function AdminCategoriesPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleArchive}>Archive</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!permanentDeleteId}
+        onOpenChange={() => setPermanentDeleteId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete category permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone. Products may still reference this category
+              until you update them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handlePermanentDelete}
+            >
+              Delete permanently
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

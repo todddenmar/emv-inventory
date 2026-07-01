@@ -8,7 +8,10 @@ import {
 } from "firebase/firestore";
 import { getPublicDb } from "@/lib/firebase-public";
 import { resolveSlug } from "@/lib/slug";
-import type { Category, Product } from "@/types";
+import { isProductPublished } from "@/lib/products-catalog";
+import { migrateLegacyProductVariants, getDefaultVariant } from "@/lib/product-variants";
+import { specsToText } from "@/lib/specs";
+import type { Category, Product, ProductOption, ProductSpec, ProductVariant } from "@/types";
 
 function toDate(value: unknown): Date {
   if (!value) return new Date();
@@ -35,16 +38,39 @@ function mapCategory(id: string, data: Record<string, unknown>): Category {
 
 function mapProduct(id: string, data: Record<string, unknown>): Product {
   const name = String(data.name ?? "");
+  const legacySpecs = (data.specs as ProductSpec[]) ?? [];
+  const { options, variants } = migrateLegacyProductVariants(id, {
+    price: Number(data.price ?? 0),
+    compareAtPrice: data.compareAtPrice as number | null | undefined,
+    variants: data.variants as ProductVariant[] | undefined,
+    options: data.options as ProductOption[] | undefined,
+  });
+  const defaultVariant = getDefaultVariant({ variants });
+  const specsText =
+    typeof data.specsText === "string" && data.specsText.trim()
+      ? data.specsText
+      : specsToText(legacySpecs);
+
   return {
     id,
     name,
     slug: resolveSlug(data.slug as string | undefined, name, id),
     description: String(data.description ?? ""),
-    price: Number(data.price ?? 0),
+    price: defaultVariant.price,
+    compareAtPrice: defaultVariant.compareAtPrice,
     categoryIds: (data.categoryIds as string[]) ?? [],
-    specs: (data.specs as Product["specs"]) ?? [],
+    options,
+    variants,
+    specsText,
+    specs: legacySpecs,
     images: (data.images as Product["images"]) ?? [],
     thumbnailImageId: (data.thumbnailImageId as string | null) ?? null,
+    status:
+      data.status === "draft" || data.status === "published"
+        ? data.status
+        : data.isActive === false
+          ? "draft"
+          : "published",
     isActive: data.isActive !== false,
     isArchived: Boolean(data.isArchived),
     archivedAt: data.archivedAt ? toDate(data.archivedAt) : null,
@@ -90,13 +116,13 @@ export async function fetchProductBySlug(
   if (!snap.empty) {
     const doc = snap.docs[0];
     const product = mapProduct(doc.id, doc.data());
-    if (product.isActive && !product.isArchived) return product;
+    if (isProductPublished(product)) return product;
   }
 
   const all = await getDocs(query(collection(db, "products"), orderBy("name")));
   for (const doc of all.docs) {
     const product = mapProduct(doc.id, doc.data());
-    if (product.isActive && !product.isArchived && product.slug === slug) {
+    if (isProductPublished(product) && product.slug === slug) {
       return product;
     }
   }
@@ -118,5 +144,5 @@ export async function fetchPublicProducts(): Promise<Product[]> {
   );
   return snap.docs
     .map((doc) => mapProduct(doc.id, doc.data()))
-    .filter((p) => p.isActive && !p.isArchived);
+    .filter((p) => isProductPublished(p));
 }

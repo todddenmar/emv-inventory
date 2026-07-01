@@ -39,14 +39,14 @@ export default function CartPage() {
       <h1 className="text-2xl font-bold mb-6">Shopping Cart</h1>
       <div className="space-y-4">
         {items.map((item) => (
-          <Card key={item.productId}>
+          <Card key={item.variantId}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">{item.name}</CardTitle>
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => removeItem(item.productId)}
+                  onClick={() => removeItem(item.variantId)}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -60,7 +60,7 @@ export default function CartPage() {
                     size="icon"
                     className="h-8 w-8"
                     onClick={() =>
-                      updateQuantity(item.productId, item.quantity - 1)
+                      updateQuantity(item.variantId, item.quantity - 1)
                     }
                   >
                     <Minus className="h-3 w-3" />
@@ -71,7 +71,7 @@ export default function CartPage() {
                     size="icon"
                     className="h-8 w-8"
                     onClick={() =>
-                      updateQuantity(item.productId, item.quantity + 1)
+                      updateQuantity(item.variantId, item.quantity + 1)
                     }
                     disabled={item.quantity >= item.maxStock}
                   >

@@ -99,6 +99,8 @@ export default function CheckoutPage() {
 
       const orderItems = items.map((i) => ({
         productId: i.productId,
+        variantId: i.variantId,
+        sku: i.sku,
         name: i.name,
         price: i.price,
         quantity: i.quantity,
@@ -124,6 +126,7 @@ export default function CheckoutPage() {
         await decrementBranchStock(
           shopBranch.id,
           item.productId,
+          item.variantId,
           item.quantity,
           {
             productName: item.name,

@@ -24,10 +24,7 @@ export function useSlugField(resolveSlug: ResolveSlugFn) {
       if (slugManualRef.current) return;
 
       const trimmed = name.trim();
-      if (!trimmed) {
-        setSlugState("");
-        return;
-      }
+      if (!trimmed) return;
 
       setSlugState(slugify(trimmed));
 

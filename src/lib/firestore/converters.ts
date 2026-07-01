@@ -5,7 +5,9 @@ import {
   SnapshotOptions,
   Timestamp,
 } from "firebase/firestore";
-import type { AppUser, Branch, BranchInventory, BranchTransfer, Category, HomeBanner, InventoryLog, Invite, Order, Product, ProductImage, ProductSpec, SiteSettings, SocialLink, SocialPlatform, Testimonial } from "@/types";
+import type { AppUser, Branch, BranchInventory, BranchTransfer, Category, HomeBanner, InventoryLog, Invite, Order, OrderItem, Product, ProductImage, ProductOption, ProductSpec, ProductVariant, SiteSettings, SocialLink, SocialPlatform, Testimonial } from "@/types";
+import { migrateLegacyProductVariants, getDefaultVariant, defaultVariantId } from "@/lib/product-variants";
+import { specsToText } from "@/lib/specs";
 import { resolveSlug } from "@/lib/slug";
 
 function toDate(value: Timestamp | Date | undefined | null): Date {
@@ -111,6 +113,7 @@ export const branchInventoryConverter: FirestoreDataConverter<BranchInventory> =
     return {
       branchId: item.branchId,
       productId: item.productId,
+      variantId: item.variantId,
       stock: item.stock,
       lowStockThreshold: item.lowStockThreshold,
       updatedAt: item.updatedAt,
@@ -121,10 +124,15 @@ export const branchInventoryConverter: FirestoreDataConverter<BranchInventory> =
     options: SnapshotOptions
   ): BranchInventory {
     const data = snapshot.data(options);
+    const productId = data.productId as string;
+    const variantId =
+      (data.variantId as string | undefined) ??
+      (snapshot.id.includes("_") ? snapshot.id.split("_").slice(1).join("_") : productId);
     return {
       id: snapshot.id,
       branchId: data.branchId,
-      productId: data.productId,
+      productId,
+      variantId,
       stock: data.stock ?? 0,
       lowStockThreshold: data.lowStockThreshold ?? 5,
       updatedAt: toDate(data.updatedAt),
@@ -134,15 +142,21 @@ export const branchInventoryConverter: FirestoreDataConverter<BranchInventory> =
 
 export const productConverter: FirestoreDataConverter<Product> = {
   toFirestore(product: Product): DocumentData {
+    const defaultVariant = getDefaultVariant(product);
     return {
       name: product.name,
       slug: product.slug,
       description: product.description,
-      price: product.price,
+      price: defaultVariant.price,
+      compareAtPrice: defaultVariant.compareAtPrice,
       categoryIds: product.categoryIds,
+      options: product.options,
+      variants: product.variants,
+      specsText: product.specsText,
       specs: product.specs,
       images: product.images,
       thumbnailImageId: product.thumbnailImageId,
+      status: product.status,
       isActive: product.isActive,
       isArchived: product.isArchived,
       archivedAt: product.archivedAt,
@@ -156,18 +170,41 @@ export const productConverter: FirestoreDataConverter<Product> = {
   ): Product {
     const data = snapshot.data(options);
     const images = parseLegacyImages(data);
+    const legacySpecs = (data.specs as ProductSpec[]) ?? [];
+    const { options: productOptions, variants } = migrateLegacyProductVariants(snapshot.id, {
+      price: data.price,
+      compareAtPrice: data.compareAtPrice,
+      variants: data.variants as ProductVariant[] | undefined,
+      options: data.options as ProductOption[] | undefined,
+    });
+    const defaultVariant = variants[0];
+    const specsText =
+      typeof data.specsText === "string" && data.specsText.trim()
+        ? data.specsText
+        : specsToText(legacySpecs);
+
     return {
       id: snapshot.id,
       name: data.name,
       slug: resolveSlug(data.slug, data.name, snapshot.id),
       description: data.description,
-      price: data.price,
+      price: defaultVariant?.price ?? Number(data.price ?? 0),
+      compareAtPrice: defaultVariant?.compareAtPrice ?? null,
       categoryIds: data.categoryIds ?? [],
-      specs: (data.specs as ProductSpec[]) ?? [],
+      options: productOptions,
+      variants,
+      specsText,
+      specs: legacySpecs,
       images,
       thumbnailImageId:
         data.thumbnailImageId ??
         (images.length > 0 ? images[0].id : null),
+      status:
+        data.status === "draft" || data.status === "published"
+          ? data.status
+          : data.isActive === false
+            ? "draft"
+            : "published",
       isActive: data.isActive ?? true,
       isArchived: data.isArchived ?? false,
       archivedAt: data.archivedAt ? toDate(data.archivedAt) : null,
@@ -211,7 +248,14 @@ export const orderConverter: FirestoreDataConverter<Order> = {
       customerEmail: data.customerEmail ?? null,
       deliveryAddress: data.deliveryAddress,
       deliveryLocation: data.deliveryLocation ?? null,
-      items: data.items,
+      items: ((data.items as OrderItem[]) ?? []).map((item) => ({
+        productId: item.productId,
+        variantId: item.variantId ?? defaultVariantId(item.productId),
+        sku: item.sku ?? "",
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+      })),
       subtotal: data.subtotal,
       total: data.total,
       paymentMethod: data.paymentMethod,
@@ -373,6 +417,7 @@ export const inventoryLogConverter: FirestoreDataConverter<InventoryLog> = {
       branchId: log.branchId,
       branchName: log.branchName,
       productId: log.productId,
+      variantId: log.variantId,
       productName: log.productName,
       delta: log.delta,
       previousStock: log.previousStock,
@@ -395,6 +440,7 @@ export const inventoryLogConverter: FirestoreDataConverter<InventoryLog> = {
       branchId: data.branchId,
       branchName: data.branchName ?? null,
       productId: data.productId,
+      variantId: data.variantId ?? defaultVariantId(data.productId),
       productName: data.productName ?? null,
       delta: data.delta,
       previousStock: data.previousStock,

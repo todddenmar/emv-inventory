@@ -4,13 +4,17 @@ import {
   ref,
   uploadBytes,
 } from "firebase/storage";
-import { getClientStorage } from "@/lib/firebase";
+import { getClientAuth, getClientStorage } from "@/lib/firebase";
 
 export async function uploadProductImage(
   productId: string,
   imageId: string,
   file: File
 ): Promise<{ url: string; storagePath: string }> {
+  if (!getClientAuth().currentUser) {
+    throw new Error("You must be signed in to upload product images.");
+  }
+
   const storagePath = `products/${productId}/${imageId}-${file.name}`;
   const storageRef = ref(getClientStorage(), storagePath);
   await uploadBytes(storageRef, file);

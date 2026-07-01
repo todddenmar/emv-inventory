@@ -2,11 +2,35 @@
 
 import { useState } from "react";
 import { Plus, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import type { ProductSpec } from "@/types";
+
+export function parseSpecsBulk(input: string): ProductSpec[] {
+  const parts = input
+    .split(/[,\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const parsed: ProductSpec[] = [];
+
+  for (const part of parts) {
+    const colonIndex = part.indexOf(":");
+    if (colonIndex === -1) continue;
+
+    const label = part.slice(0, colonIndex).trim();
+    const value = part.slice(colonIndex + 1).trim();
+    if (!label || !value) continue;
+
+    parsed.push({ label, value });
+  }
+
+  return parsed;
+}
 
 interface ProductSpecsEditorProps {
   specs: ProductSpec[];
@@ -14,6 +38,8 @@ interface ProductSpecsEditorProps {
 }
 
 export function ProductSpecsEditor({ specs, onChange }: ProductSpecsEditorProps) {
+  const [bulkInput, setBulkInput] = useState("");
+
   const addSpec = () => {
     onChange([...specs, { label: "", value: "" }]);
   };
@@ -28,6 +54,20 @@ export function ProductSpecsEditor({ specs, onChange }: ProductSpecsEditorProps)
     onChange(specs.filter((_, i) => i !== index));
   };
 
+  const addFromBulk = () => {
+    const parsed = parseSpecsBulk(bulkInput);
+    if (parsed.length === 0) {
+      toast.error('Use label:value pairs separated by commas, e.g. "Size: Large, Weight: 500g"');
+      return;
+    }
+
+    onChange([...specs, ...parsed]);
+    setBulkInput("");
+    toast.success(
+      `Added ${parsed.length} spec${parsed.length === 1 ? "" : "s"}`
+    );
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -37,6 +77,34 @@ export function ProductSpecsEditor({ specs, onChange }: ProductSpecsEditorProps)
           Add spec
         </Button>
       </div>
+
+      <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+        <Label htmlFor="specs-bulk" className="text-xs text-muted-foreground">
+          Paste multiple specs
+        </Label>
+        <Textarea
+          id="specs-bulk"
+          rows={3}
+          value={bulkInput}
+          onChange={(e) => setBulkInput(e.target.value)}
+          placeholder="Size: Large, Weight: 500g, Color: Red"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            Format: label:value, label:value (commas or new lines)
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={addFromBulk}
+            disabled={!bulkInput.trim()}
+          >
+            Add to list
+          </Button>
+        </div>
+      </div>
+
       {specs.length === 0 ? (
         <p className="text-sm text-muted-foreground">No specs added yet.</p>
       ) : (

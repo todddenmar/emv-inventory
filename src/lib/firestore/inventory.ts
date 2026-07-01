@@ -10,23 +10,25 @@ import {
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 import { branchInventoryConverter } from "@/lib/firestore/converters";
+import { defaultVariantId } from "@/lib/product-variants";
 import type { BranchInventory, InventoryLogReason, Order } from "@/types";
 
-export function inventoryDocId(branchId: string, productId: string): string {
-  return `${branchId}_${productId}`;
+export function inventoryDocId(branchId: string, variantId: string): string {
+  return `${branchId}_${variantId}`;
 }
 
-function inventoryRef(branchId: string, productId: string) {
+function inventoryRef(branchId: string, variantId: string) {
   return doc(
     getClientDb(),
     "branchInventory",
-    inventoryDocId(branchId, productId)
+    inventoryDocId(branchId, variantId)
   ).withConverter(branchInventoryConverter);
 }
 
 export interface StockChangeContext {
   branchId: string;
   productId: string;
+  variantId: string;
   productName?: string | null;
   branchName?: string | null;
   reason: InventoryLogReason;
@@ -34,6 +36,26 @@ export interface StockChangeContext {
   referenceLabel?: string | null;
   performedBy: string;
   performedByName?: string | null;
+}
+
+function resolveVariantId(
+  data: Record<string, unknown> | undefined,
+  docId: string,
+  productId: string
+): string {
+  if (data?.variantId && typeof data.variantId === "string") {
+    return data.variantId;
+  }
+
+  const suffix = docId.startsWith(`${data?.branchId}_`)
+    ? docId.slice(String(data?.branchId).length + 1)
+    : docId.split("_").slice(1).join("_");
+
+  if (suffix && suffix !== productId) {
+    return suffix;
+  }
+
+  return defaultVariantId(productId);
 }
 
 export async function getBranchInventory(
@@ -46,7 +68,17 @@ export async function getBranchInventory(
     where("branchId", "==", branchId)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => d.data());
+  return snapshot.docs.map((d) => {
+    const data = d.data();
+    return {
+      ...data,
+      variantId: resolveVariantId(
+        d.data() as unknown as Record<string, unknown>,
+        d.id,
+        data.productId
+      ),
+    };
+  });
 }
 
 export async function getAllBranchInventory(): Promise<BranchInventory[]> {
@@ -55,15 +87,42 @@ export async function getAllBranchInventory(): Promise<BranchInventory[]> {
       branchInventoryConverter
     )
   );
-  return snapshot.docs.map((d) => d.data());
+  return snapshot.docs.map((d) => {
+    const data = d.data();
+    return {
+      ...data,
+      variantId: resolveVariantId(
+        d.data() as unknown as Record<string, unknown>,
+        d.id,
+        data.productId
+      ),
+    };
+  });
 }
 
+export async function getBranchVariantStock(
+  branchId: string,
+  variantId: string
+): Promise<BranchInventory | null> {
+  const snap = await getDoc(inventoryRef(branchId, variantId));
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  return {
+    ...data,
+    variantId: resolveVariantId(
+      snap.data() as unknown as Record<string, unknown>,
+      snap.id,
+      data.productId
+    ),
+  };
+}
+
+/** @deprecated Use getBranchVariantStock */
 export async function getBranchProductStock(
   branchId: string,
   productId: string
 ): Promise<BranchInventory | null> {
-  const snap = await getDoc(inventoryRef(branchId, productId));
-  return snap.exists() ? snap.data() : null;
+  return getBranchVariantStock(branchId, defaultVariantId(productId));
 }
 
 async function applyStockDelta(
@@ -74,8 +133,10 @@ async function applyStockDelta(
   if (delta === 0) return;
 
   const db = getClientDb();
-  const invId = inventoryDocId(ctx.branchId, ctx.productId);
-  const invRef = doc(db, "branchInventory", invId);
+  const invId = inventoryDocId(ctx.branchId, ctx.variantId);
+  const invRef = doc(db, "branchInventory", invId).withConverter(
+    branchInventoryConverter
+  );
   const logRef = doc(collection(db, "inventoryLogs"));
 
   await runTransaction(db, async (tx) => {
@@ -100,8 +161,10 @@ async function applyStockDelta(
       });
     } else {
       tx.set(invRef, {
+        id: invId,
         branchId: ctx.branchId,
         productId: ctx.productId,
+        variantId: ctx.variantId,
         stock: newStock,
         lowStockThreshold: threshold,
         updatedAt: serverTimestamp(),
@@ -112,6 +175,7 @@ async function applyStockDelta(
       branchId: ctx.branchId,
       branchName: ctx.branchName ?? null,
       productId: ctx.productId,
+      variantId: ctx.variantId,
       productName: ctx.productName ?? null,
       delta,
       previousStock,
@@ -129,13 +193,14 @@ async function applyStockDelta(
 export async function setBranchStockWithLog(
   branchId: string,
   productId: string,
+  variantId: string,
   stock: number,
   lowStockThreshold: number,
-  ctx: Omit<StockChangeContext, "branchId" | "productId" | "reason"> & {
+  ctx: Omit<StockChangeContext, "branchId" | "productId" | "variantId" | "reason"> & {
     reason?: InventoryLogReason;
   }
 ): Promise<void> {
-  const current = await getBranchProductStock(branchId, productId);
+  const current = await getBranchVariantStock(branchId, variantId);
   const previousStock = current?.stock ?? 0;
   const delta = stock - previousStock;
 
@@ -148,12 +213,22 @@ export async function setBranchStockWithLog(
     const invRef = doc(
       db,
       "branchInventory",
-      inventoryDocId(branchId, productId)
-    );
+      inventoryDocId(branchId, variantId)
+    ).withConverter(branchInventoryConverter);
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(invRef);
       if (snap.exists()) {
         tx.update(invRef, {
+          lowStockThreshold,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        tx.set(invRef, {
+          id: inventoryDocId(branchId, variantId),
+          branchId,
+          productId,
+          variantId,
+          stock,
           lowStockThreshold,
           updatedAt: serverTimestamp(),
         });
@@ -165,6 +240,7 @@ export async function setBranchStockWithLog(
   await applyStockDelta(delta, lowStockThreshold, {
     branchId,
     productId,
+    variantId,
     reason: ctx.reason ?? "manual_adjustment",
     ...ctx,
   });
@@ -173,14 +249,16 @@ export async function setBranchStockWithLog(
 export async function decrementBranchStock(
   branchId: string,
   productId: string,
+  variantId: string,
   quantity: number,
-  ctx: Omit<StockChangeContext, "branchId" | "productId" | "reason"> & {
+  ctx: Omit<StockChangeContext, "branchId" | "productId" | "variantId" | "reason"> & {
     reason?: InventoryLogReason;
   }
 ): Promise<void> {
   await applyStockDelta(-quantity, undefined, {
     branchId,
     productId,
+    variantId,
     reason: ctx.reason ?? "order_sale",
     ...ctx,
   });
@@ -189,14 +267,16 @@ export async function decrementBranchStock(
 export async function incrementBranchStock(
   branchId: string,
   productId: string,
+  variantId: string,
   quantity: number,
-  ctx: Omit<StockChangeContext, "branchId" | "productId" | "reason"> & {
+  ctx: Omit<StockChangeContext, "branchId" | "productId" | "variantId" | "reason"> & {
     reason?: InventoryLogReason;
   }
 ): Promise<void> {
   await applyStockDelta(quantity, undefined, {
     branchId,
     productId,
+    variantId,
     reason: ctx.reason ?? "order_cancelled",
     ...ctx,
   });
@@ -211,33 +291,53 @@ export async function restockCancelledOrder(
   if (!order.branchId) return;
 
   for (const item of order.items) {
-    await incrementBranchStock(order.branchId, item.productId, item.quantity, {
-      productName: item.name,
-      branchName: branchName ?? null,
-      referenceId: order.id,
-      referenceLabel: `Order #${order.id.slice(-6).toUpperCase()} cancelled`,
-      performedBy,
-      performedByName,
-      reason: "order_cancelled",
-    });
+    await incrementBranchStock(
+      order.branchId,
+      item.productId,
+      item.variantId,
+      item.quantity,
+      {
+        productName: item.name,
+        branchName: branchName ?? null,
+        referenceId: order.id,
+        referenceLabel: `Order #${order.id.slice(-6).toUpperCase()} cancelled`,
+        performedBy,
+        performedByName,
+        reason: "order_cancelled",
+      }
+    );
   }
 }
 
+export function buildVariantStockMap(
+  inventory: BranchInventory[]
+): Record<string, number> {
+  return Object.fromEntries(inventory.map((i) => [i.variantId, i.stock]));
+}
+
+/** @deprecated Use buildVariantStockMap */
 export function buildStockMap(
   inventory: BranchInventory[]
 ): Record<string, number> {
   return Object.fromEntries(inventory.map((i) => [i.productId, i.stock]));
 }
 
-/** @deprecated Use setBranchStockWithLog */
+/** @deprecated Use setBranchStockWithLog with variantId */
 export async function upsertBranchStock(
   branchId: string,
   productId: string,
   stock: number,
   lowStockThreshold = 5
 ): Promise<void> {
-  await setBranchStockWithLog(branchId, productId, stock, lowStockThreshold, {
-    performedBy: "system",
-    performedByName: "System",
-  });
+  await setBranchStockWithLog(
+    branchId,
+    productId,
+    defaultVariantId(productId),
+    stock,
+    lowStockThreshold,
+    {
+      performedBy: "system",
+      performedByName: "System",
+    }
+  );
 }

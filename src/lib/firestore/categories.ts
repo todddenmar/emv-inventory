@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -127,5 +128,15 @@ export async function restoreCategory(id: string): Promise<void> {
 }
 
 export async function deleteCategory(id: string): Promise<void> {
-  await archiveCategory(id);
+  const existingSnap = await getDoc(
+    doc(getClientDb(), "categories", id).withConverter(categoryConverter)
+  );
+  if (!existingSnap.exists()) return;
+
+  const category = existingSnap.data();
+  if (!category.isArchived) {
+    throw new Error("Archive the category before deleting it permanently");
+  }
+
+  await deleteDoc(doc(getClientDb(), "categories", id));
 }

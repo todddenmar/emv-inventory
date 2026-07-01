@@ -54,6 +54,7 @@ export interface BranchInventory {
   id: string;
   branchId: string;
   productId: string;
+  variantId: string;
   stock: number;
   lowStockThreshold: number;
   updatedAt: Date;
@@ -70,6 +71,22 @@ export interface Category {
   updatedAt: Date;
 }
 
+export interface ProductOption {
+  name: string;
+  values: string[];
+  position: number;
+}
+
+export interface ProductVariant {
+  id: string;
+  sku: string;
+  price: number;
+  compareAtPrice: number | null;
+  optionValues: Record<string, string>;
+  imageId: string | null;
+  position: number;
+}
+
 export interface ProductSpec {
   label: string;
   value: string;
@@ -82,16 +99,27 @@ export interface ProductImage {
   order: number;
 }
 
+export type ProductStatus = "draft" | "published";
+
 export interface Product {
   id: string;
   name: string;
   slug: string;
   description: string;
+  /** @deprecated Derived from default variant. Kept for legacy reads. */
   price: number;
+  /** @deprecated Derived from default variant. Kept for legacy reads. */
+  compareAtPrice: number | null;
   categoryIds: string[];
+  options: ProductOption[];
+  variants: ProductVariant[];
+  specsText: string;
+  /** @deprecated Use specsText. Kept for legacy documents. */
   specs: ProductSpec[];
   images: ProductImage[];
   thumbnailImageId: string | null;
+  status: ProductStatus;
+  /** @deprecated Use status === "published". Kept for legacy documents. */
   isActive: boolean;
   isArchived: boolean;
   archivedAt: Date | null;
@@ -111,6 +139,8 @@ export type PaymentMethod = "COD";
 
 export interface OrderItem {
   productId: string;
+  variantId: string;
+  sku: string;
   name: string;
   price: number;
   quantity: number;
@@ -197,6 +227,7 @@ export interface InventoryLog {
   branchId: string;
   branchName: string | null;
   productId: string;
+  variantId: string | null;
   productName: string | null;
   delta: number;
   previousStock: number;

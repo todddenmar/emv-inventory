@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { getClientAuth } from "@/lib/firebase";
 import { upsertUserOnLogin } from "@/lib/firestore/users";
+import { syncAuthClaims } from "@/lib/auth-claims";
 import { useAuthStore } from "@/stores/auth-store";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -19,6 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const appUser = await upsertUserOnLogin(firebaseUser);
+        await syncAuthClaims().catch(console.error);
         setUser(appUser);
       } catch {
         setUser(null);

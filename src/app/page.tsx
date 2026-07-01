@@ -44,15 +44,20 @@ export default function HomePage() {
       setCategories(categoryData);
       setTestimonials(testimonialData);
 
+      const catalog = await getProducts(true);
+
       if (shopBranch) {
-        const [catalog, inventory] = await Promise.all([
-          getProducts(true),
-          getBranchInventory(shopBranch.id),
-        ]);
+        const inventory = await getBranchInventory(shopBranch.id);
+        setProducts(mergeProductsWithInventory(catalog, inventory));
+      } else {
         setProducts(
-          mergeProductsWithInventory(catalog, inventory).filter(
-            (p) => p.isActive
-          )
+          catalog.map((product) => ({
+            ...product,
+            stock: 0,
+            totalStock: 0,
+            anyInStock: false,
+            lowStockThreshold: 5,
+          }))
         );
       }
     }

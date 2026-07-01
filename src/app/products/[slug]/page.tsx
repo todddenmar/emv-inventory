@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ProductDetailView } from "@/components/shop/product-detail";
 import { fetchProductBySlug } from "@/lib/firestore/public-catalog";
+import { stripHtml } from "@/lib/html";
 import { absoluteUrl, productPath, SITE_NAME } from "@/lib/seo";
 import { getProductThumbnailUrl } from "@/lib/products";
+import { getDefaultVariant } from "@/lib/product-variants";
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
@@ -21,13 +24,15 @@ export async function generateMetadata({
   const url = absoluteUrl(productPath(product.slug));
   const image = getProductThumbnailUrl(product);
 
+  const description = stripHtml(product.description);
+
   return {
     title: `${product.name} | ${SITE_NAME}`,
-    description: product.description,
+    description,
     alternates: { canonical: url },
     openGraph: {
       title: product.name,
-      description: product.description,
+      description,
       url,
       type: "website",
       images: image ? [{ url: image, alt: product.name }] : undefined,
@@ -40,16 +45,18 @@ export default async function ProductPage({ params }: ProductPageProps) {
   const product = await fetchProductBySlug(slug);
   if (!product) notFound();
 
+  const defaultVariant = getDefaultVariant(product);
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
-    description: product.description,
+    description: stripHtml(product.description),
     image: product.images.map((img) => img.url).filter(Boolean),
     offers: {
       "@type": "Offer",
       priceCurrency: "PHP",
-      price: product.price,
+      price: defaultVariant.price,
       availability: "https://schema.org/InStock",
       url: absoluteUrl(productPath(product.slug)),
     },
@@ -61,7 +68,9 @@ export default async function ProductPage({ params }: ProductPageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ProductDetailView product={product} />
+      <Suspense fallback={null}>
+        <ProductDetailView product={product} />
+      </Suspense>
     </>
   );
 }
