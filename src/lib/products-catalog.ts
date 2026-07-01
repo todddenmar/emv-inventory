@@ -1,4 +1,4 @@
-import { isHtmlEmpty } from "@/lib/html";
+import { isHtmlEmpty } from "@/lib/html-text";
 import { optionValuesKey } from "@/lib/product-variants";
 import type { Product } from "@/types";
 

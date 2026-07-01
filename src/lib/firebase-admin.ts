@@ -8,10 +8,13 @@ let adminDb: Firestore | undefined;
 
 function getProjectId(): string {
   const projectId =
+    process.env.FIREBASE_ADMIN_PROJECT_ID ??
     process.env.FIREBASE_PROJECT_ID ??
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   if (!projectId) {
-    throw new Error("Missing FIREBASE_PROJECT_ID or NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+    throw new Error(
+      "Missing FIREBASE_ADMIN_PROJECT_ID, FIREBASE_PROJECT_ID, or NEXT_PUBLIC_FIREBASE_PROJECT_ID"
+    );
   }
   return projectId;
 }
@@ -38,8 +41,12 @@ function getServiceAccountCredentials():
   | { projectId: string; clientEmail: string; privateKey: string }
   | null {
   const projectId = getProjectId();
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
-  const privateKey = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
+  const clientEmail =
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.trim() ??
+    process.env.FIREBASE_CLIENT_EMAIL?.trim();
+  const privateKey = normalizePrivateKey(
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY ?? process.env.FIREBASE_PRIVATE_KEY
+  );
 
   if (clientEmail && privateKey) {
     return { projectId, clientEmail, privateKey };
@@ -80,7 +87,7 @@ function getAdminApp(): App {
   const credentials = getServiceAccountCredentials();
   if (!credentials) {
     throw new Error(
-      "Missing Firebase Admin credentials. Set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY on Vercel."
+      "Missing Firebase Admin credentials. Set FIREBASE_ADMIN_CLIENT_EMAIL and FIREBASE_ADMIN_PRIVATE_KEY (or FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY)."
     );
   }
 

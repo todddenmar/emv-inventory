@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
 import {
   fetchPublicCategories,
   fetchPublicProducts,
 } from "@/lib/firestore/public-catalog";
 import { absoluteUrl, categoryPath, productPath } from "@/lib/seo";
+
+export const dynamic = "force-dynamic";
 
 export default async function sitemap() {
   const [categories, products] = await Promise.all([

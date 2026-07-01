@@ -12,7 +12,14 @@ export async function generateMetadata({
   params,
 }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const category = await fetchCategoryBySlug(slug);
+  let category: Awaited<ReturnType<typeof fetchCategoryBySlug>> = null;
+
+  try {
+    category = await fetchCategoryBySlug(slug);
+  } catch {
+    return { title: `Category not found | ${SITE_NAME}` };
+  }
+
   if (!category) {
     return { title: `Category not found | ${SITE_NAME}` };
   }
@@ -34,7 +41,15 @@ export async function generateMetadata({
 
 export default async function CategoryPage({ params }: CategoryPageProps) {
   const { slug } = await params;
-  const category = await fetchCategoryBySlug(slug);
+  let category: Awaited<ReturnType<typeof fetchCategoryBySlug>> = null;
+
+  try {
+    category = await fetchCategoryBySlug(slug);
+  } catch (error) {
+    console.error("[CategoryPage] fetchCategoryBySlug failed:", error);
+    notFound();
+  }
+
   if (!category) notFound();
 
   const jsonLd = {

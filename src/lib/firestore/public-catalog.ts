@@ -217,37 +217,43 @@ export async function fetchProductBySlug(
 }
 
 export async function fetchPublicCategories(): Promise<Category[]> {
-  try {
-    const { getAdminDb } = await import("@/lib/firebase-admin");
-    const snap = await getAdminDb().collection("categories").orderBy("name").get();
-    return snap.docs
-      .map((doc) => mapCategory(doc.id, doc.data() as Record<string, unknown>))
-      .filter((c) => !c.isArchived);
-  } catch (adminError) {
-    console.error("[public-catalog] Admin fetchPublicCategories failed:", adminError);
-    const snap = await getDocs(
-      query(collection(getPublicDb(), "categories"), orderBy("name"))
-    );
-    return snap.docs
-      .map((doc) => mapCategory(doc.id, doc.data() as Record<string, unknown>))
-      .filter((c) => !c.isArchived);
-  }
+  return withCatalogFallback(
+    "fetchPublicCategories",
+    async () => {
+      const { getAdminDb } = await import("@/lib/firebase-admin");
+      const snap = await getAdminDb().collection("categories").orderBy("name").get();
+      return snap.docs
+        .map((doc) => mapCategory(doc.id, doc.data() as Record<string, unknown>))
+        .filter((c) => !c.isArchived);
+    },
+    async () => {
+      const snap = await getDocs(
+        query(collection(getPublicDb(), "categories"), orderBy("name"))
+      );
+      return snap.docs
+        .map((doc) => mapCategory(doc.id, doc.data() as Record<string, unknown>))
+        .filter((c) => !c.isArchived);
+    }
+  );
 }
 
 export async function fetchPublicProducts(): Promise<Product[]> {
-  try {
-    const { getAdminDb } = await import("@/lib/firebase-admin");
-    const snap = await getAdminDb().collection("products").orderBy("name").get();
-    return snap.docs
-      .map((doc) => mapProduct(doc.id, doc.data() as Record<string, unknown>))
-      .filter((p) => isProductPublished(p));
-  } catch (adminError) {
-    console.error("[public-catalog] Admin fetchPublicProducts failed:", adminError);
-    const snap = await getDocs(
-      query(collection(getPublicDb(), "products"), orderBy("name"))
-    );
-    return snap.docs
-      .map((doc) => mapProduct(doc.id, doc.data() as Record<string, unknown>))
-      .filter((p) => isProductPublished(p));
-  }
+  return withCatalogFallback(
+    "fetchPublicProducts",
+    async () => {
+      const { getAdminDb } = await import("@/lib/firebase-admin");
+      const snap = await getAdminDb().collection("products").orderBy("name").get();
+      return snap.docs
+        .map((doc) => mapProduct(doc.id, doc.data() as Record<string, unknown>))
+        .filter((p) => isProductPublished(p));
+    },
+    async () => {
+      const snap = await getDocs(
+        query(collection(getPublicDb(), "products"), orderBy("name"))
+      );
+      return snap.docs
+        .map((doc) => mapProduct(doc.id, doc.data() as Record<string, unknown>))
+        .filter((p) => isProductPublished(p));
+    }
+  );
 }

@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ProductDetailView } from "@/components/shop/product-detail";
 import { fetchProductBySlug } from "@/lib/firestore/public-catalog";
-import { stripHtml } from "@/lib/html";
+import { stripHtml } from "@/lib/html-text";
 import { absoluteUrl, productPath, SITE_NAME } from "@/lib/seo";
 import { getProductThumbnailUrl } from "@/lib/products";
 import { getDefaultVariant } from "@/lib/product-variants";
