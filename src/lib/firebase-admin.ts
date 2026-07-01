@@ -16,6 +16,58 @@ function getProjectId(): string {
   return projectId;
 }
 
+function normalizePrivateKey(raw: string | undefined): string | undefined {
+  if (!raw?.trim()) return undefined;
+
+  let key = raw.trim();
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1);
+  }
+
+  if (key.includes("\\n")) {
+    key = key.replace(/\\n/g, "\n");
+  }
+
+  return key;
+}
+
+function getServiceAccountCredentials():
+  | { projectId: string; clientEmail: string; privateKey: string }
+  | null {
+  const projectId = getProjectId();
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+  const privateKey = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
+
+  if (clientEmail && privateKey) {
+    return { projectId, clientEmail, privateKey };
+  }
+
+  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  if (json) {
+    try {
+      const parsed = JSON.parse(json) as {
+        project_id?: string;
+        client_email?: string;
+        private_key?: string;
+      };
+      if (parsed.client_email && parsed.private_key) {
+        return {
+          projectId: parsed.project_id ?? projectId,
+          clientEmail: parsed.client_email,
+          privateKey: normalizePrivateKey(parsed.private_key) ?? parsed.private_key,
+        };
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  return null;
+}
+
 function getAdminApp(): App {
   if (adminApp) return adminApp;
 
@@ -25,20 +77,17 @@ function getAdminApp(): App {
     return adminApp;
   }
 
-  const projectId = getProjectId();
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-
-  if (clientEmail && privateKey) {
-    adminApp = initializeApp({
-      credential: cert({ projectId, clientEmail, privateKey }),
-    });
-    return adminApp;
+  const credentials = getServiceAccountCredentials();
+  if (!credentials) {
+    throw new Error(
+      "Missing Firebase Admin credentials. Set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY on Vercel."
+    );
   }
 
-  throw new Error(
-    "Missing FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY for custom auth claims"
-  );
+  adminApp = initializeApp({
+    credential: cert(credentials),
+  });
+  return adminApp;
 }
 
 export function getAdminAuth(): Auth {

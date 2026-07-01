@@ -16,7 +16,14 @@ export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = await fetchProductBySlug(slug);
+  let product: Awaited<ReturnType<typeof fetchProductBySlug>> = null;
+
+  try {
+    product = await fetchProductBySlug(slug);
+  } catch {
+    return { title: `Product not found | ${SITE_NAME}` };
+  }
+
   if (!product) {
     return { title: `Product not found | ${SITE_NAME}` };
   }
@@ -42,7 +49,15 @@ export async function generateMetadata({
 
 export default async function ProductPage({ params }: ProductPageProps) {
   const { slug } = await params;
-  const product = await fetchProductBySlug(slug);
+  let product: Awaited<ReturnType<typeof fetchProductBySlug>> = null;
+
+  try {
+    product = await fetchProductBySlug(slug);
+  } catch (error) {
+    console.error("[ProductPage] fetchProductBySlug failed:", error);
+    notFound();
+  }
+
   if (!product) notFound();
 
   const defaultVariant = getDefaultVariant(product);
