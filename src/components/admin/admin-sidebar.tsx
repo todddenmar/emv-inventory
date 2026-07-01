@@ -14,6 +14,8 @@ import {
   ArrowRightLeft,
   Layout,
   Settings,
+  Home,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -84,12 +86,29 @@ export function AdminNavLinks({
 
 export function AdminSidebar() {
   return (
-    <aside className="hidden w-64 shrink-0 border-r bg-muted/30 p-4 md:block">
+    <aside className="hidden w-64 shrink-0 border-r bg-muted/30 p-4 md:flex md:flex-col">
       <div className="mb-6">
         <h2 className="text-lg font-semibold">Admin Panel</h2>
         <p className="text-sm text-muted-foreground">Inventory Management</p>
       </div>
-      <AdminNavLinks />
+      <AdminNavLinks className="flex-1" />
+      <div className="mt-4 space-y-1 border-t pt-4">
+        <Link
+          href="/"
+          className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Home className="h-4 w-4 shrink-0" />
+          View homepage
+          <ExternalLink className="ml-auto h-3.5 w-3.5 opacity-50" />
+        </Link>
+        <Link
+          href="/shop"
+          className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Store className="h-4 w-4 shrink-0" />
+          View shop
+        </Link>
+      </div>
     </aside>
   );
 }

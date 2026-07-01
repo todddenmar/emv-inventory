@@ -11,6 +11,7 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 import { BannerSkeleton } from "@/components/shop/home-skeletons";
+import { homeHeroVisualClass } from "@/components/shop/home-hero-visual";
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { cn } from "@/lib/utils";
 import type { HomeBanner } from "@/types";
@@ -39,18 +40,23 @@ export function HomeBanners({
 
   if (banners.length === 0) return null;
 
+  const homeBannerFrame = cn(
+    homeHeroVisualClass,
+    "overflow-hidden rounded-3xl border-2 border-brand-black/15 shadow-xl"
+  );
+
   return (
-    <section className={cn("relative", !isHome && "px-1")}>
+    <section className={cn("relative w-full max-w-lg lg:max-w-none", !isHome && "px-1")}>
       <Carousel setApi={setApi} opts={{ loop: banners.length > 1 }}>
-        <CarouselContent>
+        <CarouselContent className={cn(isHome && "ml-0")}>
           {banners.map((banner) => {
             const content = (
               <div
                 className={cn(
-                  "relative overflow-hidden",
+                  "relative",
                   isHome
-                    ? "aspect-[4/3] rounded-3xl border-2 border-brand-black/15 shadow-xl"
-                    : "aspect-[21/9] rounded-xl sm:aspect-[3/1]"
+                    ? homeBannerFrame
+                    : "aspect-[21/9] overflow-hidden rounded-xl sm:aspect-[3/1]"
                 )}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -98,7 +104,10 @@ export function HomeBanners({
             );
 
             return (
-              <CarouselItem key={banner.id}>
+              <CarouselItem
+                key={banner.id}
+                className={cn(isHome && "basis-full pl-0")}
+              >
                 {banner.linkUrl ? (
                   <Link href={banner.linkUrl} className="block">
                     {content}

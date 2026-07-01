@@ -2,6 +2,7 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { homeHeroVisualClass } from "@/components/shop/home-hero-visual";
 
 type HomeVariant = "default" | "home";
 
@@ -15,7 +16,7 @@ export function BannerSkeleton({ variant = "default" }: { variant?: HomeVariant 
       className={cn(
         "w-full",
         variant === "home"
-          ? "aspect-[4/3] rounded-3xl"
+          ? cn(homeHeroVisualClass, "rounded-3xl")
           : "aspect-[21/9] rounded-xl sm:aspect-[3/1]",
         skeletonTone(variant)
       )}
@@ -55,33 +56,20 @@ export function CategoriesSectionSkeleton({
   );
 }
 
-export function ProductCardSkeleton({ variant = "default" }: { variant?: HomeVariant }) {
+export function ProductCardSkeleton({
+  variant: _variant = "default",
+}: {
+  variant?: HomeVariant;
+}) {
   return (
-    <div className="space-y-3">
-      <Skeleton
-        className={cn(
-          "aspect-square w-full rounded-2xl",
-          variant === "home" ? "bg-brand-black/10" : skeletonTone(variant)
-        )}
-      />
-      <Skeleton
-        className={cn(
-          "h-4 w-3/4",
-          variant === "home" ? "bg-brand-black/10" : skeletonTone(variant)
-        )}
-      />
-      <Skeleton
-        className={cn(
-          "h-4 w-1/2",
-          variant === "home" ? "bg-brand-black/10" : skeletonTone(variant)
-        )}
-      />
-      <Skeleton
-        className={cn(
-          "h-9 w-full rounded-full",
-          variant === "home" ? "bg-brand-black/10" : skeletonTone(variant)
-        )}
-      />
+    <div className="flex h-full flex-col space-y-3 rounded-2xl border border-brand-black/10 bg-white p-0 shadow-sm">
+      <Skeleton className="aspect-square w-full rounded-none bg-brand-black/10" />
+      <div className="space-y-3 px-4 pb-4">
+        <Skeleton className="h-4 w-3/4 bg-brand-black/10" />
+        <Skeleton className="h-4 w-full bg-brand-black/10" />
+        <Skeleton className="h-7 w-1/2 bg-brand-black/10" />
+        <Skeleton className="h-9 w-full rounded-full bg-brand-black/10" />
+      </div>
     </div>
   );
 }
@@ -93,6 +81,8 @@ export function ProductsSectionSkeleton({
   variant?: HomeVariant;
   dark?: boolean;
 }) {
+  const isHome = variant === "home";
+
   return (
     <section className="space-y-4">
       <Skeleton
@@ -101,11 +91,29 @@ export function ProductsSectionSkeleton({
           dark ? "bg-brand-yellow/20" : skeletonTone(variant)
         )}
       />
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <ProductCardSkeleton key={i} variant={variant} />
-        ))}
-      </div>
+      {isHome ? (
+        <>
+          <div className="flex gap-3 overflow-hidden md:hidden">
+            <div className="w-[84%] shrink-0">
+              <ProductCardSkeleton variant={variant} />
+            </div>
+            <div className="w-[84%] shrink-0 opacity-60">
+              <ProductCardSkeleton variant={variant} />
+            </div>
+          </div>
+          <div className="hidden items-stretch gap-4 md:grid md:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <ProductCardSkeleton key={i} variant={variant} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="grid grid-cols-2 items-stretch gap-4 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <ProductCardSkeleton key={i} variant={variant} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

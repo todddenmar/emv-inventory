@@ -1,16 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ProductCard } from "@/components/shop/product-card";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  ShopCatalogFilters,
+  sortShopProducts,
+  type ShopSortOption,
+} from "@/components/shop/shop-catalog-filters";
 import { ProductsSectionSkeleton } from "@/components/shop/home-skeletons";
 import { getProducts } from "@/lib/firestore/products";
 import { getCategories } from "@/lib/firestore/categories";
@@ -45,6 +43,7 @@ function ShopCatalogInner({
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("all");
+  const [sort, setSort] = useState<ShopSortOption>("name_asc");
   const [shopBranchName, setShopBranchName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,9 +68,7 @@ function ShopCatalogInner({
       }
 
       const inventory = await getBranchInventory(shopBranch.id).catch(() => []);
-      setProducts(
-        mergeProductsWithInventory(catalog, inventory)
-      );
+      setProducts(mergeProductsWithInventory(catalog, inventory));
     }
 
     load().catch(console.error).finally(() => setLoading(false));
@@ -85,22 +82,25 @@ function ShopCatalogInner({
     }
   }, [legacyCategoryId, categories, router]);
 
-  const filtered = products.filter((p) => {
-    const plainDescription = stripHtml(p.description);
-    const matchesSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      plainDescription.toLowerCase().includes(search.toLowerCase()) ||
-      specsTextMatchesSearch(p.specsText, search);
-    const matchesCategory =
-      categoryId === "all" || p.categoryIds.includes(categoryId);
-    return matchesSearch && matchesCategory;
-  });
+  const filtered = useMemo(() => {
+    const matches = products.filter((p) => {
+      const plainDescription = stripHtml(p.description);
+      const matchesSearch =
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        plainDescription.toLowerCase().includes(search.toLowerCase()) ||
+        specsTextMatchesSearch(p.specsText, search);
+      const matchesCategory =
+        categoryId === "all" || p.categoryIds.includes(categoryId);
+      return matchesSearch && matchesCategory;
+    });
+    return sortShopProducts(matches, sort);
+  }, [products, search, categoryId, sort]);
 
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
   const activeCategory = categories.find((c) => c.id === categoryId);
 
-  const handleCategoryChange = (value: string | null) => {
-    if (!value || value === "all") {
+  const handleCategoryChange = (value: string) => {
+    if (value === "all") {
       router.push("/shop");
       return;
     }
@@ -108,6 +108,11 @@ function ShopCatalogInner({
     if (category) {
       router.push(categoryPath(category.slug));
     }
+  };
+
+  const handleClearFilters = () => {
+    setSort("name_asc");
+    router.push("/shop");
   };
 
   return (
@@ -125,8 +130,8 @@ function ShopCatalogInner({
         )}
       </div>
 
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row">
-        <div className="relative flex-1">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search products..."
@@ -135,19 +140,14 @@ function ShopCatalogInner({
             className="pl-9"
           />
         </div>
-        <Select value={categoryId} onValueChange={handleCategoryChange}>
-          <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {categories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.id}>
-                {cat.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ShopCatalogFilters
+          categories={categories}
+          categoryId={categoryId}
+          sort={sort}
+          onCategoryChange={handleCategoryChange}
+          onSortChange={setSort}
+          onClear={handleClearFilters}
+        />
       </div>
 
       {loading ? (
@@ -163,7 +163,7 @@ function ShopCatalogInner({
           <p className="text-muted-foreground">No products available yet.</p>
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((product) => (
             <ProductCard
               key={product.id}

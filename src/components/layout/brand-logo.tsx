@@ -10,6 +10,13 @@ const sizeMap = {
   md: { dimension: 40, className: "h-10 w-10" },
   lg: { dimension: 72, className: "h-[4.5rem] w-[4.5rem]" },
   xl: { dimension: 112, className: "h-28 w-28" },
+  "2xl": { dimension: 144, className: "h-36 w-36 sm:h-40 sm:w-40" },
+  "3xl": { dimension: 224, className: "h-48 w-48 sm:h-56 sm:w-56" },
+  "4xl": { dimension: 320, className: "h-56 w-56 sm:h-64 sm:w-64 lg:h-80 lg:w-80" },
+  "5xl": {
+    dimension: 384,
+    className: "h-64 w-64 sm:h-80 sm:w-80 lg:h-96 lg:w-96",
+  },
 } as const;
 
 interface BrandLogoProps {

@@ -589,7 +589,12 @@ export default function AdminHomepagePage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select product" />
+                  <SelectValue placeholder="Select product">
+                    {(value) =>
+                      products.find((p) => p.id === value)?.name ??
+                      "Select product"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {products.map((p) => (

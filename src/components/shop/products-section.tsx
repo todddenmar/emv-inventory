@@ -7,6 +7,11 @@ import {
   ProductsSectionSkeleton,
   ProductCardSkeleton,
 } from "@/components/shop/home-skeletons";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+} from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import type { Category } from "@/types";
 import type { ProductWithStock } from "@/lib/inventory";
@@ -21,6 +26,53 @@ interface ProductsSectionProps {
   dark?: boolean;
 }
 
+function sortFeaturedProducts(products: ProductWithStock[]) {
+  return [...products]
+    .sort((a, b) => {
+      if (a.anyInStock && !b.anyInStock) return -1;
+      if (!a.anyInStock && b.anyInStock) return 1;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, 8);
+}
+
+function FeaturedProductsMobileCarousel({
+  products,
+  categoryMap,
+  variant,
+}: {
+  products: ProductWithStock[];
+  categoryMap: Record<string, Category>;
+  variant: "default" | "home";
+}) {
+  return (
+    <div className="-mx-4 px-4 md:hidden">
+      <Carousel
+        opts={{
+          align: "start",
+          containScroll: "trimSnaps",
+          loop: products.length > 1,
+        }}
+      >
+        <CarouselContent className="-ml-3">
+          {products.map((product) => (
+            <CarouselItem key={product.id} className="basis-[84%] pl-3 sm:basis-[72%]">
+              <ProductCard
+                product={product}
+                stock={product.stock}
+                variant={variant}
+                categories={product.categoryIds
+                  .map((id) => categoryMap[id])
+                  .filter(Boolean)}
+              />
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+      </Carousel>
+    </div>
+  );
+}
+
 export function ProductsSection({
   products,
   categories,
@@ -32,13 +84,7 @@ export function ProductsSection({
   const isHome = variant === "home";
   const isDark = isHome && dark;
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
-  const featured = [...products]
-    .sort((a, b) => {
-      if (a.anyInStock && !b.anyInStock) return -1;
-      if (!a.anyInStock && b.anyInStock) return 1;
-      return a.name.localeCompare(b.name);
-    })
-    .slice(0, 8);
+  const featured = sortFeaturedProducts(products);
 
   if (loading) {
     return <ProductsSectionSkeleton variant={variant} dark={dark} />;
@@ -55,10 +101,19 @@ export function ProductsSection({
         >
           {title}
         </h2>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <ProductCardSkeleton key={i} variant={variant} />
-          ))}
+        <div className="flex gap-3 overflow-hidden md:grid md:grid-cols-2 md:gap-4 lg:grid-cols-4">
+          <div className="w-[84%] shrink-0 md:w-auto">
+            <ProductCardSkeleton variant={variant} />
+          </div>
+          <div className="w-[84%] shrink-0 md:w-auto">
+            <ProductCardSkeleton variant={variant} />
+          </div>
+          <div className="hidden md:block">
+            <ProductCardSkeleton variant={variant} />
+          </div>
+          <div className="hidden lg:block">
+            <ProductCardSkeleton variant={variant} />
+          </div>
         </div>
         <p
           className={cn(
@@ -103,7 +158,7 @@ export function ProductsSection({
           <Link
             href="/shop"
             className={cn(
-              "inline-flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90",
+              "inline-flex shrink-0 items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90",
               isDark
                 ? "bg-brand-yellow text-brand-black"
                 : "bg-brand-black text-brand-yellow"
@@ -114,19 +169,43 @@ export function ProductsSection({
           </Link>
         ) : null}
       </div>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {featured.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            stock={product.stock}
+
+      {isHome ? (
+        <>
+          <FeaturedProductsMobileCarousel
+            products={featured}
+            categoryMap={categoryMap}
             variant={variant}
-            categories={product.categoryIds
-              .map((id) => categoryMap[id])
-              .filter(Boolean)}
           />
-        ))}
-      </div>
+          <div className="hidden items-stretch gap-4 md:grid md:grid-cols-2 lg:grid-cols-4">
+            {featured.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                stock={product.stock}
+                variant={variant}
+                categories={product.categoryIds
+                  .map((id) => categoryMap[id])
+                  .filter(Boolean)}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="grid grid-cols-2 items-stretch gap-4 lg:grid-cols-4">
+          {featured.map((product) => (
+            <ProductCard
+              key={product.id}
+              product={product}
+              stock={product.stock}
+              variant={variant}
+              categories={product.categoryIds
+                .map((id) => categoryMap[id])
+                .filter(Boolean)}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

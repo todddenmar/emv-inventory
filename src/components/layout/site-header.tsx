@@ -112,7 +112,7 @@ export function SiteHeader() {
       >
         <BrandLogo
           href="/"
-          size="sm"
+          size={isBrandedHeader ? "md" : "sm"}
           priority
           nameClassName={isBrandedHeader ? "text-brand-yellow" : undefined}
         />
