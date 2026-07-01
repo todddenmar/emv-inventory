@@ -1,12 +1,4 @@
-import {
-  collection,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
-import { getPublicDb } from "@/lib/firebase-public";
+import { getAdminDb } from "@/lib/firebase-admin";
 import { resolveSlug } from "@/lib/slug";
 import { isProductPublished } from "@/lib/products-catalog";
 import { migrateLegacyProductVariants, getDefaultVariant } from "@/lib/product-variants";
@@ -82,22 +74,22 @@ function mapProduct(id: string, data: Record<string, unknown>): Product {
 export async function fetchCategoryBySlug(
   slug: string
 ): Promise<Category | null> {
-  const db = getPublicDb();
-  const bySlug = query(
-    collection(db, "categories"),
-    where("slug", "==", slug),
-    limit(1)
-  );
-  const snap = await getDocs(bySlug);
-  if (!snap.empty) {
-    const doc = snap.docs[0];
-    const category = mapCategory(doc.id, doc.data());
+  const db = getAdminDb();
+  const bySlug = await db
+    .collection("categories")
+    .where("slug", "==", slug)
+    .limit(1)
+    .get();
+
+  if (!bySlug.empty) {
+    const doc = bySlug.docs[0];
+    const category = mapCategory(doc.id, doc.data() as Record<string, unknown>);
     if (!category.isArchived) return category;
   }
 
-  const all = await getDocs(query(collection(db, "categories"), orderBy("name")));
+  const all = await db.collection("categories").orderBy("name").get();
   for (const doc of all.docs) {
-    const category = mapCategory(doc.id, doc.data());
+    const category = mapCategory(doc.id, doc.data() as Record<string, unknown>);
     if (!category.isArchived && category.slug === slug) return category;
   }
   return null;
@@ -106,22 +98,22 @@ export async function fetchCategoryBySlug(
 export async function fetchProductBySlug(
   slug: string
 ): Promise<Product | null> {
-  const db = getPublicDb();
-  const bySlug = query(
-    collection(db, "products"),
-    where("slug", "==", slug),
-    limit(1)
-  );
-  const snap = await getDocs(bySlug);
-  if (!snap.empty) {
-    const doc = snap.docs[0];
-    const product = mapProduct(doc.id, doc.data());
+  const db = getAdminDb();
+  const bySlug = await db
+    .collection("products")
+    .where("slug", "==", slug)
+    .limit(1)
+    .get();
+
+  if (!bySlug.empty) {
+    const doc = bySlug.docs[0];
+    const product = mapProduct(doc.id, doc.data() as Record<string, unknown>);
     if (isProductPublished(product)) return product;
   }
 
-  const all = await getDocs(query(collection(db, "products"), orderBy("name")));
+  const all = await db.collection("products").orderBy("name").get();
   for (const doc of all.docs) {
-    const product = mapProduct(doc.id, doc.data());
+    const product = mapProduct(doc.id, doc.data() as Record<string, unknown>);
     if (isProductPublished(product) && product.slug === slug) {
       return product;
     }
@@ -130,19 +122,15 @@ export async function fetchProductBySlug(
 }
 
 export async function fetchPublicCategories(): Promise<Category[]> {
-  const snap = await getDocs(
-    query(collection(getPublicDb(), "categories"), orderBy("name"))
-  );
+  const snap = await getAdminDb().collection("categories").orderBy("name").get();
   return snap.docs
-    .map((doc) => mapCategory(doc.id, doc.data()))
+    .map((doc) => mapCategory(doc.id, doc.data() as Record<string, unknown>))
     .filter((c) => !c.isArchived);
 }
 
 export async function fetchPublicProducts(): Promise<Product[]> {
-  const snap = await getDocs(
-    query(collection(getPublicDb(), "products"), orderBy("name"))
-  );
+  const snap = await getAdminDb().collection("products").orderBy("name").get();
   return snap.docs
-    .map((doc) => mapProduct(doc.id, doc.data()))
+    .map((doc) => mapProduct(doc.id, doc.data() as Record<string, unknown>))
     .filter((p) => isProductPublished(p));
 }

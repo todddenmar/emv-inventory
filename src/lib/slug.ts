@@ -47,20 +47,18 @@ export function resolveSlug(
 
 export async function ensureUniqueSlug(
   base: string,
-  isTaken: (slug: string) => Promise<boolean>,
-  excludeSlug?: string
+  isTaken: (slug: string) => Promise<boolean>
 ): Promise<string> {
-  let slug = slugify(base) || "item";
-  if (excludeSlug && slug === excludeSlug) return slug;
+  const slug = slugify(base) || "item";
 
-  if (!(await isTaken(slug)) || slug === excludeSlug) {
+  if (!(await isTaken(slug))) {
     return slug;
   }
 
   let counter = 2;
   while (counter < 100) {
     const candidate = `${slug}-${counter}`;
-    if (!(await isTaken(candidate)) || candidate === excludeSlug) {
+    if (!(await isTaken(candidate))) {
       return candidate;
     }
     counter += 1;

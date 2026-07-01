@@ -44,7 +44,7 @@ export async function resolveCategorySlug(
   excludeId?: string
 ): Promise<string> {
   const base = preferredSlug?.trim() ? slugify(preferredSlug) : slugify(name);
-  return ensureUniqueSlug(base || "category", isCategorySlugTaken, excludeId);
+  return ensureUniqueSlug(base, (slug) => isCategorySlugTaken(slug, excludeId));
 }
 
 export async function getCategories(

@@ -89,7 +89,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       resolveProductSlug(name || "draft", preferredSlug, productId),
     [productId]
   );
-  const { slug, setSlug, syncSlugFromName, resetSlugField } =
+  const { slug, setSlug, syncSlugFromName, applySlugFromName, resetSlugField } =
     useSlugField(resolveSlug);
 
   const form = useForm<ProductFormValues>({
@@ -370,14 +370,34 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
 
           <div className="space-y-2 sm:col-span-2">
             <Label htmlFor="slug">URL slug</Label>
-            <Input
-              id="slug"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="e.g. house-blend-coffee"
-            />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                id="slug"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="e.g. apple-ball"
+                className="sm:flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                disabled={saving || publishing}
+                onClick={() => {
+                  const name = getValues("name").trim();
+                  if (!name) {
+                    toast.error("Enter a product name first");
+                    return;
+                  }
+                  void applySlugFromName(name);
+                }}
+              >
+                Use name as slug
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Used in /products/{slug || "your-slug"}
+              Used in /products/{slug || "your-slug"}. Example: Apple Ball →
+              apple-ball (adds -2, -3… if already taken).
             </p>
           </div>
 

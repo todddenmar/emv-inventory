@@ -39,8 +39,31 @@ export async function resolveProductSlug(
   preferredSlug?: string,
   excludeId?: string
 ): Promise<string> {
-  const base = preferredSlug?.trim() ? slugify(preferredSlug) : slugify(name);
-  return ensureUniqueSlug(base || "product", isProductSlugTaken, excludeId);
+  const existing = excludeId ? await getProduct(excludeId) : null;
+  const normalizedPreferred = preferredSlug?.trim()
+    ? slugify(preferredSlug)
+    : "";
+  const normalizedName = slugify(name);
+
+  if (
+    existing &&
+    normalizedPreferred &&
+    normalizedPreferred === existing.slug
+  ) {
+    return existing.slug;
+  }
+
+  const base = normalizedPreferred || normalizedName || "product";
+  return ensureUniqueSlug(base, (slug) => isProductSlugTaken(slug, excludeId));
+}
+
+/** Always slugify from the product name (ignores the current slug field). */
+export async function resolveProductSlugFromName(
+  name: string,
+  excludeId?: string
+): Promise<string> {
+  const base = slugify(name) || "product";
+  return ensureUniqueSlug(base, (slug) => isProductSlugTaken(slug, excludeId));
 }
 
 export async function getProducts(

@@ -53,10 +53,29 @@ export function useSlugField(resolveSlug: ResolveSlugFn) {
     };
   }, []);
 
+  const applySlugFromName = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+
+      slugManualRef.current = true;
+      setSlugState(slugify(trimmed));
+
+      try {
+        const unique = await resolveSlug(trimmed);
+        setSlugState(unique);
+      } catch {
+        setSlugState(slugify(trimmed));
+      }
+    },
+    [resolveSlug]
+  );
+
   return {
     slug,
     setSlug: handleSlugChange,
     syncSlugFromName,
+    applySlugFromName,
     resetSlugField,
   };
 }

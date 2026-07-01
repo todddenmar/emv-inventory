@@ -1,7 +1,7 @@
 import type { ProductOption, ProductSpec, ProductVariant } from "@/types";
 
-export function parseSpecsText(input: string): ProductSpec[] {
-  const parts = input
+export function parseSpecsText(input: string | null | undefined): ProductSpec[] {
+  const parts = (input ?? "")
     .split(/[,\n]+/)
     .map((part) => part.trim())
     .filter(Boolean);

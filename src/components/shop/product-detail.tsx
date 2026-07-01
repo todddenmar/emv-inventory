@@ -41,7 +41,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
 
   const sortedOptions = useMemo(
-    () => [...product.options].sort((a, b) => a.position - b.position),
+    () => [...(product.options ?? [])].sort((a, b) => a.position - b.position),
     [product.options]
   );
 
@@ -93,7 +93,7 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
       if (!shopBranch) return;
 
       const entries = await Promise.all(
-        product.variants.map(async (variant) => {
+        (product.variants ?? []).map(async (variant) => {
           const row = await getBranchVariantStock(shopBranch.id, variant.id);
           return [variant.id, row?.stock ?? 0] as const;
         })
@@ -105,11 +105,12 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
   useEffect(() => {
     if (!selectedVariant) return;
-    const path = productVariantPath(product.slug, selectedVariant.id);
-    if (typeof window !== "undefined" && window.location.pathname + window.location.search !== path) {
-      router.replace(path, { scroll: false });
-    }
-  }, [selectedVariant, product.slug, router]);
+    const currentVariantId = searchParams.get("variant");
+    if (currentVariantId === selectedVariant.id) return;
+    router.replace(productVariantPath(product.slug, selectedVariant.id), {
+      scroll: false,
+    });
+  }, [searchParams, selectedVariant, product.slug, router]);
 
   const outOfStock = stock <= 0;
   const variantLabel = formatVariantLabel(selectedVariant, sortedOptions);
