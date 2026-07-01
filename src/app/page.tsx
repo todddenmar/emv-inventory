@@ -44,10 +44,10 @@ export default function HomePage() {
       setCategories(categoryData);
       setTestimonials(testimonialData);
 
-      const catalog = await getProducts(true);
+      const catalog = await getProducts(true).catch(() => []);
 
       if (shopBranch) {
-        const inventory = await getBranchInventory(shopBranch.id);
+        const inventory = await getBranchInventory(shopBranch.id).catch(() => []);
         setProducts(mergeProductsWithInventory(catalog, inventory));
       } else {
         setProducts(

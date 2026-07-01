@@ -12,8 +12,12 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
-    if (!user || !isStaff) {
+    if (!user) {
       router.replace("/login?redirect=/admin");
+      return;
+    }
+    if (!isStaff) {
+      router.replace("/");
     }
   }, [loading, user, isStaff, router]);
 

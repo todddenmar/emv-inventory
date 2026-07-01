@@ -94,7 +94,9 @@ export function ProductDetailView({ product }: ProductDetailViewProps) {
 
       const entries = await Promise.all(
         (product.variants ?? []).map(async (variant) => {
-          const row = await getBranchVariantStock(shopBranch.id, variant.id);
+          const row = await getBranchVariantStock(shopBranch.id, variant.id).catch(
+            () => null
+          );
           return [variant.id, row?.stock ?? 0] as const;
         })
       );

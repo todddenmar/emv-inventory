@@ -13,7 +13,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { OpenInBrowserPrompt } from "@/components/auth/open-in-browser-prompt";
 import { signInWithGoogle, signInAsGuest } from "@/lib/auth";
+import { isInAppBrowser } from "@/lib/in-app-browser";
+import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 import { useAuthStore, useIsStaff } from "@/stores/auth-store";
 
 function LoginContent() {
@@ -25,27 +28,28 @@ function LoginContent() {
   const loading = useAuthStore((s) => s.loading);
   const isStaff = useIsStaff();
   const [signingIn, setSigningIn] = useState(false);
+  const [inAppBrowser, setInAppBrowser] = useState(false);
+
+  useEffect(() => {
+    setInAppBrowser(isInAppBrowser());
+  }, []);
 
   useEffect(() => {
     if (loading || !user) return;
-    if (isStaff) {
-      router.replace(redirect.startsWith("/admin") ? redirect : "/admin");
-    } else {
-      router.replace(redirect);
-    }
+    router.replace(resolvePostLoginRedirect(isStaff, redirect));
   }, [user, loading, isStaff, router, redirect]);
 
   const handleGoogleSignIn = async () => {
+    if (inAppBrowser) return;
+
     setSigningIn(true);
     try {
       const appUser = await signInWithGoogle(inviteToken);
       useAuthStore.getState().setUser(appUser);
       toast.success(`Welcome, ${appUser.displayName || "user"}!`);
-      if (appUser.role === "master-admin" || appUser.role === "manager") {
-        router.push("/admin");
-      } else {
-        router.push(redirect);
-      }
+      const staff =
+        appUser.role === "master-admin" || appUser.role === "manager";
+      router.push(resolvePostLoginRedirect(staff, redirect));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign in failed");
     } finally {
@@ -59,7 +63,7 @@ function LoginContent() {
       const appUser = await signInAsGuest();
       useAuthStore.getState().setUser(appUser);
       toast.success("Signed in as guest");
-      router.push(redirect);
+      router.push(resolvePostLoginRedirect(false, redirect));
     } catch {
       toast.error("Guest sign in failed");
     } finally {
@@ -75,14 +79,16 @@ function LoginContent() {
           <CardDescription>
             {inviteToken
               ? "Accept your manager invite by signing in with Google"
-              : "Sign in to manage inventory or track your orders"}
+              : "Sign in to track your orders or manage the shop"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <OpenInBrowserPrompt />
+
           <Button
             className="w-full"
             onClick={handleGoogleSignIn}
-            disabled={signingIn}
+            disabled={signingIn || inAppBrowser}
           >
             {signingIn && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Continue with Google
@@ -111,7 +117,6 @@ function LoginContent() {
           )}
 
           <p className="text-center text-xs text-muted-foreground">
-            The first Google sign-in becomes master-admin.{" "}
             <Link href="/" className="underline">
               Back to shop
             </Link>

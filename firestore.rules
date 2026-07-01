@@ -28,6 +28,11 @@ service cloud.firestore {
       return isMasterAdmin() || managerBranchId() == branchId;
     }
 
+    function isOnlineShopBranch(branchId) {
+      let branch = get(/databases/$(database)/documents/branches/$(branchId));
+      return branch.data.isOnlineShop == true && branch.data.isActive == true;
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
       allow read: if isStaff();
@@ -65,6 +70,8 @@ service cloud.firestore {
     }
 
     match /branchInventory/{inventoryId} {
+      allow read: if resource.data.branchId != null &&
+        isOnlineShopBranch(resource.data.branchId);
       allow read: if resource.data.branchId != null &&
         (isMasterAdmin() || managerBranchId() == resource.data.branchId);
       allow read: if isMasterAdmin();

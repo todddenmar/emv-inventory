@@ -68,7 +68,7 @@ function ShopCatalogInner({
         return;
       }
 
-      const inventory = await getBranchInventory(shopBranch.id);
+      const inventory = await getBranchInventory(shopBranch.id).catch(() => []);
       setProducts(
         mergeProductsWithInventory(catalog, inventory)
       );
