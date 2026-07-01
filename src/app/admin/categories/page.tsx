@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, Archive, ArchiveRestore, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -44,10 +44,12 @@ import {
   archiveCategory,
   createCategory,
   getCategories,
+  resolveCategorySlug,
   restoreCategory,
   updateCategory,
 } from "@/lib/firestore/categories";
 import { slugify } from "@/lib/slug";
+import { useSlugField } from "@/hooks/use-slug-field";
 import type { Category } from "@/types";
 
 export default function AdminCategoriesPage() {
@@ -59,7 +61,13 @@ export default function AdminCategoriesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
+  const resolveSlug = useCallback(
+    (categoryName: string, preferredSlug?: string) =>
+      resolveCategorySlug(categoryName, preferredSlug, editing?.id),
+    [editing?.id]
+  );
+  const { slug, setSlug, syncSlugFromName, resetSlugField } =
+    useSlugField(resolveSlug);
   const [tags, setTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -89,7 +97,7 @@ export default function AdminCategoriesPage() {
   const openCreate = () => {
     setEditing(null);
     setName("");
-    setSlug("");
+    resetSlugField("", false);
     setTags([]);
     setDialogOpen(true);
   };
@@ -97,7 +105,7 @@ export default function AdminCategoriesPage() {
   const openEdit = (category: Category) => {
     setEditing(category);
     setName(category.name);
-    setSlug(category.slug);
+    resetSlugField(category.slug, true);
     setTags(category.tags);
     setDialogOpen(true);
   };
@@ -203,9 +211,7 @@ export default function AdminCategoriesPage() {
                 onChange={(e) => {
                   const nextName = e.target.value;
                   setName(nextName);
-                  if (!editing && !slug) {
-                    setSlug(slugify(nextName));
-                  }
+                  if (!editing) syncSlugFromName(nextName);
                 }}
                 placeholder="e.g. Beverages"
               />
@@ -215,7 +221,7 @@ export default function AdminCategoriesPage() {
               <Input
                 id="cat-slug"
                 value={slug}
-                onChange={(e) => setSlug(slugify(e.target.value))}
+                onChange={(e) => setSlug(e.target.value)}
                 placeholder="e.g. beverages"
               />
               <p className="text-xs text-muted-foreground">

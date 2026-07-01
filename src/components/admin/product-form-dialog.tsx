@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -25,6 +25,7 @@ import {
 import { getCategories } from "@/lib/firestore/categories";
 import {
   createProduct,
+  resolveProductSlug,
   updateProduct,
 } from "@/lib/firestore/products";
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/lib/storage/products";
 import { normalizeImageOrder } from "@/lib/products";
 import { slugify } from "@/lib/slug";
+import { useSlugField } from "@/hooks/use-slug-field";
 import type { Category, Product, ProductImage, ProductSpec } from "@/types";
 
 const productSchema = z.object({
@@ -70,7 +72,13 @@ export function ProductFormDialog({
   const [specs, setSpecs] = useState<ProductSpec[]>([]);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [thumbnailId, setThumbnailId] = useState<string | null>(null);
-  const [slug, setSlug] = useState("");
+  const resolveSlug = useCallback(
+    (name: string, preferredSlug?: string) =>
+      resolveProductSlug(name, preferredSlug, product?.id),
+    [product?.id]
+  );
+  const { slug, setSlug, syncSlugFromName, resetSlugField } =
+    useSlugField(resolveSlug);
   const [removedStoragePaths, setRemovedStoragePaths] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -100,19 +108,19 @@ export function ProductFormDialog({
       });
       setCategoryIds(product.categoryIds);
       setSpecs(product.specs);
-      setSlug(product.slug);
+      resetSlugField(product.slug, true);
       setGalleryItems(productToGalleryItems(product));
       setThumbnailId(product.thumbnailImageId);
     } else {
       form.reset({ name: "", description: "", price: 0 });
       setCategoryIds([]);
       setSpecs([]);
-      setSlug("");
+      resetSlugField("", false);
       setGalleryItems([]);
       setThumbnailId(null);
     }
     setRemovedStoragePaths([]);
-  }, [open, product, form]);
+  }, [open, product, form, resetSlugField]);
 
   const trackRemovedItem = (item: GalleryItem) => {
     if (item.storagePath) {
@@ -240,9 +248,7 @@ export function ProductFormDialog({
                 id="name"
                 {...register("name", {
                   onChange: (e) => {
-                    if (!product && !slug) {
-                      setSlug(slugify(e.target.value));
-                    }
+                    if (!product) syncSlugFromName(e.target.value);
                   },
                 })}
               />
@@ -256,7 +262,7 @@ export function ProductFormDialog({
               <Input
                 id="slug"
                 value={slug}
-                onChange={(e) => setSlug(slugify(e.target.value))}
+                onChange={(e) => setSlug(e.target.value)}
                 placeholder="e.g. house-blend-coffee"
               />
               <p className="text-xs text-muted-foreground">
