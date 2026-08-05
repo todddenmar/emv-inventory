@@ -33,7 +33,9 @@ export function UserMenu({
   const handleSignOut = async () => {
     try {
       await signOutUser();
+      useAuthStore.getState().setUser(null);
       toast.success("Signed out");
+      router.replace("/login");
     } catch {
       toast.error("Failed to sign out");
     }

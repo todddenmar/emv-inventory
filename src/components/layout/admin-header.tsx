@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Menu, Store, Home } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,26 +36,12 @@ export function AdminHeader() {
           <div className="flex min-w-0 items-center gap-2">
             <BrandLogo href="/admin" size="sm" priority />
             <Badge variant="secondary" className="hidden sm:inline-flex">
-              Admin
+              Inventory
             </Badge>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/"
-            className="hidden items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex"
-          >
-            <Home className="h-4 w-4" />
-            Homepage
-          </Link>
-          <Link
-            href="/shop"
-            className="hidden items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex"
-          >
-            <Store className="h-4 w-4" />
-            Shop
-          </Link>
           {!loading && user && <UserMenu showAdminLink={false} />}
         </div>
       </div>
@@ -64,27 +49,9 @@ export function AdminHeader() {
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent side="left" className="w-72">
           <SheetHeader>
-            <SheetTitle>Admin menu</SheetTitle>
+            <SheetTitle>Menu</SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-4 px-2">
-            <div className="flex flex-col gap-1 border-b pb-4">
-              <Link
-                href="/"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm transition-colors hover:bg-muted"
-              >
-                <Home className="h-4 w-4 shrink-0" />
-                Homepage
-              </Link>
-              <Link
-                href="/shop"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm transition-colors hover:bg-muted"
-              >
-                <Store className="h-4 w-4 shrink-0" />
-                Shop
-              </Link>
-            </div>
             <AdminNavLinks onNavigate={() => setMenuOpen(false)} />
           </div>
         </SheetContent>

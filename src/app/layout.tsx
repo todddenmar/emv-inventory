@@ -14,7 +14,7 @@ const figtree = Figtree({
 
 export const metadata: Metadata = {
   title: BRAND_NAME,
-  description: "Inventory management and online ordering",
+  description: "Physical store inventory management",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [

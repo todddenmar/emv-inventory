@@ -334,7 +334,7 @@ export default function AdminUsersPage() {
 
               {role === "customer" && (
                 <p className="text-sm text-muted-foreground">
-                  Customers can shop and place orders only.
+                  Customers have no access to this inventory app.
                 </p>
               )}
 

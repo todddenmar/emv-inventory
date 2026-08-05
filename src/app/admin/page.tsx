@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Package, ShoppingBag, AlertTriangle, Warehouse } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Package, AlertTriangle, Warehouse, ArrowRightLeft } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -13,12 +13,10 @@ import { LinkButton } from "@/components/ui/link-button";
 import { InventoryActivityFeed } from "@/components/admin/inventory-activity-feed";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getProducts } from "@/lib/firestore/products";
-import { getOrders } from "@/lib/firestore/orders";
 import { getBranchInventory } from "@/lib/firestore/inventory";
 import { getBranch, getBranches } from "@/lib/firestore/branches";
 import { mergeProductsWithInventory, getLowStockItems } from "@/lib/inventory";
-import { formatCurrency } from "@/lib/format";
-import type { Branch, Order } from "@/types";
+import type { Branch } from "@/types";
 
 export default function AdminDashboardPage() {
   const { isMasterAdmin, assignedBranchId } = useBranchAccess();
@@ -26,14 +24,12 @@ export default function AdminDashboardPage() {
   const [branchCount, setBranchCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const [products, allOrders, branches] = await Promise.all([
+      const [products, branches] = await Promise.all([
         getProducts(),
-        getOrders(),
         getBranches(true),
       ]);
 
@@ -41,10 +37,6 @@ export default function AdminDashboardPage() {
       setBranchCount(branches.length);
 
       const scopeBranchId = isMasterAdmin ? null : assignedBranchId;
-      const scopedOrders = scopeBranchId
-        ? allOrders.filter((o) => o.branchId === scopeBranchId)
-        : allOrders;
-      setOrders(scopedOrders);
 
       if (scopeBranchId) {
         const [inv, b] = await Promise.all([
@@ -54,6 +46,17 @@ export default function AdminDashboardPage() {
         setBranch(b);
         const withStock = mergeProductsWithInventory(products, inv);
         setLowStockCount(getLowStockItems(withStock).length);
+      } else if (isMasterAdmin && branches.length > 0) {
+        let totalLow = 0;
+        const inventories = await Promise.all(
+          branches.map((b) => getBranchInventory(b.id))
+        );
+        for (const inv of inventories) {
+          totalLow += getLowStockItems(
+            mergeProductsWithInventory(products, inv)
+          ).length;
+        }
+        setLowStockCount(totalLow);
       } else {
         setLowStockCount(0);
       }
@@ -61,11 +64,6 @@ export default function AdminDashboardPage() {
 
     load().catch(console.error).finally(() => setLoading(false));
   }, [isMasterAdmin, assignedBranchId]);
-
-  const pendingOrders = orders.filter((o) => o.status === "pending");
-  const revenue = orders
-    .filter((o) => o.status === "delivered")
-    .reduce((sum, o) => sum + o.total, 0);
 
   if (loading) {
     return <p className="text-muted-foreground">Loading dashboard...</p>;
@@ -97,30 +95,24 @@ export default function AdminDashboardPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Pending orders</CardDescription>
-            <CardTitle className="text-3xl">{pendingOrders.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>
-              {isMasterAdmin ? "Delivered revenue" : "Low stock items"}
-            </CardDescription>
+            <CardDescription>Low stock items</CardDescription>
             <CardTitle
-              className={`text-3xl ${!isMasterAdmin && lowStockCount > 0 ? "text-amber-600" : ""}`}
+              className={`text-3xl ${lowStockCount > 0 ? "text-amber-600" : ""}`}
             >
-              {isMasterAdmin ? formatCurrency(revenue) : lowStockCount}
+              {lowStockCount}
             </CardTitle>
           </CardHeader>
         </Card>
       </div>
 
-      {!isMasterAdmin && lowStockCount > 0 && (
+      {lowStockCount > 0 && (
         <Card className="border-amber-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-amber-700">
               <AlertTriangle className="h-5 w-5" />
-              Low stock at {branch?.name}
+              {isMasterAdmin
+                ? "Low stock across branches"
+                : `Low stock at ${branch?.name}`}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -147,13 +139,13 @@ export default function AdminDashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ShoppingBag className="h-5 w-5" />
-              Orders
+              <ArrowRightLeft className="h-5 w-5" />
+              Transfers
             </CardTitle>
-            <CardDescription>View and update order status</CardDescription>
+            <CardDescription>Move stock between branches</CardDescription>
           </CardHeader>
           <CardContent>
-            <LinkButton href="/admin/orders">View orders</LinkButton>
+            <LinkButton href="/admin/transfers">Manage transfers</LinkButton>
           </CardContent>
         </Card>
         {isMasterAdmin && (
@@ -176,8 +168,8 @@ export default function AdminDashboardPage() {
         branchId={isMasterAdmin ? null : assignedBranchId}
         description={
           isMasterAdmin
-            ? "Sales, adjustments, and transfers across all branches"
-            : "Sales and stock changes for your branch"
+            ? "Adjustments and transfers across all branches"
+            : "Stock changes for your branch"
         }
       />
     </div>

@@ -72,7 +72,7 @@ export default function AdminInventoryPage() {
     if (!selectedBranchId && all.length > 0) {
       setSelectedBranchId(
         isMasterAdmin
-          ? all.find((b) => b.isOnlineShop)?.id ?? all[0].id
+          ? all[0].id
           : assignedBranchId ?? all[0].id
       );
     }

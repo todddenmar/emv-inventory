@@ -26,7 +26,7 @@ export function BranchSetupGuard({ children }: { children: React.ReactNode }) {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              You will only see inventory and orders for your assigned branch
+              You will only see inventory for your assigned branch
               once setup is complete.
             </p>
           </CardContent>

@@ -7,6 +7,7 @@ import {
   where,
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
+import { COLLECTIONS } from "@/lib/firestore/collections";
 import { inventoryLogConverter } from "@/lib/firestore/converters";
 import type { InventoryLog, InventoryLogReason } from "@/types";
 
@@ -14,7 +15,7 @@ export async function getInventoryLogs(options?: {
   branchId?: string | null;
   max?: number;
 }): Promise<InventoryLog[]> {
-  const ref = collection(getClientDb(), "inventoryLogs").withConverter(
+  const ref = collection(getClientDb(), COLLECTIONS.inventoryLogs).withConverter(
     inventoryLogConverter
   );
   const max = options?.max ?? 50;
@@ -36,10 +37,6 @@ export function inventoryLogReasonLabel(reason: InventoryLogReason): string {
   switch (reason) {
     case "manual_adjustment":
       return "Manual adjustment";
-    case "order_sale":
-      return "Sale";
-    case "order_cancelled":
-      return "Order cancelled";
     case "transfer_out":
       return "Transfer out";
     case "transfer_in":

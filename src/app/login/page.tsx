@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { OpenInBrowserPrompt } from "@/components/auth/open-in-browser-prompt";
-import { signInWithGoogle, signInAsGuest } from "@/lib/auth";
+import { signInWithGoogle, signOutUser } from "@/lib/auth";
 import { isInAppBrowser } from "@/lib/in-app-browser";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 import { useAuthStore, useIsStaff } from "@/stores/auth-store";
@@ -22,8 +21,9 @@ import { useAuthStore, useIsStaff } from "@/stores/auth-store";
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/";
+  const redirect = searchParams.get("redirect") || "/admin";
   const inviteToken = searchParams.get("invite") || undefined;
+  const denied = searchParams.get("denied") === "1";
   const user = useAuthStore((s) => s.user);
   const loading = useAuthStore((s) => s.loading);
   const isStaff = useIsStaff();
@@ -35,9 +35,17 @@ function LoginContent() {
   }, []);
 
   useEffect(() => {
-    if (loading || !user) return;
-    router.replace(resolvePostLoginRedirect(isStaff, redirect));
-  }, [user, loading, isStaff, router, redirect]);
+    if (loading) return;
+
+    if (user && isStaff) {
+      router.replace(resolvePostLoginRedirect(true, redirect));
+      return;
+    }
+
+    if (user && !isStaff && !denied) {
+      router.replace("/login?denied=1");
+    }
+  }, [user, loading, isStaff, router, redirect, denied]);
 
   const handleGoogleSignIn = async () => {
     if (inAppBrowser) return;
@@ -46,10 +54,19 @@ function LoginContent() {
     try {
       const appUser = await signInWithGoogle(inviteToken);
       useAuthStore.getState().setUser(appUser);
-      toast.success(`Welcome, ${appUser.displayName || "user"}!`);
       const staff =
         appUser.role === "master-admin" || appUser.role === "manager";
-      router.push(resolvePostLoginRedirect(staff, redirect));
+
+      if (!staff) {
+        await signOutUser();
+        useAuthStore.getState().setUser(null);
+        toast.error("Access denied. Staff accounts only.");
+        router.replace("/login?denied=1");
+        return;
+      }
+
+      toast.success(`Welcome, ${appUser.displayName || "user"}!`);
+      router.push(resolvePostLoginRedirect(true, redirect));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign in failed");
     } finally {
@@ -57,15 +74,14 @@ function LoginContent() {
     }
   };
 
-  const handleGuestSignIn = async () => {
+  const handleSignOut = async () => {
     setSigningIn(true);
     try {
-      const appUser = await signInAsGuest();
-      useAuthStore.getState().setUser(appUser);
-      toast.success("Signed in as guest");
-      router.push(resolvePostLoginRedirect(false, redirect));
+      await signOutUser();
+      useAuthStore.getState().setUser(null);
+      router.replace("/login");
     } catch {
-      toast.error("Guest sign in failed");
+      toast.error("Sign out failed");
     } finally {
       setSigningIn(false);
     }
@@ -75,52 +91,42 @@ function LoginContent() {
     <div className="container mx-auto flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Sign in</CardTitle>
+          <CardTitle className="text-2xl">Staff sign in</CardTitle>
           <CardDescription>
             {inviteToken
               ? "Accept your manager invite by signing in with Google"
-              : "Sign in to track your orders or manage the shop"}
+              : "Sign in to manage physical store inventory"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <OpenInBrowserPrompt />
 
-          <Button
-            className="w-full"
-            onClick={handleGoogleSignIn}
-            disabled={signingIn || inAppBrowser}
-          >
-            {signingIn && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Continue with Google
-          </Button>
-
-          {!inviteToken && (
-            <>
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or</span>
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={handleGuestSignIn}
-                disabled={signingIn}
-              >
-                Continue as guest
-              </Button>
-            </>
+          {denied && (
+            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-center text-sm text-destructive">
+              Access denied. This app is for staff only.
+            </p>
           )}
 
-          <p className="text-center text-xs text-muted-foreground">
-            <Link href="/" className="underline">
-              Back to shop
-            </Link>
-          </p>
+          {user && !isStaff ? (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleSignOut}
+              disabled={signingIn}
+            >
+              {signingIn && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Sign out
+            </Button>
+          ) : (
+            <Button
+              className="w-full"
+              onClick={handleGoogleSignIn}
+              disabled={signingIn || inAppBrowser}
+            >
+              {signingIn && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Continue with Google
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>

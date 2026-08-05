@@ -9,6 +9,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
+import { COLLECTIONS } from "@/lib/firestore/collections";
 import { branchTransferConverter } from "@/lib/firestore/converters";
 import { inventoryDocId } from "@/lib/firestore/inventory";
 import type { BranchTransfer, BranchTransferItem } from "@/types";
@@ -35,7 +36,7 @@ export async function createBranchTransfer(
   }
 
   const db = getClientDb();
-  const transferRef = doc(collection(db, "branchTransfers"));
+  const transferRef = doc(collection(db, COLLECTIONS.branchTransfers));
   const transferId = transferRef.id;
   const transferLabel = `Transfer ${transferId.slice(-6).toUpperCase()}`;
 
@@ -57,12 +58,12 @@ export async function createBranchTransfer(
 
       const sourceRef = doc(
         db,
-        "branchInventory",
+        COLLECTIONS.branchInventory,
         inventoryDocId(input.fromBranchId, item.productId)
       );
       const destRef = doc(
         db,
-        "branchInventory",
+        COLLECTIONS.branchInventory,
         inventoryDocId(input.toBranchId, item.productId)
       );
 
@@ -116,7 +117,7 @@ export async function createBranchTransfer(
         });
       }
 
-      tx.set(doc(collection(db, "inventoryLogs")), {
+      tx.set(doc(collection(db, COLLECTIONS.inventoryLogs)), {
         branchId: input.fromBranchId,
         branchName: input.fromBranchName,
         productId: row.item.productId,
@@ -132,7 +133,7 @@ export async function createBranchTransfer(
         createdAt: serverTimestamp(),
       });
 
-      tx.set(doc(collection(db, "inventoryLogs")), {
+      tx.set(doc(collection(db, COLLECTIONS.inventoryLogs)), {
         branchId: input.toBranchId,
         branchName: input.toBranchName,
         productId: row.item.productId,
@@ -166,7 +167,7 @@ export async function createBranchTransfer(
 }
 
 export async function getBranchTransfers(max = 50): Promise<BranchTransfer[]> {
-  const ref = collection(getClientDb(), "branchTransfers").withConverter(
+  const ref = collection(getClientDb(), COLLECTIONS.branchTransfers).withConverter(
     branchTransferConverter
   );
   const snapshot = await getDocs(

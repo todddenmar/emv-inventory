@@ -2,12 +2,12 @@ export function resolvePostLoginRedirect(
   isStaff: boolean,
   redirect: string
 ): string {
-  const path = redirect || "/";
+  const path = redirect || "/admin";
 
   if (isStaff) {
     return path.startsWith("/admin") ? path : "/admin";
   }
 
-  if (path.startsWith("/admin")) return "/";
-  return path;
+  // Non-staff cannot access the inventory app
+  return "/login?denied=1";
 }

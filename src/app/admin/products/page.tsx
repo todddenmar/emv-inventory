@@ -10,6 +10,7 @@ import {
   ArchiveRestore,
   Trash2,
   MoreHorizontal,
+  FileJson,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -193,10 +194,16 @@ export default function AdminProductsPage() {
             {showArchived ? "Showing archived" : "Show archived"}
           </Button>
           {!showArchived && (
-            <LinkButton href="/admin/products/new">
-              <Plus className="mr-2 h-4 w-4" />
-              Add product
-            </LinkButton>
+            <>
+              <LinkButton href="/admin/products/import" variant="outline">
+                <FileJson className="mr-2 h-4 w-4" />
+                Product JSON import
+              </LinkButton>
+              <LinkButton href="/admin/products/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Add product
+              </LinkButton>
+            </>
           )}
         </div>
       </div>

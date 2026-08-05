@@ -5,7 +5,21 @@ import {
   SnapshotOptions,
   Timestamp,
 } from "firebase/firestore";
-import type { AppUser, Branch, BranchInventory, BranchTransfer, Category, HomeBanner, InventoryLog, Invite, Order, OrderItem, Product, ProductImage, ProductOption, ProductSpec, ProductVariant, SiteSettings, SocialLink, SocialPlatform, Testimonial } from "@/types";
+import type {
+  AppUser,
+  Branch,
+  BranchInventory,
+  BranchTransfer,
+  Category,
+  InventoryLog,
+  Invite,
+  Product,
+  ProductImage,
+  ProductOption,
+  ProductSpec,
+  ProductVariant,
+  Vendor,
+} from "@/types";
 import { migrateLegacyProductVariants, getDefaultVariant, defaultVariantId } from "@/lib/product-variants";
 import { specsToText } from "@/lib/specs";
 import { resolveSlug } from "@/lib/slug";
@@ -80,7 +94,6 @@ export const branchConverter: FirestoreDataConverter<Branch> = {
       managerId: branch.managerId,
       managerName: branch.managerName,
       isActive: branch.isActive,
-      isOnlineShop: branch.isOnlineShop,
       createdAt: branch.createdAt,
       updatedAt: branch.updatedAt,
     };
@@ -101,7 +114,6 @@ export const branchConverter: FirestoreDataConverter<Branch> = {
       managerId: data.managerId ?? null,
       managerName: data.managerName ?? null,
       isActive: data.isActive ?? true,
-      isOnlineShop: data.isOnlineShop ?? false,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
     };
@@ -147,6 +159,9 @@ export const productConverter: FirestoreDataConverter<Product> = {
       name: product.name,
       slug: product.slug,
       description: product.description,
+      productType: product.productType,
+      tags: product.tags,
+      vendorId: product.vendorId,
       price: defaultVariant.price,
       compareAtPrice: defaultVariant.compareAtPrice,
       categoryIds: product.categoryIds,
@@ -188,6 +203,11 @@ export const productConverter: FirestoreDataConverter<Product> = {
       name: data.name,
       slug: resolveSlug(data.slug, data.name, snapshot.id),
       description: data.description,
+      productType: typeof data.productType === "string" ? data.productType : "",
+      tags: Array.isArray(data.tags)
+        ? data.tags.filter((t: unknown): t is string => typeof t === "string")
+        : [],
+      vendorId: data.vendorId ?? null,
       price: defaultVariant?.price ?? Number(data.price ?? 0),
       compareAtPrice: defaultVariant?.compareAtPrice ?? null,
       categoryIds: data.categoryIds ?? [],
@@ -214,53 +234,22 @@ export const productConverter: FirestoreDataConverter<Product> = {
   },
 };
 
-export const orderConverter: FirestoreDataConverter<Order> = {
-  toFirestore(order: Order): DocumentData {
+export const vendorConverter: FirestoreDataConverter<Vendor> = {
+  toFirestore(vendor: Vendor): DocumentData {
     return {
-      branchId: order.branchId,
-      customerId: order.customerId,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      customerEmail: order.customerEmail,
-      deliveryAddress: order.deliveryAddress,
-      deliveryLocation: order.deliveryLocation,
-      items: order.items,
-      subtotal: order.subtotal,
-      total: order.total,
-      paymentMethod: order.paymentMethod,
-      status: order.status,
-      notes: order.notes,
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
+      name: vendor.name,
+      createdAt: vendor.createdAt,
+      updatedAt: vendor.updatedAt,
     };
   },
   fromFirestore(
     snapshot: QueryDocumentSnapshot,
     options: SnapshotOptions
-  ): Order {
+  ): Vendor {
     const data = snapshot.data(options);
     return {
       id: snapshot.id,
-      branchId: data.branchId ?? null,
-      customerId: data.customerId ?? null,
-      customerName: data.customerName,
-      customerPhone: data.customerPhone,
-      customerEmail: data.customerEmail ?? null,
-      deliveryAddress: data.deliveryAddress,
-      deliveryLocation: data.deliveryLocation ?? null,
-      items: ((data.items as OrderItem[]) ?? []).map((item) => ({
-        productId: item.productId,
-        variantId: item.variantId ?? defaultVariantId(item.productId),
-        sku: item.sku ?? "",
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-      })),
-      subtotal: data.subtotal,
-      total: data.total,
-      paymentMethod: data.paymentMethod,
-      status: data.status,
-      notes: data.notes ?? null,
+      name: data.name ?? "",
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
     };
@@ -333,80 +322,6 @@ export const inviteConverter: FirestoreDataConverter<Invite> = {
       usedAt: data.usedAt ? toDate(data.usedAt) : null,
       usedBy: data.usedBy ?? null,
       createdAt: toDate(data.createdAt),
-    };
-  },
-};
-
-export const bannerConverter: FirestoreDataConverter<HomeBanner> = {
-  toFirestore(banner: HomeBanner): DocumentData {
-    return {
-      title: banner.title,
-      subtitle: banner.subtitle,
-      imageUrl: banner.imageUrl,
-      storagePath: banner.storagePath,
-      linkUrl: banner.linkUrl,
-      order: banner.order,
-      isActive: banner.isActive,
-      createdAt: banner.createdAt,
-      updatedAt: banner.updatedAt,
-    };
-  },
-  fromFirestore(
-    snapshot: QueryDocumentSnapshot,
-    options: SnapshotOptions
-  ): HomeBanner {
-    const data = snapshot.data(options);
-    return {
-      id: snapshot.id,
-      title: data.title,
-      subtitle: data.subtitle ?? null,
-      imageUrl: data.imageUrl,
-      storagePath: data.storagePath ?? "",
-      linkUrl: data.linkUrl ?? null,
-      order: data.order ?? 0,
-      isActive: data.isActive ?? true,
-      createdAt: toDate(data.createdAt),
-      updatedAt: toDate(data.updatedAt),
-    };
-  },
-};
-
-export const testimonialConverter: FirestoreDataConverter<Testimonial> = {
-  toFirestore(item: Testimonial): DocumentData {
-    return {
-      customerName: item.customerName,
-      quote: item.quote,
-      customerImageUrl: item.customerImageUrl,
-      customerImageStoragePath: item.customerImageStoragePath,
-      productId: item.productId,
-      productName: item.productName,
-      productImageUrl: item.productImageUrl,
-      productImageStoragePath: item.productImageStoragePath,
-      order: item.order,
-      isActive: item.isActive,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    };
-  },
-  fromFirestore(
-    snapshot: QueryDocumentSnapshot,
-    options: SnapshotOptions
-  ): Testimonial {
-    const data = snapshot.data(options);
-    return {
-      id: snapshot.id,
-      customerName: data.customerName,
-      quote: data.quote ?? null,
-      customerImageUrl: data.customerImageUrl,
-      customerImageStoragePath: data.customerImageStoragePath ?? "",
-      productId: data.productId ?? null,
-      productName: data.productName,
-      productImageUrl: data.productImageUrl ?? null,
-      productImageStoragePath: data.productImageStoragePath ?? null,
-      order: data.order ?? 0,
-      isActive: data.isActive ?? true,
-      createdAt: toDate(data.createdAt),
-      updatedAt: toDate(data.updatedAt),
     };
   },
 };
@@ -485,53 +400,6 @@ export const branchTransferConverter: FirestoreDataConverter<BranchTransfer> = {
       createdBy: data.createdBy,
       createdByName: data.createdByName ?? null,
       createdAt: toDate(data.createdAt),
-    };
-  },
-};
-
-const SOCIAL_PLATFORMS: SocialPlatform[] = [
-  "facebook",
-  "instagram",
-  "twitter",
-  "tiktok",
-  "youtube",
-  "website",
-];
-
-function parseSocialLinks(raw: unknown): SocialLink[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((item) => item && typeof item.url === "string" && item.url.trim())
-    .map((item) => ({
-      platform: SOCIAL_PLATFORMS.includes(item.platform)
-        ? item.platform
-        : "website",
-      url: item.url.trim(),
-      label: item.label?.trim() || null,
-    }));
-}
-
-export const siteSettingsConverter: FirestoreDataConverter<SiteSettings> = {
-  toFirestore(settings: SiteSettings): DocumentData {
-    return {
-      footerAddress: settings.footerAddress,
-      footerPhone: settings.footerPhone,
-      footerEmail: settings.footerEmail,
-      socialLinks: settings.socialLinks,
-      updatedAt: settings.updatedAt,
-    };
-  },
-  fromFirestore(
-    snapshot: QueryDocumentSnapshot,
-    options: SnapshotOptions
-  ): SiteSettings {
-    const data = snapshot.data(options);
-    return {
-      footerAddress: data.footerAddress ?? "",
-      footerPhone: data.footerPhone ?? null,
-      footerEmail: data.footerEmail ?? null,
-      socialLinks: parseSocialLinks(data.socialLinks),
-      updatedAt: toDate(data.updatedAt),
     };
   },
 };

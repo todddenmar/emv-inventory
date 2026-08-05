@@ -5,17 +5,14 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Package,
-  ShoppingBag,
   UserPlus,
   Users,
   Tags,
   Warehouse,
   Store,
   ArrowRightLeft,
-  Layout,
-  Settings,
-  Home,
-  ExternalLink,
+  Building2,
+  FileJson,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -26,11 +23,15 @@ export const adminNavItems = [
   { href: "/admin/inventory", label: "Inventory", icon: Warehouse, masterOnly: false },
   { href: "/admin/transfers", label: "Transfers", icon: ArrowRightLeft, masterOnly: false },
   { href: "/admin/branches", label: "Branches", icon: Store, masterOnly: true },
-  { href: "/admin/homepage", label: "Homepage", icon: Layout, masterOnly: true },
-  { href: "/admin/settings", label: "Settings", icon: Settings, masterOnly: true },
   { href: "/admin/products", label: "Products", icon: Package, masterOnly: true },
+  {
+    href: "/admin/products/import",
+    label: "Product JSON import",
+    icon: FileJson,
+    masterOnly: true,
+  },
   { href: "/admin/categories", label: "Categories", icon: Tags, masterOnly: true },
-  { href: "/admin/orders", label: "Orders", icon: ShoppingBag, masterOnly: false },
+  { href: "/admin/vendors", label: "Vendors", icon: Building2, masterOnly: true },
   { href: "/admin/users", label: "Users", icon: Users, masterOnly: true },
   { href: "/admin/invites", label: "Invites", icon: UserPlus, masterOnly: true },
 ];
@@ -53,9 +54,17 @@ export function AdminNavLinks({
     <nav className={cn("space-y-1", className)}>
       {items.map((item) => {
         const Icon = item.icon;
+        const hasMoreSpecificMatch = items.some(
+          (other) =>
+            other.href !== item.href &&
+            other.href.startsWith(`${item.href}/`) &&
+            (pathname === other.href || pathname.startsWith(`${other.href}/`))
+        );
         const isActive =
-          pathname === item.href ||
-          (item.href !== "/admin" && pathname.startsWith(item.href));
+          item.href === "/admin"
+            ? pathname === "/admin"
+            : pathname === item.href ||
+              (pathname.startsWith(`${item.href}/`) && !hasMoreSpecificMatch);
         return (
           <Link
             key={item.href}
@@ -88,27 +97,10 @@ export function AdminSidebar() {
   return (
     <aside className="hidden w-64 shrink-0 border-r bg-muted/30 p-4 md:flex md:flex-col">
       <div className="mb-6">
-        <h2 className="text-lg font-semibold">Admin Panel</h2>
-        <p className="text-sm text-muted-foreground">Inventory Management</p>
+        <h2 className="text-lg font-semibold">Inventory</h2>
+        <p className="text-sm text-muted-foreground">Physical stores</p>
       </div>
       <AdminNavLinks className="flex-1" />
-      <div className="mt-4 space-y-1 border-t pt-4">
-        <Link
-          href="/"
-          className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Home className="h-4 w-4 shrink-0" />
-          View homepage
-          <ExternalLink className="ml-auto h-3.5 w-3.5 opacity-50" />
-        </Link>
-        <Link
-          href="/shop"
-          className="flex items-center gap-2 rounded-md px-3 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Store className="h-4 w-4 shrink-0" />
-          View shop
-        </Link>
-      </div>
     </aside>
   );
 }

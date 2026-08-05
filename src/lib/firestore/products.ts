@@ -14,6 +14,7 @@ import {
   type CollectionReference,
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
+import { COLLECTIONS } from "@/lib/firestore/collections";
 import { productConverter } from "@/lib/firestore/converters";
 import { deleteProductImage } from "@/lib/storage/products";
 import { ensureUniqueSlug, slugify } from "@/lib/slug";
@@ -21,7 +22,9 @@ import { isProductPublished } from "@/lib/products-catalog";
 import type { Product } from "@/types";
 
 function productsRef(): CollectionReference<Product> {
-  return collection(getClientDb(), "products").withConverter(productConverter);
+  return collection(getClientDb(), COLLECTIONS.products).withConverter(
+    productConverter
+  );
 }
 
 async function isProductSlugTaken(
@@ -29,7 +32,11 @@ async function isProductSlugTaken(
   excludeId?: string
 ): Promise<boolean> {
   const snap = await getDocs(
-    query(collection(getClientDb(), "products"), where("slug", "==", slug), limit(5))
+    query(
+      collection(getClientDb(), COLLECTIONS.products),
+      where("slug", "==", slug),
+      limit(5)
+    )
   );
   return snap.docs.some((d) => d.id !== excludeId);
 }
@@ -105,6 +112,9 @@ export async function createDraftProduct(): Promise<string> {
     name: "",
     slug,
     description: "",
+    productType: "",
+    tags: [],
+    vendorId: null,
     price: 0,
     compareAtPrice: null,
     categoryIds: [],
@@ -150,7 +160,7 @@ export async function createProduct(
   > & { slug?: string }
 ): Promise<string> {
   const slug = await resolveProductSlug(data.name, data.slug);
-  const docRef = await addDoc(collection(getClientDb(), "products"), {
+  const docRef = await addDoc(collection(getClientDb(), COLLECTIONS.products), {
     ...data,
     slug,
     status: data.status ?? "draft",
@@ -183,11 +193,11 @@ export async function updateProduct(
     }
   }
 
-  await updateDoc(doc(getClientDb(), "products", id), payload);
+  await updateDoc(doc(getClientDb(), COLLECTIONS.products, id), payload);
 }
 
 export async function archiveProduct(id: string): Promise<void> {
-  await updateDoc(doc(getClientDb(), "products", id), {
+  await updateDoc(doc(getClientDb(), COLLECTIONS.products, id), {
     isArchived: true,
     isActive: false,
     status: "draft",
@@ -197,7 +207,7 @@ export async function archiveProduct(id: string): Promise<void> {
 }
 
 export async function restoreProduct(id: string): Promise<void> {
-  await updateDoc(doc(getClientDb(), "products", id), {
+  await updateDoc(doc(getClientDb(), COLLECTIONS.products, id), {
     isArchived: false,
     archivedAt: null,
     updatedAt: serverTimestamp(),
@@ -217,5 +227,5 @@ export async function deleteProduct(id: string): Promise<void> {
     }
   }
 
-  await deleteDoc(doc(getClientDb(), "products", id));
+  await deleteDoc(doc(getClientDb(), COLLECTIONS.products, id));
 }

@@ -8,12 +8,8 @@ service firebase.storage {
     }
 
     match /products/{productId}/{fileName} {
-      allow read: if true;
-      allow write: if isMasterAdmin();
-    }
-
-    match /homepage/{allPaths=**} {
-      allow read: if true;
+      allow read: if isMasterAdmin() ||
+        (request.auth != null && request.auth.token.role == 'manager');
       allow write: if isMasterAdmin();
     }
   }

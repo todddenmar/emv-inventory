@@ -23,30 +23,7 @@ export interface Branch {
   managerId: string | null;
   managerName: string | null;
   isActive: boolean;
-  isOnlineShop: boolean;
   createdAt: Date;
-  updatedAt: Date;
-}
-
-export type SocialPlatform =
-  | "facebook"
-  | "instagram"
-  | "twitter"
-  | "tiktok"
-  | "youtube"
-  | "website";
-
-export interface SocialLink {
-  platform: SocialPlatform;
-  url: string;
-  label: string | null;
-}
-
-export interface SiteSettings {
-  footerAddress: string;
-  footerPhone: string | null;
-  footerEmail: string | null;
-  socialLinks: SocialLink[];
   updatedAt: Date;
 }
 
@@ -106,6 +83,9 @@ export interface Product {
   name: string;
   slug: string;
   description: string;
+  productType: string;
+  tags: string[];
+  vendorId: string | null;
   /** @deprecated Derived from default variant. Kept for legacy reads. */
   price: number;
   /** @deprecated Derived from default variant. Kept for legacy reads. */
@@ -127,46 +107,9 @@ export interface Product {
   updatedAt: Date;
 }
 
-export type OrderStatus =
-  | "pending"
-  | "confirmed"
-  | "preparing"
-  | "out_for_delivery"
-  | "delivered"
-  | "cancelled";
-
-export type PaymentMethod = "COD";
-
-export interface OrderItem {
-  productId: string;
-  variantId: string;
-  sku: string;
-  name: string;
-  price: number;
-  quantity: number;
-}
-
-export interface DeliveryLocation {
-  latitude: number;
-  longitude: number;
-  accuracy?: number;
-}
-
-export interface Order {
+export interface Vendor {
   id: string;
-  branchId: string | null;
-  customerId: string | null;
-  customerName: string;
-  customerPhone: string;
-  customerEmail: string | null;
-  deliveryAddress: string;
-  deliveryLocation: DeliveryLocation | null;
-  items: OrderItem[];
-  subtotal: number;
-  total: number;
-  paymentMethod: PaymentMethod;
-  status: OrderStatus;
-  notes: string | null;
+  name: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -186,39 +129,8 @@ export interface Invite {
   createdAt: Date;
 }
 
-export interface HomeBanner {
-  id: string;
-  title: string;
-  subtitle: string | null;
-  imageUrl: string;
-  storagePath: string;
-  linkUrl: string | null;
-  order: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface Testimonial {
-  id: string;
-  customerName: string;
-  quote: string | null;
-  customerImageUrl: string;
-  customerImageStoragePath: string;
-  productId: string | null;
-  productName: string;
-  productImageUrl: string | null;
-  productImageStoragePath: string | null;
-  order: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export type InventoryLogReason =
   | "manual_adjustment"
-  | "order_sale"
-  | "order_cancelled"
   | "transfer_out"
   | "transfer_in";
 

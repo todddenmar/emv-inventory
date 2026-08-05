@@ -1,6 +1,5 @@
 import {
   GoogleAuthProvider,
-  signInAnonymously,
   signInWithPopup,
   signOut,
   type User,
@@ -15,11 +14,6 @@ const googleProvider = new GoogleAuthProvider();
 export async function signInWithGoogle(inviteToken?: string) {
   const result = await signInWithPopup(getClientAuth(), googleProvider);
   return handlePostLogin(result.user, inviteToken);
-}
-
-export async function signInAsGuest() {
-  const result = await signInAnonymously(getClientAuth());
-  return handlePostLogin(result.user);
 }
 
 export async function signOutUser() {

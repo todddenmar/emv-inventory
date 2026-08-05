@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Loader2, Star } from "lucide-react";
+import { Plus, Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,7 +65,6 @@ export default function AdminBranchesPage() {
     longitude: "",
     phone: "",
     managerId: "",
-    isOnlineShop: false,
   });
 
   const loadData = () => {
@@ -104,7 +103,6 @@ export default function AdminBranchesPage() {
       longitude: "",
       phone: "",
       managerId: "",
-      isOnlineShop: false,
     });
     setDialogOpen(true);
   };
@@ -119,7 +117,6 @@ export default function AdminBranchesPage() {
       longitude: branch.longitude != null ? String(branch.longitude) : "",
       phone: branch.phone ?? "",
       managerId: branch.managerId ?? "",
-      isOnlineShop: branch.isOnlineShop,
     });
     setDialogOpen(true);
   };
@@ -165,7 +162,6 @@ export default function AdminBranchesPage() {
         managerId: form.managerId || null,
         managerName: manager?.displayName || manager?.email || null,
         isActive: true,
-        isOnlineShop: form.isOnlineShop,
       };
 
       let branchId = editing?.id;
@@ -300,17 +296,6 @@ export default function AdminBranchesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.isOnlineShop}
-                onChange={(e) =>
-                  setForm({ ...form, isOnlineShop: e.target.checked })
-                }
-                className="rounded border-input"
-              />
-              Online shop fulfillment branch
-            </label>
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editing ? "Update branch" : "Create branch"}
@@ -341,12 +326,6 @@ export default function AdminBranchesPage() {
                     <CardDescription>{branch.code}</CardDescription>
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {branch.isOnlineShop && (
-                      <Badge className="gap-1 text-xs">
-                        <Star className="h-3 w-3 fill-current" />
-                        Online
-                      </Badge>
-                    )}
                     <Badge
                       variant={branch.isActive ? "default" : "secondary"}
                       className="text-xs"

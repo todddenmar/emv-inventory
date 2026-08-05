@@ -17,7 +17,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!isStaff) {
-      router.replace("/");
+      router.replace("/login?denied=1");
     }
   }, [loading, user, isStaff, router]);
 

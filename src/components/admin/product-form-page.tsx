@@ -17,6 +17,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ProductDescriptionEditor } from "@/components/admin/product-description-editor";
 import { CategoryMultiSelect } from "@/components/admin/category-multi-select";
 import { ProductOptionsEditor } from "@/components/admin/product-options-editor";
@@ -26,6 +33,7 @@ import {
   type GalleryItem,
 } from "@/components/admin/product-image-gallery";
 import { getCategories } from "@/lib/firestore/categories";
+import { getVendors } from "@/lib/firestore/vendors";
 import {
   getProduct,
   publishProduct,
@@ -38,12 +46,20 @@ import {
 } from "@/lib/storage/products";
 import { normalizeImageOrder } from "@/lib/products";
 import { canPublishProduct, productStatusLabel } from "@/lib/products-catalog";
+import { formatProductTags, parseProductTags } from "@/lib/product-tags";
 import { slugify } from "@/lib/slug";
 import { isHtmlEmpty } from "@/lib/html";
 import { mergeVariantsOnOptionChange } from "@/lib/product-variants";
 import { parseSpecsText } from "@/lib/specs";
 import { useSlugField } from "@/hooks/use-slug-field";
-import type { Category, Product, ProductImage, ProductOption, ProductVariant } from "@/types";
+import type {
+  Category,
+  Product,
+  ProductImage,
+  ProductOption,
+  ProductVariant,
+  Vendor,
+} from "@/types";
 
 const publishSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -72,7 +88,11 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [productType, setProductType] = useState("");
+  const [tagsText, setTagsText] = useState("");
+  const [vendorId, setVendorId] = useState<string | null>(null);
   const [options, setOptions] = useState<ProductOption[]>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [specsText, setSpecsText] = useState("");
@@ -104,8 +124,8 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   };
 
   useEffect(() => {
-    Promise.all([getProduct(productId), getCategories()])
-      .then(([loaded, cats]) => {
+    Promise.all([getProduct(productId), getCategories(), getVendors()])
+      .then(([loaded, cats, vendorList]) => {
         if (!loaded) {
           toast.error("Product not found");
           router.replace("/admin/products");
@@ -113,11 +133,15 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         }
         setProduct(loaded);
         setCategories(cats);
+        setVendors(vendorList);
         form.reset({
           name: loaded.name,
           description: loaded.description,
         });
         setCategoryIds(loaded.categoryIds);
+        setProductType(loaded.productType ?? "");
+        setTagsText(formatProductTags(loaded.tags ?? []));
+        setVendorId(loaded.vendorId ?? null);
         setOptions(loaded.options);
         setVariants(loaded.variants);
         setSpecsText(loaded.specsText);
@@ -169,6 +193,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
 
     const values = getValues();
     const parsedSpecs = parseSpecsText(specsText);
+    const tags = parseProductTags(tagsText);
 
     if (saveOptions.publish) {
       const parsed = publishSchema.safeParse(values);
@@ -183,6 +208,9 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       ...(product as Product),
       name: values.name.trim(),
       description: values.description,
+      productType: productType.trim(),
+      tags,
+      vendorId,
       categoryIds,
       options,
       variants,
@@ -225,6 +253,9 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         name,
         slug: preferredSlug,
         description: values.description,
+        productType: productType.trim(),
+        tags,
+        vendorId,
         categoryIds,
         options,
         variants,
@@ -256,6 +287,9 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
               name,
               slug: preferredSlug,
               description: values.description,
+              productType: productType.trim(),
+              tags,
+              vendorId,
               categoryIds,
               options,
               variants,
@@ -414,6 +448,53 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                 />
               )}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="productType">Product type</Label>
+            <Input
+              id="productType"
+              value={productType}
+              onChange={(e) => setProductType(e.target.value)}
+              placeholder="e.g. Shirt, Accessory"
+              disabled={saving || publishing}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="vendor">Vendor</Label>
+            <Select
+              value={vendorId ?? "none"}
+              onValueChange={(v) =>
+                setVendorId(!v || v === "none" ? null : v)
+              }
+            >
+              <SelectTrigger id="vendor" disabled={saving || publishing}>
+                <SelectValue placeholder="Select vendor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No vendor</SelectItem>
+                {vendors.map((vendor) => (
+                  <SelectItem key={vendor.id} value={vendor.id}>
+                    {vendor.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="tags">Tags</Label>
+            <Input
+              id="tags"
+              value={tagsText}
+              onChange={(e) => setTagsText(e.target.value)}
+              placeholder="size:large, color:black"
+              disabled={saving || publishing}
+            />
+            <p className="text-xs text-muted-foreground">
+              Comma-separated tags, e.g. size:large, color:black
+            </p>
           </div>
         </div>
 

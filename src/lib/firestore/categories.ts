@@ -14,12 +14,13 @@ import {
   type CollectionReference,
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
+import { COLLECTIONS } from "@/lib/firestore/collections";
 import { categoryConverter } from "@/lib/firestore/converters";
 import { ensureUniqueSlug, slugify } from "@/lib/slug";
 import type { Category } from "@/types";
 
 function categoriesRef(): CollectionReference<Category> {
-  return collection(getClientDb(), "categories").withConverter(
+  return collection(getClientDb(), COLLECTIONS.categories).withConverter(
     categoryConverter
   );
 }
@@ -30,7 +31,7 @@ async function isCategorySlugTaken(
 ): Promise<boolean> {
   const snap = await getDocs(
     query(
-      collection(getClientDb(), "categories"),
+      collection(getClientDb(), COLLECTIONS.categories),
       where("slug", "==", slug),
       limit(5)
     )
@@ -73,7 +74,7 @@ export async function createCategory(
   data: Pick<Category, "name" | "tags"> & { slug?: string }
 ): Promise<string> {
   const slug = await resolveCategorySlug(data.name, data.slug);
-  const docRef = await addDoc(collection(getClientDb(), "categories"), {
+  const docRef = await addDoc(collection(getClientDb(), COLLECTIONS.categories), {
     name: data.name,
     slug,
     tags: data.tags,
@@ -96,7 +97,7 @@ export async function updateCategory(
 
   if (data.name !== undefined || data.slug !== undefined) {
     const existingSnap = await getDoc(
-      doc(getClientDb(), "categories", id).withConverter(categoryConverter)
+      doc(getClientDb(), COLLECTIONS.categories, id).withConverter(categoryConverter)
     );
     if (existingSnap.exists()) {
       const existing = existingSnap.data();
@@ -108,11 +109,11 @@ export async function updateCategory(
     }
   }
 
-  await updateDoc(doc(getClientDb(), "categories", id), payload);
+  await updateDoc(doc(getClientDb(), COLLECTIONS.categories, id), payload);
 }
 
 export async function archiveCategory(id: string): Promise<void> {
-  await updateDoc(doc(getClientDb(), "categories", id), {
+  await updateDoc(doc(getClientDb(), COLLECTIONS.categories, id), {
     isArchived: true,
     archivedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -120,7 +121,7 @@ export async function archiveCategory(id: string): Promise<void> {
 }
 
 export async function restoreCategory(id: string): Promise<void> {
-  await updateDoc(doc(getClientDb(), "categories", id), {
+  await updateDoc(doc(getClientDb(), COLLECTIONS.categories, id), {
     isArchived: false,
     archivedAt: null,
     updatedAt: serverTimestamp(),
@@ -129,7 +130,7 @@ export async function restoreCategory(id: string): Promise<void> {
 
 export async function deleteCategory(id: string): Promise<void> {
   const existingSnap = await getDoc(
-    doc(getClientDb(), "categories", id).withConverter(categoryConverter)
+    doc(getClientDb(), COLLECTIONS.categories, id).withConverter(categoryConverter)
   );
   if (!existingSnap.exists()) return;
 
@@ -138,5 +139,5 @@ export async function deleteCategory(id: string): Promise<void> {
     throw new Error("Archive the category before deleting it permanently");
   }
 
-  await deleteDoc(doc(getClientDb(), "categories", id));
+  await deleteDoc(doc(getClientDb(), COLLECTIONS.categories, id));
 }
