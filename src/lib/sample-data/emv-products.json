@@ -1,0 +1,6722 @@
+[
+  {
+    "category": "BEAST TIRE",
+    "vendor": "BEAST",
+    "products": [
+      {
+        "title": "BEAST TIRE",
+        "productType": "TIRE",
+        "variants": []
+      }
+    ]
+  },
+  {
+    "category": "BEAST TIRE",
+    "vendor": "BOM X",
+    "products": [
+      {
+        "title": "BEAST TIRE",
+        "productType": "TIRE",
+        "variants": [
+          {
+            "title": "BEAST TIRE 100/80-14",
+            "price": 1590
+          },
+          {
+            "title": "BEAST TIRE 100/90-12",
+            "price": 1620
+          },
+          {
+            "title": "BEAST TIRE 110/70-13",
+            "price": 1540
+          },
+          {
+            "title": "BEAST TIRE 110/80-14 X3M DUAL SPORT",
+            "price": 1820
+          },
+          {
+            "title": "BEAST TIRE 110/90-12",
+            "price": 1690
+          },
+          {
+            "title": "BEAST TIRE 120/70-17",
+            "price": 2495
+          },
+          {
+            "title": "BEAST TIRE 130/70-13",
+            "price": 2080
+          },
+          {
+            "title": "BEAST TIRE 140/70-14",
+            "price": 2580
+          },
+          {
+            "title": "BEAST TIRE 70/90-14",
+            "price": 978
+          },
+          {
+            "title": "BEAST TIRE 90/80-14",
+            "price": 1245
+          },
+          {
+            "title": "BEAST TIRE 80/80-14",
+            "price": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "BOM X MAGS",
+    "vendor": "BOM X",
+    "products": [
+      {
+        "title": "17S STYLE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX 17S STYLE LYNX AEROX BLACK",
+            "price": 7000
+          },
+          {
+            "title": "BOMX 17S STYLE LYNX AEROX BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX 17S STYLE LYNX AEROX SILVER",
+            "price": 7000
+          },
+          {
+            "title": "BOMX 17S STYLE LYNX AEROX VIOLET",
+            "price": 7000
+          },
+          {
+            "title": "BOMX 17S STYLE LYNX VARIO BLUE",
+            "price": 7000
+          }
+        ]
+      },
+      {
+        "title": "AEGIS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE AEGIS BLACK 2XL",
+            "price": 3999
+          },
+          {
+            "title": "GILLE AEGIS BLACK LARGE",
+            "price": 3999
+          },
+          {
+            "title": "GILLE AEGIS BLACK MEDIUM",
+            "price": 3999
+          },
+          {
+            "title": "GILLE AEGIS BLACK XL",
+            "price": 3999
+          },
+          {
+            "title": "GILLE AEGIS MATTE BLACK 2XL",
+            "price": 3999
+          },
+          {
+            "title": "GILLE AEGIS MATTE BLACK LARGE",
+            "price": 3999
+          },
+          {
+            "title": "GILLE AEGIS MATTE BLACK MEDIUM",
+            "price": 3999
+          },
+          {
+            "title": "GILLE AEGIS MATTE BLACK XL",
+            "price": 3999
+          },
+          {
+            "title": "GILLE AEGIS MATTE PURPLE MEDIUM",
+            "price": 3999
+          },
+          {
+            "title": "GILLE AEGIS PINK MEDIUM",
+            "price": 3999
+          }
+        ]
+      },
+      {
+        "title": "AGV HELMET",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "AGV K1S MATTE BLACK LARGE",
+            "price": 12990
+          },
+          {
+            "title": "AGV K1S MATTE BLACK MEDIUM",
+            "price": 12990
+          },
+          {
+            "title": "AGV K1S MATTE BLACK XL",
+            "price": 12990
+          },
+          {
+            "title": "AGV K1S WHITE MEDIUM",
+            "price": 12990
+          },
+          {
+            "title": "AGV K1S WHITE XL",
+            "price": 12990
+          },
+          {
+            "title": "AGV K1S WHITE XXL",
+            "price": 12990
+          },
+          {
+            "title": "AGV K3 MATTE BLACK XL",
+            "price": 17990
+          },
+          {
+            "title": "AGV K3 ROSSI WINTERTEST XL",
+            "price": 29990
+          },
+          {
+            "title": "AGV K6S GLOSSY BLACK XL",
+            "price": 29990
+          },
+          {
+            "title": "AGV K6S GLOSSY BLACK XXL",
+            "price": 29990
+          },
+          {
+            "title": "AGV K6S GLOSSY WHITE LARGE",
+            "price": 29990
+          },
+          {
+            "title": "AGV K6S GLOSSY WHITE XXL",
+            "price": 29990
+          },
+          {
+            "title": "AGV K6S MATTE BLACK XL",
+            "price": 29990
+          },
+          {
+            "title": "AGV K6S MATTE BLACK XXL",
+            "price": 29990
+          },
+          {
+            "title": "AGV K6S MONO NARDO GREY LARGE",
+            "price": 29990
+          },
+          {
+            "title": "AGV K6S MONO NARDO GREY XL",
+            "price": 29990
+          },
+          {
+            "title": "AGV K6S MONO NARDO GREY XXL",
+            "price": 29990
+          }
+        ]
+      },
+      {
+        "title": "ALWAYS HEAD",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "ALWAYS AHEAD LONG SLEEVE 2XL",
+            "price": 1350
+          },
+          {
+            "title": "ALWAYS AHEAD LONG SLEEVE 3XL",
+            "price": 1350
+          },
+          {
+            "title": "ALWAYS AHEAD LONG SLEEVE LARGE",
+            "price": 1350
+          },
+          {
+            "title": "ALWAYS AHEAD LONG SLEEVE MEDIUM",
+            "price": 1350
+          },
+          {
+            "title": "ALWAYS AHEAD LONG SLEEVE SMALL",
+            "price": 1350
+          },
+          {
+            "title": "ALWAYS AHEAD LONG SLEEVE XL",
+            "price": 1350
+          }
+        ]
+      },
+      {
+        "title": "ANNIHILATE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "ANNIHILATE LONG SLEEVE 2XL",
+            "price": 1350
+          },
+          {
+            "title": "ANNIHILATE LONG SLEEVE 3XL",
+            "price": 1350
+          },
+          {
+            "title": "ANNIHILATE LONG SLEEVE LARGE",
+            "price": 1350
+          },
+          {
+            "title": "ANNIHILATE LONG SLEEVE MEDIUM",
+            "price": 1350
+          },
+          {
+            "title": "ANNIHILATE LONG SLEEVE SMALL",
+            "price": 1350
+          },
+          {
+            "title": "ANNIHILATE LONG SLEEVE XL",
+            "price": 1350
+          }
+        ]
+      },
+      {
+        "title": "APIDO PIPE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "APIDO PIPE MIO",
+            "price": 1800
+          }
+        ]
+      },
+      {
+        "title": "AQUILA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX AQUILA CLICK 125 14S VIOLET",
+            "price": 6500
+          }
+        ]
+      },
+      {
+        "title": "AR-01",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO AR01 GLOSS BLACK 2XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO AR01 GLOSS BLACK XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO AR01 MATTE BLACK 2XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO AR01 PEARL WHITE 2XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO AR01 PEARL WHITE XL",
+            "price": 3800
+          }
+        ]
+      },
+      {
+        "title": "ARES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE ARES  MATTE BLACK LARGE",
+            "price": 5150
+          },
+          {
+            "title": "GILLE ARES  MATTE BLACK MEDIUM",
+            "price": 5150
+          },
+          {
+            "title": "GILLE ARES  MATTE BLACK XL",
+            "price": 5150
+          },
+          {
+            "title": "GILLE ARES  WHITE/RED LARGE",
+            "price": 5150
+          },
+          {
+            "title": "GILLE ARES  WHITE/RED MEDIUM",
+            "price": 5150
+          },
+          {
+            "title": "GILLE ARES  WHITE/RED XL",
+            "price": 5150
+          }
+        ]
+      },
+      {
+        "title": "ARMADA",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "ASTRAL",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE 135 ASTRAL BLACK LARGE",
+            "price": 4800
+          },
+          {
+            "title": "GILLE 135 ASTRAL MAORI BLACK GOLDEN 2XL",
+            "price": 4999
+          },
+          {
+            "title": "GILLE 135 ASTRAL MAORI BLACK GOLDEN LARGE",
+            "price": 4999
+          },
+          {
+            "title": "GILLE 135 ASTRAL MAORI BLACK GOLDEN XL",
+            "price": 4999
+          },
+          {
+            "title": "GILLE 135 ASTRAL MAORI BLACK WHITE XL",
+            "price": 4999
+          },
+          {
+            "title": "GILLE 135 ASTRAL MAORI MATTE BLACK RED LARGE",
+            "price": 4999
+          },
+          {
+            "title": "GILLE 135 ASTRAL MAORI MATTE BLACK SILVER 2XL",
+            "price": 4999
+          },
+          {
+            "title": "GILLE 135 ASTRAL MATTE BLACK LARGE",
+            "price": 4800
+          },
+          {
+            "title": "GILLE 135 ASTRAL MATTE BLACK MEDIUM",
+            "price": 4800
+          },
+          {
+            "title": "GILLE 135 ASTRAL MATTE BLACK XL",
+            "price": 4800
+          },
+          {
+            "title": "GILLE 135 ASTRAL MATTE LIGHT GREY LARGE",
+            "price": 4800
+          },
+          {
+            "title": "GILLE 135 ASTRAL MATTE LIGHT GREY MEDIUM",
+            "price": 4800
+          },
+          {
+            "title": "GILLE 135 ASTRAL MATTE LIGHT GREY XL",
+            "price": 4800
+          }
+        ]
+      },
+      {
+        "title": "BACKPACK",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BACKPACK ATLAS B-20",
+            "price": 8990
+          },
+          {
+            "title": "BACKPACK ATLAS B-30",
+            "price": 9990
+          },
+          {
+            "title": "BACKPACK ATLAS T-10  TOUR PACK",
+            "price": 4990
+          },
+          {
+            "title": "BACKPACK ATLAS T-30  TOUR PACK",
+            "price": 6990
+          },
+          {
+            "title": "BACKPACK MOTOWOLF BAG",
+            "price": 1350
+          }
+        ]
+      },
+      {
+        "title": "BALLISTIC",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE 2020 BALLISTIC MATTE BLACK EXTA LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE 2020 BALLISTIC MATTE BLACK LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE 2020 BALLISTIC MATTE BLACK MEDIUM",
+            "price": 3900
+          },
+          {
+            "title": "GILLE 2020 BALLISTIC PINK LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE 2020 BALLISTIC PINK MEDIUM",
+            "price": 3900
+          },
+          {
+            "title": "GILLE 2020 BALLISTIC WHITE LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE 2020 BALLISTIC WHITE MEDIUM",
+            "price": 3900
+          }
+        ]
+      },
+      {
+        "title": "BOLTS AND BRACKETS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "CNC AXLE GEAR FRONT",
+            "price": 415
+          },
+          {
+            "title": "CNC BAR HAND GEAR",
+            "price": 420
+          },
+          {
+            "title": "CNC BODY SCREW 5X15",
+            "price": 35
+          },
+          {
+            "title": "CNC CLICK BOLT BACK GEAR",
+            "price": 230
+          },
+          {
+            "title": "CNC DISC BOLT HONDA",
+            "price": 50
+          },
+          {
+            "title": "CNC DISC BOLT HONDA CONCAVE",
+            "price": 50
+          },
+          {
+            "title": "CNC GEAR TYPE 6x20",
+            "price": 50
+          },
+          {
+            "title": "CNC LEVER BOLT CLICK 125/150 MIOi",
+            "price": 400
+          },
+          {
+            "title": "CNC MIO BOLT BACK GEAR",
+            "price": 230
+          },
+          {
+            "title": "GP4 BRACKET CLICK",
+            "price": 750
+          },
+          {
+            "title": "GP4 BRACKET NMAX/AEROX",
+            "price": 900
+          }
+        ]
+      },
+      {
+        "title": "BOMX BLAZE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX-08 BLAZE ADV/ PCX 365MM BLACK/SILVER/CHROME",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-08 BLAZE ADV/ PCX 365MM BLACK/SILVER/RED",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-08 BLAZE ADV/ PCX 365MM WHITE/BLACK/BLACK",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-08 BLAZE AEROX/NMAX 305MM BLACK SILVER CHROME",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-08 BLAZE AEROX/NMAX 305MM BLACK SILVER RED",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-08 BLAZE AEROX/NMAX 305MM CHROME BLACK BLACK",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-08 BLAZE AEROX/NMAX 305MM WHITE BLACK BLACK",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-08 BLAZE CLICK 125 330MM BLACK SILVER CHROME",
+            "price": 5200
+          },
+          {
+            "title": "BOMX-08 BLAZE CLICK 125 330MM CHROME BLACK BLACK",
+            "price": 5200
+          },
+          {
+            "title": "BOMX-08 BLAZE CLICK 125 330MM CHROME BLACK CHROME",
+            "price": 5200
+          },
+          {
+            "title": "BOMX-08 BLAZE CLICK 125 330MM WHITE BLACK BLACK",
+            "price": 5200
+          },
+          {
+            "title": "BOMX-08 BLAZE MIO M3/125 300MM BLACK SILVER CHROME",
+            "price": 5200
+          },
+          {
+            "title": "BOMX-08 BLAZE MIO M3/125 300MM CHROME/BLACK/BLACK",
+            "price": 5200
+          },
+          {
+            "title": "BOMX-08 BLAZE MIO M3/125 300MM WHITE/BLACK/BLACK",
+            "price": 5200
+          }
+        ]
+      },
+      {
+        "title": "BOMX DRIFT",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX-05 DRIFT ADV/PCX 365MM CHROME/SILVER/RED",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-05 DRIFT ADV/PCX 365MM RED/BLACK/RED",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-05 DRIFT AEROX/NMAX V2 305MM CHROME/BLACK/CHROME",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-05 DRIFT AEROX/NMAX V2 305MM TITANIUM/BLACK/BLACK",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-05 DRIFT AEROX/NMAX V2 305MM WHITE/BLACK/CHROME",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-05 DRIFT CLICK 125 330MM CHROME/BLACK/CHROME",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-05 DRIFT MIO M3/M10 110 300MM TITANIUM/BLACK/BLACK",
+            "price": 5200
+          }
+        ]
+      },
+      {
+        "title": "BOMX FORCE SP",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX SGM-T FORCE SP AEROX/NMAX V2 305MM  CHROME BLACK BLACK",
+            "price": 9000
+          },
+          {
+            "title": "BOMX SGM-T FORCE SP AEROX/NMAX V2 305MM CHROME SILVER BLUE",
+            "price": 9000
+          },
+          {
+            "title": "BOMX SGM-T FORCE SP AEROX/NMAX V2 305MM CHROME SILVER CHROME",
+            "price": 9000
+          },
+          {
+            "title": "BOMX SGM-T FORCE SP AEROX/NMAX V2 305MM CHROME SILVER RED",
+            "price": 9000
+          },
+          {
+            "title": "BOMX SGM-T FORCE SP AEROX/NMAX V2 305MM CHROME SILVER VIOLET",
+            "price": 9000
+          },
+          {
+            "title": "BOMX SGM-T FORCE SP CLICK 125 330M CHROME SILVER BLUE",
+            "price": 5700
+          },
+          {
+            "title": "BOMX SGM-T FORCE SP CLICK 125 330MM CHROME BLACK BLACK",
+            "price": 5700
+          },
+          {
+            "title": "BOMX SGM-T FORCE SP CLICK 125 330MM CHROME SILVER CHROME",
+            "price": 5700
+          },
+          {
+            "title": "BOMX SGM-T FORCE SP CLICK 125 330MM CHROME SILVER RED",
+            "price": 5700
+          },
+          {
+            "title": "BOMX SGM-T FORCE SP CLICK 125 330MM CHROME SILVER VIOLET",
+            "price": 5700
+          }
+        ]
+      },
+      {
+        "title": "BOMX GPX LINE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX GPX LINE AEROX 155/NVX 155 26MM GOLD/METALLIC/ DARK GRAY",
+            "price": 7600
+          },
+          {
+            "title": "BOMX GPX LINE CLICK 125 150/VARIO 26MM SILVER/METALLIC/ DARK GRAY",
+            "price": 6500
+          }
+        ]
+      },
+      {
+        "title": "BOMX HYPERLINK",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX-03 HYPERLINK RAIDER CARB F1 285MM BLACK BLACK RED",
+            "price": 6500
+          }
+        ]
+      },
+      {
+        "title": "BOMX PIPES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX PIPE WAVE 100",
+            "price": 3550
+          },
+          {
+            "title": "BOMX PIPE WAVE 110",
+            "price": 3550
+          },
+          {
+            "title": "BOMX PIPE WAVE 125",
+            "price": 3550
+          },
+          {
+            "title": "BOMX POWERPIPE TAIWAN NMAX/AEROX V2",
+            "price": 4500
+          },
+          {
+            "title": "BOMX POWERPIPE THAILAND CLICK 2020",
+            "price": 4500
+          },
+          {
+            "title": "BOMX POWERPIPE THAILAND NMAX/AEROX 2020",
+            "price": 4500
+          },
+          {
+            "title": "BOMX TAIWAN SHARK TIP NMAX V2/AEROX V2 SILVER",
+            "price": 12500
+          },
+          {
+            "title": "BOMX TAIWAN TITANIUM SHARK TIP NMAX V2/AEROX V2 BLACK",
+            "price": 7500
+          },
+          {
+            "title": "BOMX TAIWAN TITANIUM SHARK TIP NMAX V2/AEROX V2 SILVER",
+            "price": 12500
+          },
+          {
+            "title": "BOMX TAIWAN TITANIUM STRAIGHT TIP AEROX V2/NMAX V2 BLACK",
+            "price": 6500
+          },
+          {
+            "title": "BOMX TAIWAN TITANIUM STRAIGHT TIP AEROX V2/NMAX V2 SILVER",
+            "price": 11500
+          },
+          {
+            "title": "BOMX TAIWAN TITANIUM STRAIGHT TIP CLICK 125 BLACK",
+            "price": 6500
+          },
+          {
+            "title": "BOMX TAIWAN TITANIUM STRAIGHT TIP CLICK 125 SILVER",
+            "price": 11500
+          }
+        ]
+      },
+      {
+        "title": "BOMX PULSE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX-06 PULSE AEROX/NMAX 305MM BLACK/SILVER/CHROME",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-06 PULSE AEROX/NMAX 305MM BLACK/SILVER/GREEN",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-06 PULSE AEROX/NMAX 305MM BLACK/SILVER/RED",
+            "price": 8500
+          },
+          {
+            "title": "BOMX-06 PULSE CLICK 125 330MM BLACK SILVER CHROME",
+            "price": 5200
+          },
+          {
+            "title": "BOMX-06 PULSE CLICK 125 330MM BLACK SILVER RED",
+            "price": 5200
+          },
+          {
+            "title": "BOMX-06 PULSE CLICK 125 330MM BLACK SILVER VIOLET",
+            "price": 5200
+          },
+          {
+            "title": "BOMX-06 PULSE CLICK 125 330MM CHROME SILVER CHROME",
+            "price": 5200
+          }
+        ]
+      },
+      {
+        "title": "BOMX SGM XSTREET",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX SGM XSTREET AEROX/NMAX V2 305MM CHROME/BLACK/BLACK",
+            "price": 5000
+          }
+        ]
+      },
+      {
+        "title": "BOMX VORTEX",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX VORTEX AEROX/NMAX 305MM BLACK BLACK BLACK",
+            "price": 9000
+          },
+          {
+            "title": "BOMX VORTEX AEROX/NMAX 305MM BLACK SILVER BLACK",
+            "price": 8500
+          },
+          {
+            "title": "BOMX VORTEX AEROX/NMAX 305MM CHROME BLACK BLACK",
+            "price": 8500
+          }
+        ]
+      },
+      {
+        "title": "BOMX X2 SERIES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX (X2 SERIES) CLICK 125 330MM GREY/BLACK",
+            "price": 1200
+          },
+          {
+            "title": "BOMX (X2 SERIES) CLICK 125 330MM GREY/CHROME",
+            "price": 1200
+          },
+          {
+            "title": "BOMX (X2 SERIES) CLICK 125 330MM GREY/PURPLE",
+            "price": 1200
+          },
+          {
+            "title": "BOMX (X2 SERIES) CLICK 125 330MM GREY/RED",
+            "price": 1200
+          },
+          {
+            "title": "BOMX (X2 SERIES) CLICK 125 330MM GREY/WHITE",
+            "price": 1200
+          },
+          {
+            "title": "BOMX (X2 SERIES) MIO M3/110 300MM GREY/BLACK",
+            "price": 1200
+          },
+          {
+            "title": "BOMX (X2 SERIES) MIO M3/110 300MM GREY/CHROME",
+            "price": 1200
+          },
+          {
+            "title": "BOMX (X2 SERIES) MIO M3/110 300MM GREY/RED",
+            "price": 1200
+          },
+          {
+            "title": "BOMX (X2 SERIES) MIO M3/110 300MM GREY/WHITE",
+            "price": 1200
+          },
+          {
+            "title": "BOMX (X2 SERIES) MIO M3/110 GREY/PURPLE",
+            "price": 1200
+          }
+        ]
+      },
+      {
+        "title": "BRAKE HOSE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX BRAKE HOSE 60CM",
+            "price": 600
+          },
+          {
+            "title": "BOMX BRAKE HOSE 96CM",
+            "price": 650
+          },
+          {
+            "title": "BOMX BRAKE HOSE 110CM",
+            "price": 800
+          },
+          {
+            "title": "BOMX BRAKE HOSE 210CM",
+            "price": 800
+          }
+        ]
+      },
+      {
+        "title": "BRAKE MASTER",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RCB MASTER BRAKE PUMP LH BLACK",
+            "price": 1100
+          },
+          {
+            "title": "RCB MASTER BRAKE PUMP RH SILVER",
+            "price": 1100
+          },
+          {
+            "title": "BOMX BRAKE MASTER SINGLE TANK SET BLACK",
+            "price": 5995
+          },
+          {
+            "title": "BOMX BRAKE MASTER DUAL TANK SET BLACK",
+            "price": 6995
+          },
+          {
+            "title": "BOMX BRAKE MASTER SINGLE TANK SET SILVER",
+            "price": 5995
+          }
+        ]
+      },
+      {
+        "title": "BRUTALE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BRUTALE LONG SLEEVE 2XL",
+            "price": 1350
+          },
+          {
+            "title": "BRUTALE LONG SLEEVE 3XL",
+            "price": 1350
+          },
+          {
+            "title": "BRUTALE LONG SLEEVE LARGE",
+            "price": 1350
+          },
+          {
+            "title": "BRUTALE LONG SLEEVE MEDIUM",
+            "price": 1350
+          },
+          {
+            "title": "BRUTALE LONG SLEEVE SMALL",
+            "price": 1350
+          },
+          {
+            "title": "BRUTALE LONG SLEEVE XL",
+            "price": 1350
+          },
+          {
+            "title": "BRUTALE TSHIRT LARGE",
+            "price": 999
+          }
+        ]
+      },
+      {
+        "title": "CALIPER",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX BRAKE CALIPER BX-2C01 SILVER",
+            "price": 3500
+          },
+          {
+            "title": "BOMX BRAKE CALIPER BX-4C02 BLACK",
+            "price": 4995
+          }
+        ]
+      },
+      {
+        "title": "CIRCUIT",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER BLACK BLUE SILVER LARGE",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER BLACK BLUE SILVER MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER BLACK BLUE SILVER XL",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER BLACK RED GOLDEN LARGE",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER BLACK RED GOLDEN MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER BLACK RED GOLDEN XL",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER WHITE GOLDEN SILVER LARGE",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER WHITE GOLDEN SILVER MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER WHITE GOLDEN SILVER XL",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER WHITE PINK SILVER MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "GILLE CIRCUIT W/D FF012 RACER WHITE PINK SILVER XL",
+            "price": 3700
+          }
+        ]
+      },
+      {
+        "title": "CLP PIPES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "CLD PIPE CLICK 125",
+            "price": 4700
+          },
+          {
+            "title": "CLD PIPE NMAX",
+            "price": 4700
+          }
+        ]
+      },
+      {
+        "title": "CORE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO CORE FUSCHIA PINK LARGE",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE FUSCHIA PINK MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE FUSCHIA PINK XL",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE GLOSS BLACK 2XL",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE GLOSS BLACK LARGE",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE GLOSS BLACK MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE GLOSS BLACK XL",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE GLOSSY TITITANIUM 2XL",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE GLOSSY TITITANIUM LARGE",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE GLOSSY TITITANIUM MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE GLOSSY TITITANIUM XL",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE MATTE BLACK LARGE",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE MATTE BLACK MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE MATTE BLACK XL",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE MATTE TITANIUM 2XL",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE MATTE TITANIUM LARGE",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE MATTE TITANIUM MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE MATTE TITANIUM XL",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE PEARL WHITE LARGE",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE PEARL WHITE MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE PEARL WHITE XL",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE TORQUISE BLUE GLOSSY L",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE TORQUISE BLUE GLOSSY M",
+            "price": 3300
+          },
+          {
+            "title": "EVO CORE TORQUISE BLUE GLOSSY XL",
+            "price": 3300
+          }
+        ]
+      },
+      {
+        "title": "CORSA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER CORSA BLACK PINK LARGE",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA BLACK PINK XL",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA BLACK YELLOW 2XL",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA BLACK YELLOW LARGE",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA BLACK YELLOW MEDIUM",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA BLACK YELLOW XL",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA CARBON SNAKE BLACK GOLD LARGE",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA MATTE BLACK GRAY LARGE",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA MATTE BLACK GRAY MEDIUM",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA MATTE BLACK GRAY XL",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA MATTE BLACK YELLOW 2XL",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA MATTE BLACK YELLOW LARGE",
+            "price": 4100
+          },
+          {
+            "title": "SPYDER CORSA MATTE BLACK YELLOW XL",
+            "price": 4100
+          }
+        ]
+      },
+      {
+        "title": "CRP PIPES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "CRP PIPE CLICK",
+            "price": 7500
+          },
+          {
+            "title": "CRP PIPE MIO 110 / SPORTY",
+            "price": 7500
+          },
+          {
+            "title": "CRP PIPE MIO 125",
+            "price": 7500
+          },
+          {
+            "title": "CRP PIPE NMAX/AEROX",
+            "price": 7500
+          },
+          {
+            "title": "CRP PIPE PCX/ADV",
+            "price": 7500
+          }
+        ]
+      },
+      {
+        "title": "CVT SET",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "HIRC CVT SET CLICK 125",
+            "price": 4500
+          },
+          {
+            "title": "HIRC CVT SET MIO 125",
+            "price": 4500
+          },
+          {
+            "title": "HIRC CVT SET PCX 160",
+            "price": 4800
+          }
+        ]
+      },
+      {
+        "title": "DISCS",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "DRACO",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX DRACO AEROX 14S SILVER",
+            "price": 7000
+          },
+          {
+            "title": "BOMX DRACO CLICK 125/150 14S BLUE",
+            "price": 7000
+          }
+        ]
+      },
+      {
+        "title": "DRI PLUS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "DRI PLUS LONGSLEEVE MEDIUM",
+            "price": 1400
+          },
+          {
+            "title": "DRI PLUS LONGSLEEVE LARGE",
+            "price": 1400
+          },
+          {
+            "title": "DRI PLUS LONGSLEEVE XL",
+            "price": 1400
+          },
+          {
+            "title": "DRI PLUS LONGSLEEVE GREY",
+            "price": 1400
+          },
+          {
+            "title": "DRI PLUS LONGSLEEVE BLACK XL",
+            "price": 1400
+          }
+        ]
+      },
+      {
+        "title": "EDGE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER EDGE ARCE WHITE RED (FR) LARGE",
+            "price": 4495
+          },
+          {
+            "title": "SPYDER EDGE ARCE WHITE RED (FR) MEDIUM",
+            "price": 4495
+          },
+          {
+            "title": "SPYDER EDGE ARCE WHITE RED (FR) XL",
+            "price": 4495
+          },
+          {
+            "title": "SPYDER EDGE ARCE WHITE RED (WS) MEDIUM",
+            "price": 4495
+          }
+        ]
+      },
+      {
+        "title": "EVO HELMET",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "FEARLESS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "FEARLESS LONG SLEEVE 2XL",
+            "price": 1400
+          },
+          {
+            "title": "FEARLESS LONG SLEEVE 3XL",
+            "price": 1400
+          },
+          {
+            "title": "FEARLESS LONG SLEEVE LARGE",
+            "price": 1350
+          },
+          {
+            "title": "FEARLESS LONG SLEEVE MEDIUM",
+            "price": 1350
+          },
+          {
+            "title": "FEARLESS LONG SLEEVE XL",
+            "price": 1350
+          }
+        ]
+      },
+      {
+        "title": "FLUX",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "FORCE+",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER FORCE+ BLACK GRAY MEDIUM",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ BLACK GRAY LARGE",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ BLACK GRAY XL",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK GOLD LARGE",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK GOLD MEDIUM",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK GOLD XL",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK GRAY LARGE",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK GRAY MEDIUM",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK GRAY XL",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK PURPLE LARGE",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK PURPLE MEDIUM",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK PURPLE XL",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK RED LARGE",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK RED MEDIUM",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK RED XL",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK SILVER LARGE",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK SILVER MEDIUM",
+            "price": 4895
+          },
+          {
+            "title": "SPYDER FORCE+ MATTE BLACK SILVER XL",
+            "price": 4895
+          }
+        ]
+      },
+      {
+        "title": "FORZA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER FORZA BLACK RED LARGE",
+            "price": 4495
+          },
+          {
+            "title": "SPYDER FORZA BLACK RED XL",
+            "price": 4495
+          }
+        ]
+      },
+      {
+        "title": "FUEL",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER FUEL ARC WHITE BLACK LARGE",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL ARC WHITE BLACK MEDIUM",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL ARC WHITE RED LARGE",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL ARC WHITE RED MEDIUM",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL ARC WHITE RED XL",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL ARC WHITE SILVER LARGE",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL ARC WHITE SILVER MEDIUM",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL ARC WHITE SILVER XL",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL BLACK GRAY LARGE",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL BLACK GRAY MEDIUM",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL BLACK GRAY XL",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL MATTE BLACK GRAY LARGE",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL MATTE BLACK GRAY XL",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL MATTE BLACK GREY MEDIUM",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL MATTE NUDE PINK BLACK LARGE",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL MATTE NUDE PINK BLACK MEDIUM",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL MATTE NUDE PINK BLACK XL",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL MATTE PURPLE PURPLE LARGE",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL MATTE PURPLE PURPLE MEDIUM",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL MATTE PURPLE PURPLE XL",
+            "price": 3495
+          },
+          {
+            "title": "SPYDER FUEL PEARL WHITE XL",
+            "price": 3495
+          }
+        ]
+      },
+      {
+        "title": "FURY",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER FURY MATTE BLACK SILVER LARGE",
+            "price": 4695
+          },
+          {
+            "title": "SPYDER FURY MATTE BLACK SILVER XL",
+            "price": 4695
+          },
+          {
+            "title": "SPYDER FURY MATTE NUDE PINK BLACK LARGE",
+            "price": 4695
+          },
+          {
+            "title": "SPYDER FURY MATTE NUDE PINK BLACK XL",
+            "price": 4695
+          },
+          {
+            "title": "SPYDER FURY MATTE PURPLE VIOLET LARGE",
+            "price": 4695
+          },
+          {
+            "title": "SPYDER FURY MATTE PURPLE VIOLET XL",
+            "price": 4695
+          }
+        ]
+      },
+      {
+        "title": "G RACING",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "G RACING MOTOSYN OIL 1L",
+            "price": 380
+          }
+        ]
+      },
+      {
+        "title": "GILLE HELMET",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "GLOVES",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "GOLD RUNWAY",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GR F-5 SERIES",
+            "price": 14000
+          },
+          {
+            "title": "GR LED AUXILIARY LIGHTS X3",
+            "price": 10500
+          },
+          {
+            "title": "GR LED AUXILIARY LIGHTS X4",
+            "price": 11200
+          },
+          {
+            "title": "GR LENS X3",
+            "price": 1400
+          },
+          {
+            "title": "GR LENS X4",
+            "price": 1400
+          },
+          {
+            "title": "GR LENS X5",
+            "price": 1800
+          }
+        ]
+      },
+      {
+        "title": "GT-PRO",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO GT-PRO BEIGE MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO FUSCHIA LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO FUSCHIA MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO FUSCHIA XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY BLACK LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY BLACK MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY BLACK XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY BLACK XXL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY BLUE LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY BLUE MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY BLUE XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY GREY LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY METALLIC SILVER 2XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY METALLIC SILVER LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY METALLIC SILVER MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY METALLIC SILVER XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY PASTEL PINK LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY PASTEL PINK MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY PEARL WHITE LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY PEARL WHITE MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY PEARL WHITE XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY PEARL WHITE XXL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY RED MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY YELLOW LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO GLOSSY YELLOW MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS BLACK LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS BLACK MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS BLACK XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS BLUE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS BLUE MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS PURPLE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS PURPLE XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS RED LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS RED MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO INVICTUS RED XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND BLUE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND BLUE MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND BLUE RED LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND BLUE RED MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND BLUE RED XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND BLUE XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND GRAY BLACK LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND GRAY BLACK MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND GRAY BLACK XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND PINK LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND PINK MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO LEGEND PINK XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO MATTE BLACK LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE BLACK MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE BLACK XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE BLUE LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE BLUE MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE CARBON BLACK DIAMOND LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE COOL GRAY LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE COOL GRAY MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE COOL GRAY XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE COOL GRAY XXL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE NAVY BLUE LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE NAVY BLUE MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE NAVY BLUE XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE PINK LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE PINK MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE PINK XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO MATTE YELLOW MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO NEON GREEN LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK GLOSSY BLACK GRAY WHITE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK GLOSSY BLACK GRAY WHITE MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK GLOSSY BLACK GRAY WHITE XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK GLOSSY BLACK LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK GLOSSY BLACK MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK GLOSSY BLACK RED WHITE XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK GLOSSY BLACK XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK GLOSSY BLUE WHITE PINK MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK MATTE COOL GREY LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK MATTE COOL GREY MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO OUTBREAK RED MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF BLUE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF BLUE MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF BLUE XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF GRAY LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF GRAY MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF GRAY XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF GREEN LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF GREEN MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF GREEN XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF RED LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF RED MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO RR FF RED XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO SHINOBI BLUE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO SHINOBI BLUE MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO SHINOBI PINK LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO SHINOBI PINK MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO SHINOBI RED LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO SHINOBI RED MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH BLU/RED LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH BLU/RED MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH BLU/RED XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH BLUE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH BLUE MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH BLUE XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH DARK BLUE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH DARK BLUE MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH DARK BLUE XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH RED LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH RED MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO GT-PRO XENITH RED XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO XR CARBON GLOSSY TWILL 3K EXTRA SMALL",
+            "price": 12500
+          },
+          {
+            "title": "EVO XR CARBON GLOSSY TWILL 3K LARGE",
+            "price": 12500
+          },
+          {
+            "title": "EVO XR CARBON GLOSSY TWILL 3K MEDIUM",
+            "price": 12500
+          },
+          {
+            "title": "EVO XR CARBON GLOSSY TWILL 3K SMALL",
+            "price": 12500
+          },
+          {
+            "title": "EVO XR CARBON GLOSSY TWILL 3K XL",
+            "price": 12500
+          },
+          {
+            "title": "EVO XR CARBON GLOSSY TWILL 3K XXL",
+            "price": 12500
+          }
+        ]
+      },
+      {
+        "title": "GT-SPORT",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO GT-SPORT DUALITY RED WHITE LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY RED WHITE MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY RED WHITE SMALL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY RED WHITE XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY TORQUISE BLUE WHITE MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY TORQUISE BLUE WHITE SMALL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY TORQUISE BLUE WHITE XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY TORQUISE BLUE WHITELARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY VIOLET PINK LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY VIOLET PINK MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY VIOLET PINK SMALL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY VIOLET PINK XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY WHITE GRAY LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY WHITE GRAY MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY WHITE GRAY SMALL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT DUALITY WHITE GRAY XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT FRACTURE BLUE WHITE LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT FRACTURE BLUE WHITE MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT FRACTURE PINK PURPLE LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT FRACTURE PINK PURPLE MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT FRACTURE RED WHITE LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT FRACTURE RED WHITE MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT FRACTURE RED WHITE XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT FRACTURE VIOLET BLUE LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT FRACTURE VIOLET BLUE MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GT-SPORT GLOSS BLACK 2XL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT GLOSS BLACK LARGE",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT GLOSS BLACK MEDIUM",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT GLOSS BLACK SMALL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT GLOSS BLACK XL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT GLOSS NAVY BLUE 2XL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT GLOSS NAVY BLUE LARGE",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT GLOSS NAVY BLUE MEDIUM",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE BLACK LARGE",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE BLACK MEDIUM",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE BLACK XL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE BLACK XXL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE BLUE MEDIUM",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE BLUE XL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE METAL RED MEDIUM",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE METAL RED XL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE TORQUISE BLUE 2XL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE TORQUISE BLUE LARGE",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE TORQUISE BLUE MEDIUM",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT MATTE TORQUISE BLUE XL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT PEARL WHITE LARGE",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT PEARL WHITE MEDIUM",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT PEARL WHITE XL",
+            "price": 3500
+          },
+          {
+            "title": "EVO GT-SPORT PEARL WHITE XXL",
+            "price": 3500
+          }
+        ]
+      },
+      {
+        "title": "GTS-V1",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE GTS-V1 EAGLES WHITE LARGE",
+            "price": 4500
+          },
+          {
+            "title": "GILLE GTS-V1 EAGLES WHITE MEDIUM",
+            "price": 4500
+          }
+        ]
+      },
+      {
+        "title": "GVR 172",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE 172 BLACK LARGE",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 BLACK XL",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 CHAMELEON BLUE LARGE",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 CHAMELEON BLUE MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 CHAMELEON BLUE XL",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 GREY LARGE",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 GREY XL",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 MATTE BLACK LARGE",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 MATTE BLACK MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 MATTE BLACK XL",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 MATTE GREY LARGE",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 MATTE GREY XL",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 RED LARGE",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 RED MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 RED XL",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 WHITE LARGE",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 WHITE MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "GILLE 172 WHITE XL",
+            "price": 3100
+          }
+        ]
+      },
+      {
+        "title": "GX-1",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO GX-1 GLOSSY BLACK MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 GLOSSY BLACK XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 GLOSSY PASTEL PINK LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 GLOSSY PASTEL PINK MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 GLOSSY PEARL WHITE LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 GLOSSY PEARL WHITE MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 GLOSSY PEARL WHITE XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 GLOSSY RED 2XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 GLOSSY RED LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 GLOSSY RED MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 MATTE BLACK LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 MATTE BLACK MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 MATTE BLACK XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 MATTE COOL GREY XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 PALE PURPLE LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO GX-1 PALE PURPLE MEDIUM",
+            "price": 3700
+          }
+        ]
+      },
+      {
+        "title": "HAND GRIP",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX HAND GRIP VIOLET",
+            "price": 250
+          },
+          {
+            "title": "BOMX HAND GRIP RED",
+            "price": 250
+          },
+          {
+            "title": "BOMX HAND GRIP GRAY",
+            "price": 250
+          },
+          {
+            "title": "BOMX HAND GRIP BLACK",
+            "price": 250
+          }
+        ]
+      },
+      {
+        "title": "HAVOC",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "HESOYAM",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "HESOYAM TSHIRT 2XL",
+            "price": 850
+          },
+          {
+            "title": "HESOYAM TSHIRT 3XL",
+            "price": 850
+          },
+          {
+            "title": "HESOYAM TSHIRT LARGE",
+            "price": 850
+          },
+          {
+            "title": "HESOYAM TSHIRT MEDIUM",
+            "price": 850
+          },
+          {
+            "title": "HESOYAM TSHIRT SMALL",
+            "price": 850
+          },
+          {
+            "title": "HESOYAM TSHIRT XL",
+            "price": 850
+          }
+        ]
+      },
+      {
+        "title": "HEXA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX HEXA AEROX V2 14S BLACK",
+            "price": 7000
+          },
+          {
+            "title": "BOMX HEXA AEROX V2 14S BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX HEXA AEROX V2 14S PURPLE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX HEXA AEROX V2 14S SILVER",
+            "price": 7000
+          }
+        ]
+      },
+      {
+        "title": "HYDRA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX HYDRA AEROX 14S VIOLET",
+            "price": 7000
+          },
+          {
+            "title": "BOMX HYDRA MIO 110 14S VIOLET",
+            "price": 7000
+          },
+          {
+            "title": "BOMX HYDRA MIO M3/R5 14S RED",
+            "price": 7000
+          },
+          {
+            "title": "BOMX HYDRA NMAX 14S VIOLET",
+            "price": 7000
+          },
+          {
+            "title": "BOMX HYDRA NMAX 2020 14S RED",
+            "price": 7000
+          },
+          {
+            "title": "BOMX HYDRA NMAX 2020 14S SILVER",
+            "price": 7000
+          }
+        ]
+      },
+      {
+        "title": "JACKETS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "KOMINE JACKET JK 07-079 BLACK MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "KOMINE JACKET JK 07-079 BLACK/NEON MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "KOMINE JACKET JK 07-079 BLACK/RED MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "KOMINE JACKET JK 07-095 BLACK/RED MAN MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "KOMINE JACKET JK 07-095 BLACK/RED WOMAN MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "KOMINE JACKET JK 07-103 BLACK/NEON MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "KOMINE JACKET JK 07-114 BLACK 3XL",
+            "price": 3800
+          },
+          {
+            "title": "LS2 AIRY EVO LADY JACKET BLACK XL",
+            "price": 3990
+          },
+          {
+            "title": "LS2 AIRY EVO MAN JACKET BLACK 2XL",
+            "price": 3990
+          },
+          {
+            "title": "LS2 AIRY EVO MAN JACKET BLACK 3XL",
+            "price": 3450
+          },
+          {
+            "title": "LS2 AIRY EVO MAN JACKET BLACK 5XL",
+            "price": 3990
+          },
+          {
+            "title": "LS2 AIRY EVO MAN JACKET BLACK LARGE",
+            "price": 3990
+          },
+          {
+            "title": "LS2 AIRY EVO MAN JACKET BLACK MEDIUM",
+            "price": 3990
+          },
+          {
+            "title": "LS2 ALBA LADY DARK GREY BLACK XL",
+            "price": 4380
+          },
+          {
+            "title": "LS2 ALBA MAN DARK GREY BLACK XL",
+            "price": 4380
+          },
+          {
+            "title": "LS2 BOLTON AIRMAN JACKET BLACK 2XL",
+            "price": 5990
+          },
+          {
+            "title": "LS2 BOLTON AIRMAN JACKET BLACK 3XL",
+            "price": 5990
+          },
+          {
+            "title": "LS2 BOLTON AIRMAN JACKET BLACK LARGE",
+            "price": 5990
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET BLACK/RED 4XL",
+            "price": 5490
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET BLACK/RED 5XL",
+            "price": 5490
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET BLACK/RED LARGE",
+            "price": 5490
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET BLACK/RED MEDIUM",
+            "price": 5490
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET BLACK/RED XL",
+            "price": 5490
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET GREEN BLACK HI-VI YELLOW 2XL",
+            "price": 5490
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET GREEN BLACK HI-VI YELLOW LARGE",
+            "price": 5490
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET GREEN BLACK HI-VI YELLOW MEDIUM",
+            "price": 5490
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET GREEN BLACK HI-VI YELLOW XL",
+            "price": 5490
+          },
+          {
+            "title": "LS2 GARDA AIR MAN JACKET GREEN BLACK HI-VI YELLOW XL",
+            "price": 5490
+          },
+          {
+            "title": "LS2 JACKET X-ARMOR MAN JACKET BLACK SILVER 3XL-4XL",
+            "price": 5990
+          },
+          {
+            "title": "LS2 JACKET X-ARMOR MAN JACKET BLACK SILVER XL - 2XL",
+            "price": 6990
+          },
+          {
+            "title": "NITRO TR-02 STRETCH AIR JACKET OLIVE/BLACK 2XL",
+            "price": 4300
+          },
+          {
+            "title": "NITRO TR-02 STRETCH AIR JACKET WHITE/BLACK 2XL",
+            "price": 4300
+          },
+          {
+            "title": "NITRO TR-02 STRETCH AIR JACKET WHITE/BLACK LARGE",
+            "price": 4300
+          },
+          {
+            "title": "NITRO TR-02 STRETCH AIR JACKET WHITE/BLACK MEDIUM",
+            "price": 4300
+          },
+          {
+            "title": "NITRO TR-02 STRETCH AIR JACKET WHITE/BLACK XL",
+            "price": 4300
+          },
+          {
+            "title": "SEC TACTICAL DRY RIDING JACKET BLACK 3XL",
+            "price": 4800
+          }
+        ]
+      },
+      {
+        "title": "JRP DISCS",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "JRP FLATSEAT",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "JRP RACING FLATSEAT AEROX BLACK",
+            "price": 4990
+          }
+        ]
+      },
+      {
+        "title": "JVT ACCESSOSRIES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "JVT CLUTCH BELL CLICK/PCX",
+            "price": 2100
+          },
+          {
+            "title": "JVT CLUTCH BELL NMAX/AEROX",
+            "price": 2100
+          },
+          {
+            "title": "JVT FLYBALL NMAX 10G",
+            "price": 399
+          },
+          {
+            "title": "JVT FLYBALL NMAX 12G",
+            "price": 399
+          },
+          {
+            "title": "JVT FLYBALL NMAX 8G",
+            "price": 399
+          },
+          {
+            "title": "JVT FLYBALL NMAX 9G",
+            "price": 399
+          },
+          {
+            "title": "JVT FLYBALL PCX 10G",
+            "price": 399
+          },
+          {
+            "title": "JVT FLYBALL PCX 11G",
+            "price": 399
+          },
+          {
+            "title": "JVT FLYBALL PCX 12G",
+            "price": 399
+          },
+          {
+            "title": "JVT PULLEY SET CLICK",
+            "price": 2350
+          },
+          {
+            "title": "JVT PULLEY SLIDER CLICK/PCX/ADV/SD",
+            "price": 150
+          },
+          {
+            "title": "JVT PULLEY SLIDER NMAX/AEROX",
+            "price": 150
+          }
+        ]
+      },
+      {
+        "title": "JVT PIPES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "JVT PIPE BEAT V3",
+            "price": 7500
+          },
+          {
+            "title": "JVT PIPE CLICK V2/V3",
+            "price": 7500
+          },
+          {
+            "title": "JVT PIPE NMAX 2020 V3/ AEROX",
+            "price": 7500
+          },
+          {
+            "title": "JVT PIPE NMAX V4",
+            "price": 8990
+          },
+          {
+            "title": "JVT PIPE NMAX V4 TITANIUM",
+            "price": 19990
+          },
+          {
+            "title": "JVT PIPE SOULTY V3",
+            "price": 7500
+          }
+        ]
+      },
+      {
+        "title": "KENOCHI PIPES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "KENOCHI PIPE CLICK BLACK",
+            "price": 7800
+          },
+          {
+            "title": "KENOCHI PIPE CLICK STAINLESS",
+            "price": 8800
+          },
+          {
+            "title": "KENOCHI PIPE NEW NMAX STAINLESS",
+            "price": 8800
+          }
+        ]
+      },
+      {
+        "title": "KERENA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE FF07 KERENA (TWO TONE) MATTE PINK MATTE FLOU PINK XL",
+            "price": 2700
+          },
+          {
+            "title": "GILLE FF07 KERENA (TWO TONE) MATTE RED/MATTE BLACK LARGE",
+            "price": 2700
+          },
+          {
+            "title": "GILLE FF07 KERENA (TWO TONE) MATTE RED/MATTE BLACK XL",
+            "price": 2700
+          },
+          {
+            "title": "GILLE FF07 KERENA MATTE BLACK 2XL",
+            "price": 2900
+          },
+          {
+            "title": "GILLE FF07 KERENA MATTE BLACK LARGE",
+            "price": 2900
+          },
+          {
+            "title": "GILLE FF07 KERENA MATTE BLACK MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "GILLE FF07 KERENA MATTE BLACK XL",
+            "price": 2900
+          },
+          {
+            "title": "GILLE FF07 KERENA MATTE PINK LARGE",
+            "price": 2900
+          },
+          {
+            "title": "GILLE FF07 KERENA MATTE PINK XL",
+            "price": 2700
+          },
+          {
+            "title": "GILLE FF07 KERENA PINK LARGE",
+            "price": 2900
+          },
+          {
+            "title": "GILLE FF07 KERENA PINK MEDIUM",
+            "price": 2700
+          },
+          {
+            "title": "GILLE FF07 KERENA PINK XL",
+            "price": 2700
+          }
+        ]
+      },
+      {
+        "title": "KOMINE GLOVES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "KOMINE GLOVES GK167 LARGE",
+            "price": 1200
+          },
+          {
+            "title": "KOMINE GLOVES GK167 MEDIUM",
+            "price": 1200
+          },
+          {
+            "title": "KOMINE GLOVES GK167 XL",
+            "price": 1200
+          },
+          {
+            "title": "KOMINE GLOVES GK-220 LARGE",
+            "price": 999
+          },
+          {
+            "title": "KOMINE GLOVES GK-220 MEDIUM",
+            "price": 999
+          },
+          {
+            "title": "KOMINE GLOVES GK-220 XL",
+            "price": 999
+          }
+        ]
+      },
+      {
+        "title": "KYT HELMET",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "KYT NF-J HALF FACE MEDIUM",
+            "price": 1000
+          },
+          {
+            "title": "KYT CARBON NZ-RACE",
+            "price": 23500
+          }
+        ]
+      },
+      {
+        "title": "LEGACY",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "LEGACY LONG SLEEVE 2XL",
+            "price": 1500
+          },
+          {
+            "title": "LEGACY LONG SLEEVE 3XL",
+            "price": 1500
+          },
+          {
+            "title": "LEGACY LONG SLEEVE LARGE",
+            "price": 1500
+          },
+          {
+            "title": "LEGACY LONG SLEEVE MEDIUM",
+            "price": 1500
+          },
+          {
+            "title": "LEGACY LONG SLEEVE SMALL",
+            "price": 1500
+          },
+          {
+            "title": "LEGACY LONG SLEEVE XL",
+            "price": 1500
+          },
+          {
+            "title": "LEGACY TSHIRT 2XL",
+            "price": 1100
+          },
+          {
+            "title": "LEGACY TSHIRT 3XL",
+            "price": 1100
+          },
+          {
+            "title": "LEGACY TSHIRT LARGE",
+            "price": 1100
+          },
+          {
+            "title": "LEGACY TSHIRT MEDIUM",
+            "price": 1100
+          },
+          {
+            "title": "LEGACY TSHIRT SMALL",
+            "price": 1100
+          },
+          {
+            "title": "LEGACY TSHIRT XL",
+            "price": 1100
+          }
+        ]
+      },
+      {
+        "title": "LEGION",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "LEGION LONG SLEEVE 2XL",
+            "price": 1350
+          },
+          {
+            "title": "LEGION LONG SLEEVE 3XL",
+            "price": 1350
+          },
+          {
+            "title": "LEGION LONG SLEEVE XL",
+            "price": 1350
+          },
+          {
+            "title": "LEGION LONG SLEEVE LARGE",
+            "price": 1350
+          },
+          {
+            "title": "LEGION LONG SLEEVE MEDIUM",
+            "price": 1350
+          },
+          {
+            "title": "LEGION LONG SLEEVE SMALL",
+            "price": 1350
+          }
+        ]
+      },
+      {
+        "title": "LIGHTS",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "LS2 HELMET",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "LS2 ADVANT II SOLID MATTE BLACK LARGE",
+            "price": 14990
+          },
+          {
+            "title": "LS2 ADVANT II SOLID MATTE BLACK MEDIUM",
+            "price": 14990
+          },
+          {
+            "title": "LS2 ADVANT II SOLID MATTE BLACK XL",
+            "price": 14990
+          },
+          {
+            "title": "LS2 ADVANT II SOLID MATTE BLACK XXL",
+            "price": 14990
+          },
+          {
+            "title": "LS2 ADVANT II SOLID MATTE CONCRETE LARGE",
+            "price": 14990
+          },
+          {
+            "title": "LS2 ADVANT II SOLID MATTE CONCRETE MEDIUM",
+            "price": 14990
+          },
+          {
+            "title": "LS2 ADVANT II SOLID MATTE CONCRETE XL",
+            "price": 14990
+          },
+          {
+            "title": "LS2 ADVANT II SOLID MATTE CONCRETE XXL",
+            "price": 14990
+          },
+          {
+            "title": "LS2 ADVANT II TAPE MATTE BLACK 2XL",
+            "price": 15990
+          },
+          {
+            "title": "LS2 ADVANT II TAPE MATTE BLACK LARGE",
+            "price": 15990
+          },
+          {
+            "title": "LS2 ADVANT II TAPE MATTE BLACK MEDIUM",
+            "price": 15990
+          },
+          {
+            "title": "LS2 ADVANT II TAPE MATTE BLACK XL",
+            "price": 15990
+          },
+          {
+            "title": "LS2 ADVANT II TRIPLE MATTE BLACK XL",
+            "price": 15990
+          },
+          {
+            "title": "LS2 ADVANT II TRIPLE MATTE BLACK XXL",
+            "price": 15990
+          },
+          {
+            "title": "LS2 ADVANT II TRIPLE WHITE BLUE RED LARGE",
+            "price": 15990
+          },
+          {
+            "title": "LS2 ADVANT II TRIPLE WHITE BLUE RED MEDIUM",
+            "price": 15990
+          },
+          {
+            "title": "LS2 ADVANT II TRIPLE WHITE BLUE RED XL",
+            "price": 15990
+          },
+          {
+            "title": "LS2 ADVANT X CARBON SOLID CARBON BLACK 3XL",
+            "price": 21990
+          },
+          {
+            "title": "LS2 DRAGON FORGED CARBON 2XL",
+            "price": 20990
+          },
+          {
+            "title": "LS2 DRAGON FORGED CARBON 3XL",
+            "price": 20990
+          },
+          {
+            "title": "LS2 DRAGON FORGED CARBON LARGE",
+            "price": 20990
+          },
+          {
+            "title": "LS2 DRAGON FORGED CARBON MEDIUM",
+            "price": 20990
+          },
+          {
+            "title": "LS2 DRAGON FORGED CARBON XL",
+            "price": 20990
+          },
+          {
+            "title": "LS2 EXPLORER CARBON GLOSSY CARBON LARGE",
+            "price": 17990
+          },
+          {
+            "title": "LS2 EXPLORER CARBON GLOSSY CARBON XL",
+            "price": 17990
+          },
+          {
+            "title": "LS2 EXPLORER CARBON GLOSSY CARBON XXL",
+            "price": 17990
+          },
+          {
+            "title": "LS2 MX702 PIONEER II HILL MATTE BLACK WHITE LARGE",
+            "price": 7990
+          },
+          {
+            "title": "LS2 MX702 PIONEER II HILL MATTE BLACK WHITE XL",
+            "price": 7990
+          },
+          {
+            "title": "LS2 MX702 PIONEER II HILL MATTE BLACK WHITE XXL",
+            "price": 7990
+          },
+          {
+            "title": "LS2 MX702 PIONEER II NAMID GRAPHICS WHITE RED BLUE XXL",
+            "price": 7990
+          },
+          {
+            "title": "LS2 MX702 PIONEER II NARDO GREY LARGE",
+            "price": 7490
+          },
+          {
+            "title": "LS2 MX702 PIONEER II NARDO GREY XL",
+            "price": 7490
+          },
+          {
+            "title": "LS2 MX702 PIONEER II NARDO GREY XXL",
+            "price": 7490
+          },
+          {
+            "title": "LS2 MX702 PIONEER II SOLID GLOSSY WHITE L",
+            "price": 7490
+          },
+          {
+            "title": "LS2 MX702 PIONEER II SOLID GLOSSY WHITE XL",
+            "price": 7490
+          },
+          {
+            "title": "LS2 MX702 PIONEER II SOLID MATTE BLACK LARGE",
+            "price": 7490
+          },
+          {
+            "title": "LS2 MX702 PIONEER II SOLID MATTE BLACK XL",
+            "price": 7490
+          },
+          {
+            "title": "LS2 MX702 PIONEER II SOLID MATTE OLIVE LARGE",
+            "price": 7490
+          },
+          {
+            "title": "LS2 MX702 PIONEER II SOLID MATTE OLIVE XL",
+            "price": 7490
+          },
+          {
+            "title": "LS2 THUNDER GP AERO BLACK L",
+            "price": 19990
+          },
+          {
+            "title": "LS2 THUNDER GP AERO BLACK M",
+            "price": 19990
+          },
+          {
+            "title": "LS2 THUNDER GP AERO BLACK XL",
+            "price": 19990
+          },
+          {
+            "title": "LS2 THUNDER GP AERO MATTE BLACK XXL",
+            "price": 19990
+          },
+          {
+            "title": "LS2 THUNDER GP AERO SPOILER BLACK XL",
+            "price": 19990
+          },
+          {
+            "title": "LS2 THUNDER GP AERO SPOILER BLACK XXL",
+            "price": 19990
+          }
+        ]
+      },
+      {
+        "title": "LUNA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX LUNA AEROX V2 14S BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LUNA AEROX V2 14S RED",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LUNA AEROX V2 14S SILVER",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LUNA BEAT 14S BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LUNA BEAT 14S RED",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LUNA BEAT 14S VIOLET",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LUNA CLICK 14S BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LUNA NMAX 2020 14S BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LUNA NMAX 2020 14S RED",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LUNA NMAX 2020 14S SILVER",
+            "price": 7000
+          }
+        ]
+      },
+      {
+        "title": "LYNX",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX LYNX AEROX V2 14S BLACK",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX AEROX V2 14S BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX AEROX V2 14S PURPLE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX AEROX V2 14S RED",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX AEROX V2 14S SILVER",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX CLICK 125 14S BLACK",
+            "price": 6500
+          },
+          {
+            "title": "BOMX LYNX CLICK 125 14S GOLD",
+            "price": 6500
+          },
+          {
+            "title": "BOMX LYNX CLICK 125 14S SILVER",
+            "price": 6500
+          },
+          {
+            "title": "BOMX LYNX CLICK 125 14S VIOLET",
+            "price": 6500
+          },
+          {
+            "title": "BOMX LYNX GIORNO 125 12S BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX GIORNO 125 12S SILVER",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX GIORNO 125 12S VIOLET",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX NMAX 13S BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX NMAX 14S BLUE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX NMAX 2020 13S BLACK",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX NMAX 2020 13S GREEN",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX NMAX 2020 13S RED",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX NMAX 2020 14S RED",
+            "price": 7000
+          },
+          {
+            "title": "BOMX LYNX PCX 14S SILVER",
+            "price": 7000
+          }
+        ]
+      },
+      {
+        "title": "M2",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO M2 GLOSS BLACK LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS BLACK MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS BLACK XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS METALLIC SILVER LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS METALLIC SILVER MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS METALLIC SILVER XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS RED LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS RED MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS RED XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS TITANIUM LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS TITANIUM MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 GLOSS TITANIUM XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MAGENTA LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MAGENTA MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MAGENTA XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE BLACK LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE BLACK MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE BLACK XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE COOL GRAY LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE COOL GRAY MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE PASTEL PINK LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE PASTEL PINK MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE PASTEL PINK XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE RED LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE RED MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE RED XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE TITANIUM LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE TITANIUM MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE TITANIUM XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE TORQUISE BLUE LARGE",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE TORQUISE BLUE MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 MATTE TORQUISE BLUE XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 PEARL WHITE 2XL",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 PEARL WHITE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO M2 PEARL WHITE MEDIUM",
+            "price": 3700
+          },
+          {
+            "title": "EVO M2 PEARL WHITE XL",
+            "price": 3700
+          }
+        ]
+      },
+      {
+        "title": "MAX SPEED",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "MAX SPEED MIO 125 BLACK/RED",
+            "price": 1000
+          },
+          {
+            "title": "MAX SPEED MIO 125 BLACK/SILVER",
+            "price": 1000
+          },
+          {
+            "title": "MAX SPEED MIO 125 SILVER/SILVER",
+            "price": 1000
+          },
+          {
+            "title": "MAX SPEED MODIFIED SIZES DISC 260MM BLACK/RED",
+            "price": 1000
+          },
+          {
+            "title": "MAX SPEED MODIFIED SIZES DISC 260MM BLACK/SILVER",
+            "price": 1000
+          },
+          {
+            "title": "MAX SPEED MODIFIED SIZES DISC 260MM SILVER/BLUE",
+            "price": 1000
+          },
+          {
+            "title": "MAX SPEED MODIFIED SIZES DISC 260MM SILVER/SILVER",
+            "price": 1000
+          },
+          {
+            "title": "MAX SPEED NMAX/AEROX 260MM BLACK/RED",
+            "price": 1000
+          },
+          {
+            "title": "MAX SPEED NMAX/AEROX 260MM BLACK/SILVER",
+            "price": 1000
+          }
+        ]
+      },
+      {
+        "title": "MONEY MAKER",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "MONEY MAKER TSHIRT 2XL",
+            "price": 1100
+          },
+          {
+            "title": "MONEY MAKER TSHIRT 3XL",
+            "price": 1100
+          },
+          {
+            "title": "MONEY MAKER TSHIRT LARGE",
+            "price": 1100
+          },
+          {
+            "title": "MONEY MAKER TSHIRT MEDIUM",
+            "price": 1100
+          },
+          {
+            "title": "MONEY MAKER TSHIRT SMALL",
+            "price": 1100
+          },
+          {
+            "title": "MONEY MAKER TSHIRT XL",
+            "price": 1100
+          }
+        ]
+      },
+      {
+        "title": "MOTOWOLF",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "CHEST MOUNT",
+            "price": 2000
+          },
+          {
+            "title": "GRX CHIN MOUNT",
+            "price": 450
+          },
+          {
+            "title": "MOTOWOLF MASK",
+            "price": 350
+          },
+          {
+            "title": "MOTOWOLF MOBILE PHONE HOLDER",
+            "price": 580
+          },
+          {
+            "title": "MOTOWOLF MOTORCYCLE COVER",
+            "price": 850
+          }
+        ]
+      },
+      {
+        "title": "MT HELMET",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "MT HELMET FALCON BLUE GREEN LARGE",
+            "price": 3900
+          }
+        ]
+      },
+      {
+        "title": "NEO BLAZDE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER NEO PEARL WHITE LARGE",
+            "price": 2895
+          },
+          {
+            "title": "SPYDER NEO PEARL WHITE MEDIUM",
+            "price": 2895
+          }
+        ]
+      },
+      {
+        "title": "NEO ICON",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER NEO ICON MATTE BLACK LARGE",
+            "price": 4195
+          },
+          {
+            "title": "SPYDER NEO ICON MATTE BLACK MEDIUM",
+            "price": 4195
+          },
+          {
+            "title": "SPYDER NEO ICON MATTE BLACK SMALL",
+            "price": 4195
+          },
+          {
+            "title": "SPYDER NEO ICON PEARL WHITE LARGE",
+            "price": 4195
+          },
+          {
+            "title": "SPYDER NEO ICON PEARL WHITE MEDIUM",
+            "price": 4195
+          }
+        ]
+      },
+      {
+        "title": "NITRO GLOVES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "NITRO GLOVES N175 MEDIUM",
+            "price": 1300
+          },
+          {
+            "title": "NITRO GLOVES N177 MEDIUM",
+            "price": 1300
+          },
+          {
+            "title": "NITRO GLOVES N410 2XL",
+            "price": 1495
+          },
+          {
+            "title": "NITRO GLOVES N410 MEDIUM",
+            "price": 1495
+          },
+          {
+            "title": "NITRO GLOVES N426 LARGE",
+            "price": 1495
+          },
+          {
+            "title": "NITRO GLOVES N426 MEDIUM",
+            "price": 1495
+          },
+          {
+            "title": "NITRO GLOVES N426 XL",
+            "price": 1495
+          },
+          {
+            "title": "NITRO GLOVES SU12 MEDIUM",
+            "price": 1495
+          }
+        ]
+      },
+      {
+        "title": "NOMAD HELMET",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "NOMAD CAMINO BLACK RED LARGE",
+            "price": 4295
+          },
+          {
+            "title": "NOMAD CAMINO PEARL WHITE RED LARGE",
+            "price": 4295
+          },
+          {
+            "title": "NOMAD CAMINO PEARL WHITE SILVER XL",
+            "price": 4295
+          }
+        ]
+      },
+      {
+        "title": "OILS AND SEALERS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GASKET",
+            "price": 50
+          },
+          {
+            "title": "KOBY AUTO TIRE SEALER",
+            "price": 100
+          },
+          {
+            "title": "KOBY BRAKE CLEANER",
+            "price": 250
+          },
+          {
+            "title": "KOBY POWER SPRAY CVT/FI CLEANER",
+            "price": 250
+          },
+          {
+            "title": "KOBY PROTECTANT SPRAY M310",
+            "price": 150
+          },
+          {
+            "title": "PIAA HORN",
+            "price": 850
+          }
+        ]
+      },
+      {
+        "title": "ORION",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE AF-10 ORION MATTE BLACK LARGE",
+            "price": 4500
+          },
+          {
+            "title": "GILLE AF-10 ORION MATTE BLACK MEDIUM",
+            "price": 4500
+          },
+          {
+            "title": "GILLE AF-10 ORION MATTE BLACK XL",
+            "price": 4500
+          },
+          {
+            "title": "GILLE AF-10 ORION PEARL WHITE LARGE",
+            "price": 4500
+          },
+          {
+            "title": "GILLE AF-10 ORION PEARL WHITE MEDIUM",
+            "price": 4500
+          },
+          {
+            "title": "GILLE AF-10 ORION PEARL WHITE XL",
+            "price": 4500
+          }
+        ]
+      },
+      {
+        "title": "OTHER PIPES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "NSA VARIO 125/150",
+            "price": 10500
+          },
+          {
+            "title": "RS8 GPI REDLAK PIPE NMAX/AEROX",
+            "price": 13500
+          }
+        ]
+      },
+      {
+        "title": "PANTS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "KOMINE PANTS 4XL",
+            "price": 3250
+          },
+          {
+            "title": "LS2 BRADFORD MAN JEANS BLACK 2XL",
+            "price": 4990
+          },
+          {
+            "title": "LS2 BRADFORD MAN JEANS BLACK 3XL",
+            "price": 4990
+          },
+          {
+            "title": "LS2 BRADFORD MAN JEANS BLACK 4XL",
+            "price": 4990
+          },
+          {
+            "title": "LS2 BRADFORD MAN JEANS BLACK LARGE",
+            "price": 4990
+          },
+          {
+            "title": "LS2 BRADFORD MAN JEANS BLACK MEDIUM",
+            "price": 4990
+          },
+          {
+            "title": "LS2 BRADFORD MAN JEANS BLACK XL",
+            "price": 4990
+          }
+        ]
+      },
+      {
+        "title": "PARAK CLOTHING",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "PHOENIX",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE PHOENIX BLACK LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX BLACK MEDIUM",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX BLACK XL",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE BLACK LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE BLACK MEDIUM",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE BLACK XL",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE GREY LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE GREY MEDIUM",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE GREY XL",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE PINK LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE PINK MEDIUM",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE PINK XL",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE VIOLET MEDIUM",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX MATTE VIOLET XL",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX PEARL WHITE LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX PEARL WHITE MEDIUM",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX PEARL WHITE XL",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX PINK LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX PINK MEDIUM",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX VIOLET LARGE",
+            "price": 3900
+          },
+          {
+            "title": "GILLE PHOENIX VIOLET MEDIUM",
+            "price": 3900
+          }
+        ]
+      },
+      {
+        "title": "PIPE",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "PRIZM LIGHTS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "PRIZM PREMIUM AUXILIARY LIGHTS DAYLIGHT 60WATTS",
+            "price": 4000
+          },
+          {
+            "title": "PRIZM PREMIUM AUXILIARY LIGHTS GLARE 35 WATTS",
+            "price": 3100
+          },
+          {
+            "title": "PRIZM PREMIUM AUXILIARY LIGHTS TRIDANT 50 WATTS",
+            "price": 3800
+          }
+        ]
+      },
+      {
+        "title": "RACING RADIATOR",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX RACING RADIATOR CLICK 150",
+            "price": 4500
+          },
+          {
+            "title": "BOMX RACING RADIATOR NMAX/AEROX",
+            "price": 4500
+          }
+        ]
+      },
+      {
+        "title": "RADAR",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER RADAR MATTE NUDE PINK",
+            "price": 3295
+          }
+        ]
+      },
+      {
+        "title": "RADIATOR COVER",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RADIATOR COVER AEROX V2/NMAX V2 SILVER",
+            "price": 750
+          },
+          {
+            "title": "RADIATOR COVER AEROX V2/NMAX V2 BLACK",
+            "price": 750
+          },
+          {
+            "title": "RADIATOR COVER CLICK/PCX/ADV BLACK",
+            "price": 750
+          },
+          {
+            "title": "RADIATOR COVER CLICK/PCX/ADV SILVER",
+            "price": 750
+          },
+          {
+            "title": "RADIATOR COVER CLICK/PCX/ADV PURPLE",
+            "price": 750
+          },
+          {
+            "title": "RADIATOR COVER CLICK/PCX/ADV RED",
+            "price": 750
+          }
+        ]
+      },
+      {
+        "title": "RAINCOAT",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RAINCOAT ORDINARY GREY (KAPOTE)",
+            "price": 580
+          },
+          {
+            "title": "RAINCOAT VELAR BLACK/RED 2XL",
+            "price": 1995
+          }
+        ]
+      },
+      {
+        "title": "RASCAL",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RASCAL LONG SLEEVE 2XL",
+            "price": 1450
+          },
+          {
+            "title": "RASCAL LONG SLEEVE 3XL",
+            "price": 1450
+          },
+          {
+            "title": "RASCAL LONG SLEEVE LARGE",
+            "price": 1450
+          },
+          {
+            "title": "RASCAL LONG SLEEVE MEDIUM",
+            "price": 1450
+          },
+          {
+            "title": "RASCAL LONG SLEEVE SMALL",
+            "price": 1450
+          },
+          {
+            "title": "RASCAL LONG SLEEVE XL",
+            "price": 1450
+          }
+        ]
+      },
+      {
+        "title": "RCB DISCS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RCB STEEL FLOATING BRAKE CLICK 150",
+            "price": 3500
+          }
+        ]
+      },
+      {
+        "title": "RCB SHOCK",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RCB SHOCK CLICK BLACK/BLACK/BLACK",
+            "price": 6800
+          }
+        ]
+      },
+      {
+        "title": "REBOOT 2",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER REBOOT2 ARC WHITE SILVER LARGE",
+            "price": 3195
+          },
+          {
+            "title": "SPYDER REBOOT2 MATTE BLACK GRAY LARGE",
+            "price": 3195
+          }
+        ]
+      },
+      {
+        "title": "RECON 2",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "RELENTLESS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RELENTLESS LONG SLEEVE 2XL",
+            "price": 1400
+          },
+          {
+            "title": "RELENTLESS LONG SLEEVE 3XL",
+            "price": 1400
+          },
+          {
+            "title": "RELENTLESS LONG SLEEVE LARGE",
+            "price": 1400
+          },
+          {
+            "title": "RELENTLESS LONG SLEEVE MEDIUM",
+            "price": 1400
+          },
+          {
+            "title": "RELENTLESS LONG SLEEVE SMALL",
+            "price": 1400
+          },
+          {
+            "title": "RELENTLESS LONG SLEEVE XL",
+            "price": 1400
+          },
+          {
+            "title": "RELENTLESS TSHIRT 2XL",
+            "price": 1100
+          },
+          {
+            "title": "RELENTLESS TSHIRT 3XL",
+            "price": 1100
+          },
+          {
+            "title": "RELENTLESS TSHIRT LARGE",
+            "price": 1100
+          },
+          {
+            "title": "RELENTLESS TSHIRT MEDIUM",
+            "price": 1100
+          },
+          {
+            "title": "RELENTLESS TSHIRT SMALL",
+            "price": 1100
+          },
+          {
+            "title": "RELENTLESS TSHIRT XL",
+            "price": 1100
+          }
+        ]
+      },
+      {
+        "title": "ROGUE+",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER ROQUE BLACK SILVER MEDIUM",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER ROQUE MATTE BLACK SILVER XL",
+            "price": 3795
+          }
+        ]
+      },
+      {
+        "title": "RS8 ACCESSORIES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RS8 1200 RPM CENTER SPRING  NMAX/AEROX  BLUE",
+            "price": 600
+          },
+          {
+            "title": "RS8 CLUTH BELL NMAX/AEROX RED",
+            "price": 2100
+          },
+          {
+            "title": "RS8 PULLEY BUSHING CLICK 125/150",
+            "price": 450
+          },
+          {
+            "title": "RS8 PULLEY BUSHING NMAX/AEROX",
+            "price": 450
+          },
+          {
+            "title": "RS8 PULLEY SET AEROX V2/ NMAX",
+            "price": 3180
+          },
+          {
+            "title": "RS8 PULLEY SET CLICK",
+            "price": 2250
+          },
+          {
+            "title": "RS8 TORQUE DRIVE CLICK 125/150",
+            "price": 3850
+          }
+        ]
+      },
+      {
+        "title": "RX5",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO RX5 BONEHEAD GOLD LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 BONEHEAD GOLD MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 BONEHEAD GRAY LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 BONEHEAD GRAY MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 BONEHEAD WHITE LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 GLOSSY BLACK LARGE",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY BLACK MEDIUM",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY BLACK SMALL",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY BLUE 2XL",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY BLUE LARGE",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY BLUE MEDIUM",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY BLUE SMALL",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY BLUE XL",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY PASTEL PINK LARGE",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY PEARL WHITE LARGE",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY PEARL WHITE MEDIUM",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY PEARL WHITE SMALL",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY RED SMALL",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY VIOLET LARGE",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY VIOLET MEDIUM",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 GLOSSY VIOLET SMALL",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE BLACK LARGE",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE BLACK MEDIUM",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE BLACK SMALL",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE BLUE LARGE",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE BLUE MEDIUM",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE BLUE SMALL",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE MOSS ARMY GREEN LARGE",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE MOSS ARMY GREEN MEDIUM",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE YELLOW LARGE",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 MATTE YELLOW MEDIUM",
+            "price": 2800
+          },
+          {
+            "title": "EVO RX5 RIOT RX GRAY PINK LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 RIOT RX GRAY PINK MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 RIOT RX PINK PURPLE LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 RIOT RX PINK PURPLE MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 RIOT RX PINK PURPLE SMALL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 RIOT RX WHITE LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 RIOT RX WHITE MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 RIOT RX YELLOW LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 RIOT RX YELLOW SMALL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 CYAN BLUE 2XL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 CYAN BLUE LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 CYAN BLUE MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 CYAN BLUE SMALL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 CYAN BLUE XL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 GREY/RED LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 GREY/RED MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 MATTE BLACK GRAY RED LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 MATTE BLACK GRAY RED MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 MATTE BLACK GRAY RED SMALL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 PINK/BLUE LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 PINK/BLUE MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 PINK/BLUE SMALL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 PINK/BLUE XL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 PINK/BLUE XXL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 RED/BLUE 2XL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 RED/BLUE LARGE",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 RED/BLUE MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 RED/BLUE SMALL",
+            "price": 2950
+          },
+          {
+            "title": "EVO RX5 TREMOR 2 RED/BLUE XL",
+            "price": 2950
+          }
+        ]
+      },
+      {
+        "title": "RYZEN HELMET",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RYZEN JR. GLOSS BLACK MEDIUM",
+            "price": 1800
+          },
+          {
+            "title": "RYZEN JR. GLOSS BLACK SMALL",
+            "price": 1800
+          },
+          {
+            "title": "RYZEN JR. GLOSS BLUE SMALL",
+            "price": 1800
+          },
+          {
+            "title": "RYZEN JR. GLOSS PEARL WHITE SMALL",
+            "price": 1800
+          },
+          {
+            "title": "RYZEN JR. GLOSS PINK LARGE",
+            "price": 1800
+          },
+          {
+            "title": "RYZEN JR. GLOSS PINK MEDIUM",
+            "price": 1800
+          },
+          {
+            "title": "RYZEN JR. GLOSS PINK SMALL",
+            "price": 1800
+          },
+          {
+            "title": "RYZEN JR. GLOSS YELLOW MEDIUM",
+            "price": 1800
+          },
+          {
+            "title": "RYZEN JR. GLOSS YELLOW SMALL",
+            "price": 1800
+          },
+          {
+            "title": "RYZEN ZX-700R GLOSSY BLACK MEDIUM",
+            "price": 2500
+          },
+          {
+            "title": "RYZEN ZX-700R GLOSSY RED MEDIUM",
+            "price": 2500
+          },
+          {
+            "title": "RYZEN ZX-700R MATTE BLACK MEDIUM",
+            "price": 2500
+          },
+          {
+            "title": "RYZEN ZX-700R MATTE BLACK SMALL",
+            "price": 2500
+          }
+        ]
+      },
+      {
+        "title": "SABER",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX SABER MIO M3 14S PURPLE",
+            "price": 7000
+          },
+          {
+            "title": "BOMX SABER MIO M3 14S SILVER",
+            "price": 7000
+          }
+        ]
+      },
+      {
+        "title": "SEC ACCESSORIES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SEC MASK",
+            "price": 250
+          }
+        ]
+      },
+      {
+        "title": "SEC HELMET",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SEC ENVIVO-SOLID 2023 GREY BLACK LARGE",
+            "price": 3500
+          },
+          {
+            "title": "SEC ENVIVO-SOLID 2023 GREY BLACK XL",
+            "price": 3500
+          },
+          {
+            "title": "SEC GRID DUOX GLOSSY BLACK WHITE HALF FACE LARGE",
+            "price": 3300
+          },
+          {
+            "title": "SEC GRID DUOX GLOSSY GREY BLACK HALF FACE LARGE",
+            "price": 3300
+          },
+          {
+            "title": "SEC GRID DUOX GLOSSY WHITE BLACK HALF FACE GRAY LARGE",
+            "price": 3300
+          }
+        ]
+      },
+      {
+        "title": "SHIBUYA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SHIBUYA LONG SLEEVE 2XL",
+            "price": 1350
+          },
+          {
+            "title": "SHIBUYA LONG SLEEVE 3XL",
+            "price": 1350
+          },
+          {
+            "title": "SHIBUYA LONG SLEEVE LARGE",
+            "price": 1350
+          },
+          {
+            "title": "SHIBUYA LONG SLEEVE MEDIUM",
+            "price": 1350
+          },
+          {
+            "title": "SHIBUYA LONG SLEEVE SMALL",
+            "price": 1350
+          },
+          {
+            "title": "SHIBUYA LONG SLEEVE XL",
+            "price": 1350
+          }
+        ]
+      },
+      {
+        "title": "SHINIGAMI",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SHINIGAMI LONG SLEEVE 2XL",
+            "price": 1350
+          },
+          {
+            "title": "SHINIGAMI LONG SLEEVE 3XL",
+            "price": 1350
+          },
+          {
+            "title": "SHINIGAMI LONG SLEEVE LARGE",
+            "price": 1350
+          },
+          {
+            "title": "SHINIGAMI LONG SLEEVE MEDIUM",
+            "price": 1350
+          },
+          {
+            "title": "SHINIGAMI LONG SLEEVE SMALL",
+            "price": 1350
+          },
+          {
+            "title": "SHINIGAMI LONG SLEEVE XL",
+            "price": 1350
+          }
+        ]
+      },
+      {
+        "title": "SHOCK",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "SHOES",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "DUHAN SNEAKERS BLACK/GRAY BOOTS SIZE 41",
+            "price": 3800
+          },
+          {
+            "title": "DUHAN SNEAKERS BLACK/GRAY BOOTS SIZE 42",
+            "price": 3800
+          },
+          {
+            "title": "DUHAN SNEAKERS BLACK/GRAY BOOTS SIZE 43",
+            "price": 3800
+          },
+          {
+            "title": "LS2 ACRUX MEN BOOTS BLACK/ORANGE SIZE 41",
+            "price": 4990
+          },
+          {
+            "title": "LS2 ACRUX MEN BOOTS BLACK/ORANGE SIZE 44",
+            "price": 4990
+          },
+          {
+            "title": "LS2 ACRUX MEN BOOTS BLACK/ORANGE SIZE 45",
+            "price": 4990
+          },
+          {
+            "title": "LS2 DARDO MAN BOOTS BLK/RED 40",
+            "price": 4990
+          },
+          {
+            "title": "LS2 DARDO MAN BOOTS BLK/RED 43",
+            "price": 4990
+          },
+          {
+            "title": "LS2 GARRA MAN UP SHOES BLACK/RED 40",
+            "price": 5990
+          },
+          {
+            "title": "LS2 GARRA MAN UP SHOES BLACK/RED 43",
+            "price": 5990
+          },
+          {
+            "title": "LS2 GARRA MAN UP SHOES BLACK/RED 44",
+            "price": 5990
+          },
+          {
+            "title": "LS2 ZOE MAN BOOTS BLACK/RED 41",
+            "price": 4750
+          },
+          {
+            "title": "LS2 ZOE MAN BOOTS BLACK/RED 42",
+            "price": 4750
+          },
+          {
+            "title": "LS2 ZOE MAN BOOTS BLACK/RED 44",
+            "price": 4750
+          },
+          {
+            "title": "LS2 ZOE MAN BOOTS BLACK/RED 45",
+            "price": 4750
+          },
+          {
+            "title": "LS2 ZOE MAN BOOTS BLACK/RED 46",
+            "price": 4750
+          }
+        ]
+      },
+      {
+        "title": "SIDE MIRROR",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "LR8 FLASH XR-A3",
+            "price": 900
+          },
+          {
+            "title": "LR8 FLASH XR-F1 HONDA BLACK/CP",
+            "price": 250
+          },
+          {
+            "title": "LR8 FLASH XR-F1 SUZUKI BLACK/CP",
+            "price": 250
+          },
+          {
+            "title": "LR8 FLASH XR-F1 YAMAHA BLACK/CP",
+            "price": 250
+          },
+          {
+            "title": "LR8 HUNTER XR-H2 HUNTER GREEN",
+            "price": 750
+          },
+          {
+            "title": "LR8 SURGE XR-S1 HONDA BLACK/CP",
+            "price": 150
+          },
+          {
+            "title": "LR8 SURGE XR-S1 YAMAHA BLACK/CP",
+            "price": 150
+          },
+          {
+            "title": "LR8 XR-A2 GOLD",
+            "price": 1000
+          },
+          {
+            "title": "LR8 XR-G22",
+            "price": 750
+          }
+        ]
+      },
+      {
+        "title": "SIGMA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER SIGMA MATTE BLACK GRAY XL",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER SIGMA MATTE BLACK GRAY LARGE",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER SIGMA MATTE BLACK GRAY MEDIUM",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER SIGMA ARC WHITE BLACK MEDIUM",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER SIGMA ARC WHITE BLACK XL",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER SIGMA ARC WHITE BLACK LARGE",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER SIGMA ARC WHITE SILVER LARGE",
+            "price": 4195
+          },
+          {
+            "title": "SPYDER SIGMA ARC WHITE SILVER MEDIUM",
+            "price": 4195
+          },
+          {
+            "title": "SPYDER SIGMA ARC WHITE SILVER XL",
+            "price": 4195
+          }
+        ]
+      },
+      {
+        "title": "SMOK",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SMOK DISC MIO 125 260MM",
+            "price": 1000
+          }
+        ]
+      },
+      {
+        "title": "SPYDER HELMET",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "SQUADRON",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE SQUADRON YM-926 MATTE GREY LARGE",
+            "price": 4100
+          },
+          {
+            "title": "GILLE SQUADRON YM-926 MATTE GREY XL",
+            "price": 4100
+          }
+        ]
+      },
+      {
+        "title": "SR-X",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO SR-X GLOSSY BLACK 2XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X GLOSSY BLACK LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X GLOSSY BLACK MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X GLOSSY BLACK XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X MATTE BLACK 2XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X MATTE BLACK LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X MATTE BLACK MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X MATTE BLACK XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X PEARL WHITE 2XL",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X PEARL WHITE LARGE",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X PEARL WHITE MEDIUM",
+            "price": 3600
+          },
+          {
+            "title": "EVO SR-X PEARL WHITE XL",
+            "price": 3600
+          }
+        ]
+      },
+      {
+        "title": "SR09",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO SR09 GLOSS 801C (BLUE) LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSS 801C (BLUE) MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSS 801C (BLUE) XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSS BLACK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSS BLACK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSS BLACK XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSS METAL LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSS METAL MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSS METAL XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSSY GREY LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 GLOSSY NARDO GREY MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 MATTE BLACK GREEN WHITE LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 MATTE BLACK GREEN WHITE MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 MATTE BLACK GREEN WHITE XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 MATTE BLACK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 MATTE BLACK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 MATTE BLACK XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 MATTE RED XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 PEARL WHITE LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 PEARL WHITE MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 PEARL WHITE XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO SR09 RUSH GLOSSY BLACK BLUE RED LARGE",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 RUSH GLOSSY BLACK BLUE RED MEDIUM",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 RUSH GLOSSY BLACK BLUE RED XL",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 RUSH GLOSSY WHITE BLACK RED XL",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 RUSH MATTE BLACK GREY YELLOW LARGE",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 RUSH MATTE BLACK GREY YELLOW MEDIUM",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 RUSH MATTE BLACK GREY YELLOW XL",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 RUSH MATTE WHITE BLUE GREEN LARGE",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 RUSH WHITE GRAY PINK LARGE",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI BLACK RED CLOUD LARGE",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI BLACK RED CLOUD MEDIUM",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI BLACK RED CLOUD XL",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI BLACK YELLOW ORANGE CLOUD LARGE",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI RED BLACK CLOUD 2XL",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI RED BLACK CLOUD LARGE",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI RED BLACK CLOUD MEDIUM",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI RED BLACK CLOUD XL",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI WHITE BLACK RED CLOUD LARGE",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI WHITE BLUE CLOUD XL",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI WHITE RED CLOUD LARGE",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI WHITE RED CLOUD MEDIUM",
+            "price": 4180
+          },
+          {
+            "title": "EVO SR09 TATAKAI WHITE RED CLOUD XL",
+            "price": 4180
+          }
+        ]
+      },
+      {
+        "title": "STREET SMART",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "STREET SMART TSHIRT 2XL",
+            "price": 999
+          },
+          {
+            "title": "STREET SMART TSHIRT 3XL",
+            "price": 999
+          },
+          {
+            "title": "STREET SMART TSHIRT LARGE",
+            "price": 999
+          },
+          {
+            "title": "STREET SMART TSHIRT MEDIUM",
+            "price": 999
+          },
+          {
+            "title": "STREET SMART TSHIRT SMALL",
+            "price": 999
+          },
+          {
+            "title": "STREET SMART TSHIRT XL",
+            "price": 999
+          }
+        ]
+      },
+      {
+        "title": "STRIKE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER STRIKE ARC WHITE GRAY LARGE",
+            "price": 4295
+          },
+          {
+            "title": "SPYDER STRIKE ARC WHITE GRAY MEDIUM",
+            "price": 4295
+          },
+          {
+            "title": "SPYDER STRIKE ARC WHITE GRAY XL",
+            "price": 4295
+          },
+          {
+            "title": "SPYDER STRIKE MATTE BLACK GRAY LARGE",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER STRIKE MATTE BLACK GRAY MEDIUM",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER STRIKE MATTE BLACK GRAY XL",
+            "price": 3995
+          }
+        ]
+      },
+      {
+        "title": "SURGE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SPYDER SURGE ARC WHITE BLACK LARGE",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER SURGE ARC WHITE BLACK MEDIUM",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER SURGE ARC WHITE BLACK XL",
+            "price": 3995
+          },
+          {
+            "title": "SPYDER SURGE ARC WHITE GRAY LARGE",
+            "price": 3895
+          },
+          {
+            "title": "SPYDER SURGE ARC WHITE GRAY MEDIUM",
+            "price": 3895
+          },
+          {
+            "title": "SPYDER SURGE ARC WHITE GRAY XL",
+            "price": 3895
+          },
+          {
+            "title": "SPYDER SURGE ARCH WHITE PINK TORQUISE MEDIUM",
+            "price": 4195
+          },
+          {
+            "title": "SPYDER SURGE BLACK GOLD RED LARGE",
+            "price": 3895
+          },
+          {
+            "title": "SPYDER SURGE BLACK GOLD RED MEDIUM",
+            "price": 3895
+          },
+          {
+            "title": "SPYDER SURGE BLACK GRAY RED LARGE",
+            "price": 4195
+          },
+          {
+            "title": "SPYDER SURGE BLACK GRAY RED MEDIUM",
+            "price": 4195
+          },
+          {
+            "title": "SPYDER SURGE BLACK SILVER GRAY LARGE",
+            "price": 3695
+          },
+          {
+            "title": "SPYDER SURGE BLACK SILVER GRAY MEDIUM",
+            "price": 3695
+          },
+          {
+            "title": "SPYDER SURGE BLACK SILVER GRAY XL",
+            "price": 3695
+          },
+          {
+            "title": "SPYDER SURGE MATTE BLACK GRAY LARGE",
+            "price": 3895
+          },
+          {
+            "title": "SPYDER SURGE MATTE BLACK GRAY MEDIUM",
+            "price": 3895
+          },
+          {
+            "title": "SPYDER SURGE MATTE BLACK GRAY XL",
+            "price": 3895
+          }
+        ]
+      },
+      {
+        "title": "SWING ARM",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX SWING ARM AEROX V2",
+            "price": 6000
+          },
+          {
+            "title": "BOMX SWING ARM CLICK 125/150",
+            "price": 5000
+          },
+          {
+            "title": "BOMX SWING ARM GIORNO",
+            "price": 6000
+          },
+          {
+            "title": "BOMX SWING ARM NMAX V2",
+            "price": 6000
+          },
+          {
+            "title": "BOMX SWING ARM XMAX",
+            "price": 7000
+          }
+        ]
+      },
+      {
+        "title": "TERRA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE TERRA BLACK LARGE",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA BLACK MEDIUM",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA BLACK XL",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA MATTE BLACK 2XL",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA MATTE BLACK LARGE",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA MATTE BLACK MEDIUM",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA MATTE BLACK XL",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA PINK LARGE",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA PINK MEDIUM",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA PURPLE LARGE",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA PURPLE MEDIUM",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA WHITE LARGE",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA WHITE MEDIUM",
+            "price": 4299
+          },
+          {
+            "title": "GILLE TERRA WHITE XL",
+            "price": 4299
+          }
+        ]
+      },
+      {
+        "title": "TOP DOGZ",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "TOP DOGZ LONG SLEEVE MEDIUM",
+            "price": 1350
+          }
+        ]
+      },
+      {
+        "title": "TOURER",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO TOURER GLOSSY BLACK LARGE",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER GLOSSY BLACK MEDIUM",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER GLOSSY BLACK XL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER GLOSSY BLACK XXL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER GLOSSY TITANIUM LARGE",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER GLOSSY TITANIUM MEDIUM",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER GLOSSY TITANIUM XL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER GLOSSY TITANIUM XXL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE BLACK LARGE",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE BLACK MEDIUM",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE BLACK XL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE BLACK XXL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE COOL GRAY MEDIUM",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE COOL GRAY XL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE COOL GRAY XXL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE TITANIUM LARGE",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE TITANIUM XL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER MATTE TITANIUM XXL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER PEARL WHITE LARGE",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER PEARL WHITE MEDIUM",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER PEARL WHITE XL",
+            "price": 5800
+          },
+          {
+            "title": "EVO TOURER PEARL WHITE XXL",
+            "price": 5800
+          }
+        ]
+      },
+      {
+        "title": "TRX",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO TRX  MATTE BLUE 286C LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX  MATTE BLUE 286C XL",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX  PEARL WHITE LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX  PEARL WHITE MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX  PEARL WHITE XL",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX  PEARL WHITE XXL",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSS PASTEL PINK LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSS PASTEL PINK MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSSY BLACK LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSSY BLACK MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSSY BLACK XL",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSSY TITANIUM LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSSY TITANIUM MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSSY YELLOW 2XL",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSSY YELLOW LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX GLOSSY YELLOW MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX MATTE BLACK 2XL",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX MATTE BLACK LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX MATTE BLACK MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX MATTE BLACK XL",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX MATTE COOL GRAY 2XL",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX MATTE COOL GRAY LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX MATTE COOL GRAY MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX MATTE COOL GRAY XL",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX METRIC BLACK LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX METRIC BLACK MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX PALE PURPLE LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX PALE PURPLE MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX RADIX GLOSSY BLACK WHITE LARGE",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX GLOSSY BLACK WHITE MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX GLOSSY BLACK WHITE XL",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX GLOSSY WHITE PURPLE LARGE",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX GLOSSY WHITE PURPLE MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX GLOSSY WHITE PURPLE XL",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX GRAY LARGE",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX MATTE GRAY BLACK LARGE",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX MATTE GRAY BLACK MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX MATTE GRAY BLACK XL",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX MATTE GRAY BLACK XXL",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX RED BLACK LARGE",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX RED BLACK MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX WHITE RED LARGE",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX WHITE RED MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RADIX WHITE RED XL",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RAVINE GLOSSY BLACK WHITE RED LARGE",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RAVINE WHITE PINK PURPLE LAARGE",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RAVINE WHITE PINK PURPLE MEDIUM",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX RAVINE WHITE PINK PURPLE XL",
+            "price": 3100
+          },
+          {
+            "title": "EVO TRX TORQUISE BLUE LARGE",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX TORQUISE BLUE MEDIUM",
+            "price": 2900
+          },
+          {
+            "title": "EVO TRX TORQUISE BLUE XL",
+            "price": 2900
+          }
+        ]
+      },
+      {
+        "title": "VELA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "BOMX VELA BEAT 14S SILVER",
+            "price": 6500
+          },
+          {
+            "title": "BOMX VELA BEAT 14S VIOLET",
+            "price": 6500
+          },
+          {
+            "title": "BOMX VELA CLICK 125/150 14S SILVER",
+            "price": 6500
+          },
+          {
+            "title": "BOMX VELA MIO 110 14S RED",
+            "price": 6500
+          },
+          {
+            "title": "BOMX VELA MIO 110 14S VIOLET",
+            "price": 6500
+          }
+        ]
+      },
+      {
+        "title": "VISAGE",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "GILLE FF05 VISAGE GLOSSY BLACK LARGE",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE GLOSSY BLACK MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE GLOSSY BLACK XL",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE BLACK 2XL",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE BLACK LARGE",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE BLACK MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE BLACK XL",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE GREY LARGE",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE GREY MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE PINK LARGE",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE PINK MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE PINK XL",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE MATTE PURPLE MEDIUM",
+            "price": 3300
+          },
+          {
+            "title": "GILLE FF05 VISAGE WHITE XL",
+            "price": 3300
+          }
+        ]
+      },
+      {
+        "title": "VXR-5000",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO VXR=5000 GLOSS TORQUISE BLUE LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR=5000 GLOSS TORQUISE BLUE MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR=5000 GLOSS TORQUISE BLUE XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS BLACK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS BLACK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS BLACK XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS BLACK XXL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS PASTEL PINK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS PASTEL PINK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS PASTEL PINK XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS PEARL WHITE LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS PEARL WHITE MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS PEARL WHITE XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSS PEARL WHITE XXL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY BLUE LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY BLUE MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY BLUE XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY COOL GRAY LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY COOL GRAY MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY COOL GRAY XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY GRAY MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY METALLIC SILVER LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY METALLIC SILVER MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY METALLIC SILVER XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 GLOSSY METALLIC SILVER XXL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 MATTE BLACK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 MATTE BLACK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 MATTE BLACK XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 MATTE BLACK XXL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 MATTE RED LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 MATTE RED MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 MATTE RED XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 MATTE RED XXL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 RED WHITE LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 RED WHITE XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY BLUE LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY BLUE MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY BLUE XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY GRAY LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY GRAY MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY GRAY XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY PINK LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY PINK MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY PINK XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY YELLOW LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY YELLOW MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 STINGRAY YELLOW XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION BLACK ORANGE LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION BLACK ORANGE MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION GRAY YELLOW LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION GRAY YELLOW MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION GRAY YELLOW XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION MATTE BLUE ORANGE LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION MATTE BLUE ORANGE MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION MATTE BLUE ORANGE XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION WHITE BLACK PINK LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION WHITE BLACK PINK MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION WHITE BLACK PINK XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION WHITE RED LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION WHITE RED MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 TORSION WHITE RED XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM PINK BLUE LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM PINK BLUE MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM PINK BLUE XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM PURPLE BLUE LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM PURPLE BLUE MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM PURPLE BLUE XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM RED YELLOW LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM RED YELLOW MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM RED YELLOW XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM TEAL BLUE RED LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM TEAL BLUE RED MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-5000 VENOM TEAL BLUE RED XL",
+            "price": 4200
+          }
+        ]
+      },
+      {
+        "title": "VXR-8000",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO VXR-8000 GLOSS BLACK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS BLACK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS BLACK XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS FRACTION BLACK/BLUE LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS FRACTION BLACK/BLUE MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS FRACTION BLACK/RED LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS FRACTION BLACK/RED MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS FRACTION WHITE/BLUE LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS FRACTION WHITE/BLUE MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS FRACTION WHITE/PINK LARGE",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS FRACTION WHITE/PINK MEDIUM",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS FRACTION WHITE/PINK XL",
+            "price": 4200
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS METAL LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS METAL MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS PEARL WHITE LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS PEARL WHITE MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS PEARL WHITE XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 GLOSS PEARL WHITE XXL",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 MATTE BLACK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 MATTE BLACK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO VXR-8000 MATTE BLACK XL",
+            "price": 3980
+          }
+        ]
+      },
+      {
+        "title": "XR-05",
+        "productType": "MAGS",
+        "variants": []
+      },
+      {
+        "title": "XT 300",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "EVO XT 300 FLORAL RED MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 GLOSS PEARL WHITE LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 GLOSS PEARL WHITE MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 GLOSS PEARL WHITE XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 GLOSSY BLACK LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 GLOSSY BLACK MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 GLOSSY METALLIC SILVER LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 GLOSSY METALLIC SILVER MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 GLOSSY PINK XL",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 MATTE BLACK LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 MATTE BLACK MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 MATTE TITANIUM LARGE",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 MATTE TITANIUM MEDIUM",
+            "price": 3800
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 PINK BLACK 2XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 PINK BLACK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 PINK BLACK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 PINK BLACK XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 WHITE BLUE 2XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 WHITE BLUE LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 WHITE BLUE MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 WHITE BLUE XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 WHITE RED 2XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 WHITE RED LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 WHITE RED MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 WHITE RED XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 YELLOW BLACK 2XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 YELLOW BLACK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 YELLOW BLACK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 RIOT 2 YELLOW BLACK XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II BLUE RED LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II BLUE RED MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GLOSSY BLACK WHITE LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GLOSSY BLACK WHITE MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GLOSSY BLACK WHITE XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GLOSSY BLUE RED LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GLOSSY BLUE RED MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GLOSSY BLUE RED XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GRAY/BLACK LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GRAY/BLACK MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GRAY/BLACK XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GRAY/RED LARGE",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GRAY/RED MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II GRAY/RED XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II MATTE GRAY BLUE RED MEDIUM",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II MATTE GRAY BLUE RED XL",
+            "price": 3980
+          },
+          {
+            "title": "EVO XT 300 VALKYRIE II WHITE BLACK MEDIUM",
+            "price": 3980
+          }
+        ]
+      },
+      {
+        "title": "YAKUZA",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "YAKUZA LONG SLEEVE 2XL",
+            "price": 1500
+          },
+          {
+            "title": "YAKUZA LONG SLEEVE 3XL",
+            "price": 1500
+          },
+          {
+            "title": "YAKUZA LONG SLEEVE LARGE",
+            "price": 1500
+          },
+          {
+            "title": "YAKUZA LONG SLEEVE MEDIUM",
+            "price": 1500
+          },
+          {
+            "title": "YAKUZA LONG SLEEVE SMALL",
+            "price": 1500
+          },
+          {
+            "title": "YAKUZA LONG SLEEVE XL",
+            "price": 1500
+          },
+          {
+            "title": "YAKUZA TSHIRT 2XL",
+            "price": 1100
+          },
+          {
+            "title": "YAKUZA TSHIRT 3XL",
+            "price": 1100
+          },
+          {
+            "title": "YAKUZA TSHIRT LARGE",
+            "price": 1100
+          },
+          {
+            "title": "YAKUZA TSHIRT MEDIUM",
+            "price": 1100
+          },
+          {
+            "title": "YAKUZA TSHIRT SMALL",
+            "price": 1100
+          },
+          {
+            "title": "YAKUZA TSHIRT XL",
+            "price": 1100
+          }
+        ]
+      },
+      {
+        "title": "YSS SHOCK",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "YSS DTG PLUS YAMAHA MIO 115 / FINO 115 / HONDA BEAT 110 -BLACK/RED",
+            "price": 2950
+          },
+          {
+            "title": "YSS DTG PLUS YAMAHA NMAX/AEROX 155 -BLACK/BLACK",
+            "price": 4500
+          },
+          {
+            "title": "YSS G-SERIES CLICK BLACK WHITE BLACK",
+            "price": 11000
+          },
+          {
+            "title": "YSS G-SERIES CLICK BLACK YELLOW BLACK",
+            "price": 11000
+          },
+          {
+            "title": "YSS DTG PLUS YAMAHA NMAX/AEROX 155 -BLACK/WHITE",
+            "price": 4500
+          },
+          {
+            "title": "YSS DTG PLUS YAMAHA NMAX/AEROX 155 -BLACK/YELLOW",
+            "price": 4500
+          },
+          {
+            "title": "YSS DTG PLUS YAMAHA NOUVO S 115 -BLACK/BLACK",
+            "price": 4500
+          },
+          {
+            "title": "YSS DTG PLUS YAMAHA NOUVO S 115 -BLACK/RED",
+            "price": 4500
+          },
+          {
+            "title": "YSS DTG PLUS YAMAHA MIO 115 / FINO 115 / HONDA BEAT 110 -BLACK/WHITE",
+            "price": 4500
+          },
+          {
+            "title": "YSS GPLUS ECOLINE HONDA CLICK 125/CLICK 150 330MM BLACK/BLACK/BLACK",
+            "price": 6000
+          },
+          {
+            "title": "YSS GPLUS ECOLINE HONDA CLICK 125/CLICK 150 330MM BLACK/WHITE/BLACK",
+            "price": 6000
+          },
+          {
+            "title": "YSS GPLUS ECOLINE HONDA CLICK 125/CLICK 150 330MM BLACK/YELLOW/BLACK",
+            "price": 6000
+          },
+          {
+            "title": "YSS G-SERIES AEROX 305MM BLACK/BLACK/GOLD",
+            "price": 11000
+          },
+          {
+            "title": "YSS G-SERIES AEROX 305MM BLACK/RED/BLACK",
+            "price": 11000
+          },
+          {
+            "title": "YSS G-SERIES MIO BLACK/BLACK",
+            "price": 11000
+          },
+          {
+            "title": "YSS G-SERIES MIO BLACK/YELLOW",
+            "price": 11000
+          }
+        ]
+      },
+      {
+        "title": "ZEBRA HELMETS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "ZEBRA CORRIDA MATTE BLACK LARGE",
+            "price": 2950
+          },
+          {
+            "title": "ZEBRA CORRIDA MATTE BLACK MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "ZEBRA CORRIDA WHITE MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "ZEBRA ATLAS PURPLE MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "ZEBRA ATLAS WHITE MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "ZEBRA ATLAS PINK MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "ZEBRA ATLAS BLACK MEDIUM",
+            "price": 2950
+          },
+          {
+            "title": "ZEBRA ATLAS BLACK LARGE",
+            "price": 2950
+          },
+          {
+            "title": "ZEBRA ATLAS BLACK XL",
+            "price": 2950
+          },
+          {
+            "title": "ZEBRA ATLAS MATTE BLACK LARGE",
+            "price": 2950
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "BOMX FLATSEAT",
+    "vendor": "BOM X",
+    "products": [
+      {
+        "title": "BOMX FLATSEAT",
+        "productType": "FLATSEAT",
+        "variants": [
+          {
+            "title": "BOMX FLATSEAT AEROX V2 BLUE",
+            "price": 2500
+          },
+          {
+            "title": "BOMX FLATSEAT AEROX V2 RED",
+            "price": 2500
+          },
+          {
+            "title": "BOMX FLATSEAT CLICK 160 BLACK",
+            "price": 2500
+          },
+          {
+            "title": "BOMX FLATSEAT MIO 125i BLACK",
+            "price": 1900
+          },
+          {
+            "title": "BOMX FLATSEAT NMAX BLUE",
+            "price": 2500
+          },
+          {
+            "title": "BOMX FLATSEAT NMAX RED",
+            "price": 2500
+          },
+          {
+            "title": "BOMX FLATSEAT SNIPER BLACK",
+            "price": 1800
+          },
+          {
+            "title": "BOMX FLATSEAT NMAX BLACK",
+            "price": 0
+          },
+          {
+            "title": "BOMX FLATSEAT SNIPER BLACK",
+            "price": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "CARDO",
+    "vendor": "CARDO",
+    "products": [
+      {
+        "title": "CARDO",
+        "productType": "Helmet Kit",
+        "variants": [
+          {
+            "title": "CARDO PACKTALK EDGE 2ND HELMET KIT",
+            "price": 6950
+          },
+          {
+            "title": "CARDO PACKTALK EDGE DUO",
+            "price": 19750
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "EURO GRIP TIRE",
+    "vendor": "BOM X",
+    "products": [
+      {
+        "title": "EURO GRIP TIRE",
+        "productType": "TIRE",
+        "variants": [
+          {
+            "title": "EUROGRIP TIRE 100/80-14",
+            "price": 2120
+          },
+          {
+            "title": "EUROGRIP TIRE 110-70-13",
+            "price": 2300
+          },
+          {
+            "title": "EUROGRIP TIRE 110-80-14",
+            "price": 2390
+          },
+          {
+            "title": "EUROGRIP TIRE 130/70-13",
+            "price": 2475
+          },
+          {
+            "title": "EUROGRIP TIRE 140-70-14",
+            "price": 3000
+          },
+          {
+            "title": "EUROGRIP TIRE 80/80-14",
+            "price": 1460
+          },
+          {
+            "title": "EUROGRIP TIRE 80/90-14",
+            "price": 1690
+          },
+          {
+            "title": "EUROGRIP TIRE 90/80-14",
+            "price": 1690
+          },
+          {
+            "title": "EUROGRIP TIRE 70/90-14",
+            "price": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "FREEDCONN",
+    "vendor": "FREEDCONN",
+    "products": [
+      {
+        "title": "FREEDCONN",
+        "productType": "Intercom",
+        "variants": [
+          {
+            "title": "FREED CONN FG UNIVERSAL HELMET BLUETOOTH INTERCOM",
+            "price": 3000
+          },
+          {
+            "title": "FREED CONN FX MOTORCYCLE BLUETOOTH KIT",
+            "price": 5000
+          },
+          {
+            "title": "FREED CONN R3 MOTORCYCLE BLUETOOTH INTERCOM WIFI RECORDER",
+            "price": 8000
+          },
+          {
+            "title": "FREED CONN T-COM MOTORCYCLE BLUETOOTH KIT",
+            "price": 2650
+          },
+          {
+            "title": "FREED CONN T-MAX",
+            "price": 3700
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "G Racing",
+    "vendor": "G Racing",
+    "products": [
+      {
+        "title": "G Racing",
+        "productType": "Motorcycle Oil",
+        "variants": [
+          {
+            "title": "G RACING MOTOSYN OIL 1L",
+            "price": 380
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "INSTA",
+    "vendor": "BOM X",
+    "products": [
+      {
+        "title": "INSTA",
+        "productType": "INSTA",
+        "variants": [
+          {
+            "title": "INSTA 360  PREMIUM LENS GUARD",
+            "price": 2290
+          },
+          {
+            "title": "INSTA 360 ACE PRO 2 FLASH PRINT BUNDLE",
+            "price": 27990
+          },
+          {
+            "title": "INSTA 360 GO ULTRA CREATOR BUNDLE MIDNIGHT BLACK",
+            "price": 27990
+          },
+          {
+            "title": "INSTA 360 MOTORCYCLE BUNDLE",
+            "price": 3499
+          },
+          {
+            "title": "INSTA 360 SELFIE STICK SUPPORT CLAMP",
+            "price": 3599
+          },
+          {
+            "title": "INSTA 360 VIBRATION DAMPER",
+            "price": 3699
+          },
+          {
+            "title": "INSTA 360 X4 AIR 8K 360 ACTION CAM",
+            "price": 24990
+          },
+          {
+            "title": "INSTA 360 X5 8K 360 ACTION CAM ESSENTIAL BUNDLE",
+            "price": 39390
+          },
+          {
+            "title": "INSTA 360 X5 8K 360 ACTION CAM MOTORCYCLE BUNDLE",
+            "price": 37890
+          },
+          {
+            "title": "INSTA 360 X5 STANDARD BUNDLE",
+            "price": 32390
+          },
+          {
+            "title": "INSTA 360X4 BATTERY",
+            "price": 2890
+          },
+          {
+            "title": "INSTA 360X4 FAST CHARGING HUB",
+            "price": 3290
+          },
+          {
+            "title": "INSTA 360X4 SCREEN PROTECTOR",
+            "price": 999
+          },
+          {
+            "title": "INSTA 360X5 SATIN WHITE LIMITED EDITION",
+            "price": 32990
+          },
+          {
+            "title": "TINY HANDS FREE 4K CAM CREATOR BUNDLE",
+            "price": 27990
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "JRP FLATSEAT",
+    "vendor": "",
+    "products": []
+  },
+  {
+    "category": "PIPE",
+    "vendor": "",
+    "products": []
+  },
+  {
+    "category": "RCB MAGS",
+    "vendor": "BOM X",
+    "products": [
+      {
+        "title": "RCB MAGS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "RCB SP 500 YAMAHA SNIPER 155 17S DARK BRONZE",
+            "price": 8700
+          },
+          {
+            "title": "RCB SP 500 YAMAHA SNIPER 155 17S WHITE",
+            "price": 9000
+          },
+          {
+            "title": "RCB SP 811 HONDA CLICK 125/150 14S WHITE",
+            "price": 6950
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "SEC TOP BOX",
+    "vendor": "BOM X",
+    "products": [
+      {
+        "title": "SEC TOP BOX",
+        "productType": "TOP BOX",
+        "variants": [
+          {
+            "title": "SEC BLACK OPS 28L",
+            "price": 6000
+          },
+          {
+            "title": "SEC WHITE 45L",
+            "price": 6000
+          },
+          {
+            "title": "SEC REINFORCED CJ 45L",
+            "price": 6000
+          },
+          {
+            "title": "SEC REINFORCED SAND RAIN 45L",
+            "price": 6000
+          },
+          {
+            "title": "SEC BLACK GHOST METAL 38L",
+            "price": 6000
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "SUPERFLY MAGS",
+    "vendor": "BOM X",
+    "products": [
+      {
+        "title": "SUPERFLY MAGS",
+        "productType": "MAGS",
+        "variants": [
+          {
+            "title": "SUPERFLY YAMAHA NVX/AEROX 17S GLOSSY WHITE",
+            "price": 5700
+          },
+          {
+            "title": "SUPERFLY YAMAHA NVX/AEROX 17S MIDNIGHT BLACK",
+            "price": 5700
+          },
+          {
+            "title": "SUPERFLY HONDA CLICK 125 14S GLOSSY WHITE",
+            "price": 0
+          },
+          {
+            "title": "SUPERFLY SNIPER 155 17S CHAMELEON/BLUE/PURPLE",
+            "price": 0
+          },
+          {
+            "title": "SUPERFLY YAMAHA 152/Y16ZR (4HOLE)/ EXCITER 150/ SNIPER 150/ MX KING 150 GLOSSY WHITE",
+            "price": 0
+          },
+          {
+            "title": "SUPERFLY YAMAHA 152/Y16ZR (4HOLE)/ EXCITER 150/ SNIPER 150/ MX KING 150 MIDNIGHT BLACK",
+            "price": 0
+          },
+          {
+            "title": "SUPERFLY YAMAHA SNIPER 155 17S NARDO GREY",
+            "price": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "VISORS",
+    "vendor": "Untitled vendor",
+    "products": [
+      {
+        "title": "VISORS",
+        "productType": "Visors",
+        "variants": [
+          {
+            "title": "GT-PRO DAY AND NIGHT VISOR",
+            "price": 1300
+          },
+          {
+            "title": "UNIVERSAL ANTI-FOG FILM",
+            "price": 600
+          },
+          {
+            "title": "VISOR AGV",
+            "price": 6690
+          },
+          {
+            "title": "VISOR VXR-4000",
+            "price": 1200
+          },
+          {
+            "title": "VISOR HJC",
+            "price": 0
+          },
+          {
+            "title": "VISOR XR-03",
+            "price": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "ZENEOS TIRE",
+    "vendor": "BOM X",
+    "products": [
+      {
+        "title": "ZENEOS TIRE",
+        "productType": "TIRE",
+        "variants": [
+          {
+            "title": "ZENEOS 110/80-14",
+            "price": 2430
+          },
+          {
+            "title": "ZENEOS 140/70-14",
+            "price": 3000
+          },
+          {
+            "title": "ZENEOS 100/80-14",
+            "price": 0
+          },
+          {
+            "title": "ZENEOS 90/80-14",
+            "price": 0
+          }
+        ]
+      }
+    ]
+  }
+]

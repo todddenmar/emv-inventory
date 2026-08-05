@@ -1,0 +1,214 @@
+[
+  {
+    "id": "bom-x-mags",
+    "name": "BOM X MAGS"
+  },
+  {
+    "id": "top-box",
+    "name": "TOP BOX"
+  },
+  {
+    "id": "rcb-mags",
+    "name": "RCB MAGS"
+  },
+  {
+    "id": "superfly-mags",
+    "name": "SUPERFLY MAGS"
+  },
+  {
+    "id": "g-racing",
+    "name": "G RACING"
+  },
+  {
+    "id": "beast-tire",
+    "name": "BEAST TIRE"
+  },
+  {
+    "id": "euro-grip-tire",
+    "name": "EURO GRIP TIRE"
+  },
+  {
+    "id": "zeneos-tire",
+    "name": "ZENEOS TIRE"
+  },
+  {
+    "id": "bomx-flatseat",
+    "name": "BOMX FLATSEAT"
+  },
+  {
+    "id": "jrp-flatseat",
+    "name": "JRP FLATSEAT"
+  },
+  {
+    "id": "freedconn",
+    "name": "FREEDCONN"
+  },
+  {
+    "id": "cardo",
+    "name": "CARDO"
+  },
+  {
+    "id": "visors",
+    "name": "VISORS"
+  },
+  {
+    "id": "pipe",
+    "name": "PIPE"
+  },
+  {
+    "id": "lights",
+    "name": "LIGHTS"
+  },
+  {
+    "id": "gloves",
+    "name": "GLOVES"
+  },
+  {
+    "id": "bolts-and-brackets",
+    "name": "BOLTS AND BRACKETS"
+  },
+  {
+    "id": "jvt-accessosries",
+    "name": "JVT ACCESSOSRIES"
+  },
+  {
+    "id": "shock",
+    "name": "SHOCK"
+  },
+  {
+    "id": "rcb-shock",
+    "name": "RCB SHOCK"
+  },
+  {
+    "id": "yss-shock",
+    "name": "YSS SHOCK"
+  },
+  {
+    "id": "rs8-accessories",
+    "name": "RS8 ACCESSORIES"
+  },
+  {
+    "id": "motowolf",
+    "name": "MOTOWOLF"
+  },
+  {
+    "id": "sec-accessories",
+    "name": "SEC ACCESSORIES"
+  },
+  {
+    "id": "parak-clothing",
+    "name": "PARAK CLOTHING"
+  },
+  {
+    "id": "dri-plus",
+    "name": "DRI PLUS"
+  },
+  {
+    "id": "discs",
+    "name": "DISCS"
+  },
+  {
+    "id": "backpack",
+    "name": "BACKPACK"
+  },
+  {
+    "id": "shoes",
+    "name": "SHOES"
+  },
+  {
+    "id": "swing-arm",
+    "name": "SWING ARM"
+  },
+  {
+    "id": "caliper",
+    "name": "CALIPER"
+  },
+  {
+    "id": "cvt-set",
+    "name": "CVT SET"
+  },
+  {
+    "id": "oils-and-sealers",
+    "name": "OILS AND SEALERS"
+  },
+  {
+    "id": "jackets",
+    "name": "JACKETS"
+  },
+  {
+    "id": "pants",
+    "name": "PANTS"
+  },
+  {
+    "id": "side-mirror",
+    "name": "SIDE MIRROR"
+  },
+  {
+    "id": "raincoat",
+    "name": "RAINCOAT"
+  },
+  {
+    "id": "brake-master",
+    "name": "BRAKE MASTER"
+  },
+  {
+    "id": "hand-grip",
+    "name": "HAND GRIP"
+  },
+  {
+    "id": "radiator-cover",
+    "name": "RADIATOR COVER"
+  },
+  {
+    "id": "racing-radiator",
+    "name": "RACING RADIATOR"
+  },
+  {
+    "id": "brake-hose",
+    "name": "BRAKE HOSE"
+  },
+  {
+    "id": "agv-helmet",
+    "name": "AGV HELMET"
+  },
+  {
+    "id": "sec-helmet",
+    "name": "SEC HELMET"
+  },
+  {
+    "id": "ryzen-helmet",
+    "name": "RYZEN HELMET"
+  },
+  {
+    "id": "kyt-helmet",
+    "name": "KYT HELMET"
+  },
+  {
+    "id": "mt-helmet",
+    "name": "MT HELMET"
+  },
+  {
+    "id": "nomad-helmet",
+    "name": "NOMAD HELMET"
+  },
+  {
+    "id": "spyder-helmet",
+    "name": "SPYDER HELMET"
+  },
+  {
+    "id": "gille-helmet",
+    "name": "GILLE HELMET"
+  },
+  {
+    "id": "ls2-helmet",
+    "name": "LS2 HELMET"
+  },
+  {
+    "id": "evo-helmet",
+    "name": "EVO HELMET"
+  },
+  {
+    "id": "zebra-helmets",
+    "name": "ZEBRA HELMETS"
+  }
+]
