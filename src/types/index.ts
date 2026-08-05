@@ -152,6 +152,23 @@ export interface InventoryLog {
   createdAt: Date;
 }
 
+export type PriceChangeDirection = "increase" | "decrease";
+
+export interface ProductPriceLog {
+  id: string;
+  productId: string;
+  productName: string;
+  variantId: string;
+  variantLabel: string;
+  previousPrice: number;
+  newPrice: number;
+  delta: number;
+  direction: PriceChangeDirection;
+  performedBy: string;
+  performedByName: string | null;
+  createdAt: Date;
+}
+
 export interface BranchTransferItem {
   productId: string;
   productName: string;

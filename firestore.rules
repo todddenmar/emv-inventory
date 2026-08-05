@@ -28,6 +28,12 @@ service cloud.firestore {
       return isMasterAdmin() || managerBranchId() == branchId;
     }
 
+    function isOnlineShopBranch(branchId) {
+      let branch = get(/databases/$(database)/documents/branches/$(branchId));
+      return branch.data.isOnlineShop == true && branch.data.isActive == true;
+    }
+
+    // Shared auth collections
     match /users/{userId} {
       allow read: if isSignedIn() && request.auth.uid == userId;
       allow read: if isStaff();
@@ -48,6 +54,98 @@ service cloud.firestore {
       allow create: if isMasterAdmin();
       allow update: if isSignedIn();
     }
+
+    // -------------------------------------------------------------------------
+    // Online shop collections (no physical prefix)
+    // -------------------------------------------------------------------------
+
+    match /settings/site {
+      allow read: if true;
+      allow write: if isMasterAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isMasterAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isMasterAdmin();
+    }
+
+    match /branches/{branchId} {
+      allow read: if resource.data.isActive == true;
+      allow read: if isStaff() && canAccessBranch(branchId);
+      allow write: if isMasterAdmin();
+    }
+
+    match /branchInventory/{inventoryId} {
+      allow read: if resource.data.branchId != null &&
+        isOnlineShopBranch(resource.data.branchId);
+      allow read: if resource.data.branchId != null &&
+        (isMasterAdmin() || managerBranchId() == resource.data.branchId);
+      allow read: if isMasterAdmin();
+      allow create: if isStaff() &&
+        request.resource.data.branchId != null &&
+        canAccessBranch(request.resource.data.branchId);
+      allow update: if isStaff() &&
+        resource.data.branchId != null &&
+        canAccessBranch(resource.data.branchId);
+      allow update: if isSignedIn() &&
+        resource.data.branchId != null &&
+        request.resource.data.stock is int &&
+        request.resource.data.stock >= 0 &&
+        request.resource.data.stock < resource.data.stock;
+      allow delete: if isMasterAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow create: if isSignedIn();
+      allow read: if isSignedIn() &&
+        (resource.data.customerId == request.auth.uid ||
+          (isStaff() &&
+            (isMasterAdmin() || resource.data.branchId == managerBranchId())));
+      allow update: if isStaff() &&
+        (isMasterAdmin() || resource.data.branchId == managerBranchId());
+    }
+
+    match /homeBanners/{bannerId} {
+      allow read: if true;
+      allow write: if isMasterAdmin();
+    }
+
+    match /testimonials/{testimonialId} {
+      allow read: if true;
+      allow write: if isMasterAdmin();
+    }
+
+    match /inventoryLogs/{logId} {
+      allow read: if isStaff() &&
+        (isMasterAdmin() || resource.data.branchId == managerBranchId());
+      allow create: if isStaff() &&
+        request.resource.data.branchId != null &&
+        canAccessBranch(request.resource.data.branchId);
+      allow create: if isSignedIn() &&
+        request.resource.data.reason == 'order_sale' &&
+        request.resource.data.delta < 0;
+      allow update, delete: if false;
+    }
+
+    match /branchTransfers/{transferId} {
+      allow read: if isStaff() &&
+        (isMasterAdmin() ||
+          resource.data.fromBranchId == managerBranchId() ||
+          resource.data.toBranchId == managerBranchId());
+      allow create: if isStaff() &&
+        request.resource.data.fromBranchId != null &&
+        canAccessBranch(request.resource.data.fromBranchId);
+      allow update, delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Physical inventory collections (physical* prefix)
+    // -------------------------------------------------------------------------
 
     match /physicalProducts/{productId} {
       allow read: if isStaff();
@@ -88,6 +186,12 @@ service cloud.firestore {
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
+      allow update, delete: if false;
+    }
+
+    match /physicalProductPriceLogs/{logId} {
+      allow read: if isStaff();
+      allow create: if isMasterAdmin();
       allow update, delete: if false;
     }
 

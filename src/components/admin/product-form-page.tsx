@@ -52,6 +52,7 @@ import { isHtmlEmpty } from "@/lib/html";
 import { mergeVariantsOnOptionChange } from "@/lib/product-variants";
 import { parseSpecsText } from "@/lib/specs";
 import { useSlugField } from "@/hooks/use-slug-field";
+import { useAuthStore } from "@/stores/auth-store";
 import type {
   Category,
   Product,
@@ -85,6 +86,7 @@ interface ProductFormPageProps {
 
 export function ProductFormPage({ productId }: ProductFormPageProps) {
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -249,24 +251,33 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       const name = values.name.trim();
       const preferredSlug = slug.trim() || slugify(name || "draft");
 
-      await updateProduct(productId, {
-        name,
-        slug: preferredSlug,
-        description: values.description,
-        productType: productType.trim(),
-        tags,
-        vendorId,
-        categoryIds,
-        options,
-        variants,
-        specsText,
-        specs: parsedSpecs,
-        images,
-        thumbnailImageId: resolvedThumbnail,
-        ...(saveOptions.publish || isPublished
-          ? { status: "published" as const, isActive: true }
-          : { status: "draft" as const, isActive: false }),
-      });
+      await updateProduct(
+        productId,
+        {
+          name,
+          slug: preferredSlug,
+          description: values.description,
+          productType: productType.trim(),
+          tags,
+          vendorId,
+          categoryIds,
+          options,
+          variants,
+          specsText,
+          specs: parsedSpecs,
+          images,
+          thumbnailImageId: resolvedThumbnail,
+          ...(saveOptions.publish || isPublished
+            ? { status: "published" as const, isActive: true }
+            : { status: "draft" as const, isActive: false }),
+        },
+        user
+          ? {
+              performedBy: user.uid,
+              performedByName: user.displayName || user.email || null,
+            }
+          : undefined
+      );
 
       if (saveOptions.publish) {
         await publishProduct(productId);

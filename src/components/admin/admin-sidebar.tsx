@@ -13,6 +13,7 @@ import {
   ArrowRightLeft,
   Building2,
   FileJson,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -22,6 +23,12 @@ export const adminNavItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, masterOnly: false },
   { href: "/admin/inventory", label: "Inventory", icon: Warehouse, masterOnly: false },
   { href: "/admin/transfers", label: "Transfers", icon: ArrowRightLeft, masterOnly: false },
+  {
+    href: "/admin/price-changes",
+    label: "Price changes",
+    icon: TrendingUp,
+    masterOnly: false,
+  },
   { href: "/admin/branches", label: "Branches", icon: Store, masterOnly: true },
   { href: "/admin/products", label: "Products", icon: Package, masterOnly: true },
   {

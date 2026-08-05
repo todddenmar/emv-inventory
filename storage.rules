@@ -7,9 +7,15 @@ service firebase.storage {
         request.auth.token.role == 'master-admin';
     }
 
+    // Shared product images (online shop + inventory)
     match /products/{productId}/{fileName} {
-      allow read: if isMasterAdmin() ||
-        (request.auth != null && request.auth.token.role == 'manager');
+      allow read: if true;
+      allow write: if isMasterAdmin();
+    }
+
+    // Online shop homepage assets
+    match /homepage/{allPaths=**} {
+      allow read: if true;
       allow write: if isMasterAdmin();
     }
   }

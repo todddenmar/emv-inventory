@@ -6,6 +6,7 @@ export const COLLECTIONS = {
   vendors: "physicalVendors",
   branchInventory: "physicalBranchInventory",
   inventoryLogs: "physicalInventoryLogs",
+  productPriceLogs: "physicalProductPriceLogs",
   branchTransfers: "physicalBranchTransfers",
   /** Auth — shared, not physical-prefixed */
   users: "users",

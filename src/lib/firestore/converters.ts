@@ -16,6 +16,7 @@ import type {
   Product,
   ProductImage,
   ProductOption,
+  ProductPriceLog,
   ProductSpec,
   ProductVariant,
   Vendor,
@@ -363,6 +364,52 @@ export const inventoryLogConverter: FirestoreDataConverter<InventoryLog> = {
       reason: data.reason,
       referenceId: data.referenceId ?? null,
       referenceLabel: data.referenceLabel ?? null,
+      performedBy: data.performedBy,
+      performedByName: data.performedByName ?? null,
+      createdAt: toDate(data.createdAt),
+    };
+  },
+};
+
+export const productPriceLogConverter: FirestoreDataConverter<ProductPriceLog> = {
+  toFirestore(log: ProductPriceLog): DocumentData {
+    return {
+      productId: log.productId,
+      productName: log.productName,
+      variantId: log.variantId,
+      variantLabel: log.variantLabel,
+      previousPrice: log.previousPrice,
+      newPrice: log.newPrice,
+      delta: log.delta,
+      direction: log.direction,
+      performedBy: log.performedBy,
+      performedByName: log.performedByName,
+      createdAt: log.createdAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): ProductPriceLog {
+    const data = snapshot.data(options);
+    const previousPrice = Number(data.previousPrice ?? 0);
+    const newPrice = Number(data.newPrice ?? 0);
+    const delta = Number(data.delta ?? newPrice - previousPrice);
+    return {
+      id: snapshot.id,
+      productId: data.productId,
+      productName: data.productName ?? "",
+      variantId: data.variantId,
+      variantLabel: data.variantLabel ?? "Default",
+      previousPrice,
+      newPrice,
+      delta,
+      direction:
+        data.direction === "increase" || data.direction === "decrease"
+          ? data.direction
+          : delta >= 0
+            ? "increase"
+            : "decrease",
       performedBy: data.performedBy,
       performedByName: data.performedByName ?? null,
       createdAt: toDate(data.createdAt),

@@ -16,6 +16,10 @@ import {
 import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { productConverter } from "@/lib/firestore/converters";
+import {
+  logProductPriceChangesFromUpdate,
+  type PriceChangeActor,
+} from "@/lib/firestore/price-logs";
 import { deleteProductImage } from "@/lib/storage/products";
 import { ensureUniqueSlug, slugify } from "@/lib/slug";
 import { isProductPublished } from "@/lib/products-catalog";
@@ -175,15 +179,16 @@ export async function createProduct(
 
 export async function updateProduct(
   id: string,
-  data: Partial<Omit<Product, "id" | "createdAt" | "updatedAt">>
+  data: Partial<Omit<Product, "id" | "createdAt" | "updatedAt">>,
+  actor?: PriceChangeActor
 ): Promise<void> {
+  const existing = await getProduct(id);
   const payload: Record<string, unknown> = {
     ...data,
     updatedAt: serverTimestamp(),
   };
 
   if (data.name !== undefined || data.slug !== undefined) {
-    const existing = await getProduct(id);
     if (existing) {
       payload.slug = await resolveProductSlug(
         data.name ?? existing.name,
@@ -194,6 +199,16 @@ export async function updateProduct(
   }
 
   await updateDoc(doc(getClientDb(), COLLECTIONS.products, id), payload);
+
+  if (existing && actor && data.variants) {
+    await logProductPriceChangesFromUpdate(
+      existing,
+      data.variants,
+      data.options,
+      data.name,
+      actor
+    ).catch(console.error);
+  }
 }
 
 export async function archiveProduct(id: string): Promise<void> {
