@@ -13,12 +13,14 @@ import type {
   Category,
   InventoryLog,
   Invite,
+  PosSale,
   Product,
   ProductImage,
   ProductOption,
   ProductPriceLog,
   ProductSpec,
   ProductVariant,
+  SupplierStockIn,
   Vendor,
 } from "@/types";
 import { migrateLegacyProductVariants, getDefaultVariant, defaultVariantId } from "@/lib/product-variants";
@@ -129,6 +131,7 @@ export const branchInventoryConverter: FirestoreDataConverter<BranchInventory> =
       variantId: item.variantId,
       stock: item.stock,
       lowStockThreshold: item.lowStockThreshold,
+      isSelling: item.isSelling,
       updatedAt: item.updatedAt,
     };
   },
@@ -148,6 +151,8 @@ export const branchInventoryConverter: FirestoreDataConverter<BranchInventory> =
       variantId,
       stock: data.stock ?? 0,
       lowStockThreshold: data.lowStockThreshold ?? 5,
+      // Legacy docs without the field remain visible as selling.
+      isSelling: data.isSelling !== false,
       updatedAt: toDate(data.updatedAt),
     };
   },
@@ -436,13 +441,106 @@ export const branchTransferConverter: FirestoreDataConverter<BranchTransfer> = {
     options: SnapshotOptions
   ): BranchTransfer {
     const data = snapshot.data(options);
+    const rawItems = (data.items ?? []) as Array<{
+      productId: string;
+      productName: string;
+      variantId?: string;
+      quantity: number;
+    }>;
     return {
       id: snapshot.id,
       fromBranchId: data.fromBranchId,
       fromBranchName: data.fromBranchName,
       toBranchId: data.toBranchId,
       toBranchName: data.toBranchName,
-      items: data.items ?? [],
+      items: rawItems.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        variantId: item.variantId ?? item.productId,
+        quantity: item.quantity,
+      })),
+      notes: data.notes ?? null,
+      createdBy: data.createdBy,
+      createdByName: data.createdByName ?? null,
+      createdAt: toDate(data.createdAt),
+    };
+  },
+};
+
+export const posSaleConverter: FirestoreDataConverter<PosSale> = {
+  toFirestore(sale: PosSale): DocumentData {
+    return {
+      branchId: sale.branchId,
+      branchName: sale.branchName,
+      items: sale.items,
+      itemCount: sale.itemCount,
+      total: sale.total,
+      createdBy: sale.createdBy,
+      createdByName: sale.createdByName,
+      createdAt: sale.createdAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): PosSale {
+    const data = snapshot.data(options);
+    const rawItems = (data.items ?? []) as PosSale["items"];
+    return {
+      id: snapshot.id,
+      branchId: data.branchId,
+      branchName: data.branchName ?? "",
+      items: rawItems.map((item) => ({
+        productId: item.productId,
+        variantId: item.variantId,
+        productName: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: item.lineTotal,
+      })),
+      itemCount: data.itemCount ?? 0,
+      total: data.total ?? 0,
+      createdBy: data.createdBy,
+      createdByName: data.createdByName ?? null,
+      createdAt: toDate(data.createdAt),
+    };
+  },
+};
+
+export const supplierStockInConverter: FirestoreDataConverter<SupplierStockIn> = {
+  toFirestore(entry: SupplierStockIn): DocumentData {
+    return {
+      branchId: entry.branchId,
+      branchName: entry.branchName,
+      vendorId: entry.vendorId,
+      vendorName: entry.vendorName,
+      items: entry.items,
+      itemCount: entry.itemCount,
+      notes: entry.notes,
+      createdBy: entry.createdBy,
+      createdByName: entry.createdByName,
+      createdAt: entry.createdAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): SupplierStockIn {
+    const data = snapshot.data(options);
+    const rawItems = (data.items ?? []) as SupplierStockIn["items"];
+    return {
+      id: snapshot.id,
+      branchId: data.branchId,
+      branchName: data.branchName ?? "",
+      vendorId: data.vendorId,
+      vendorName: data.vendorName ?? "",
+      items: rawItems.map((item) => ({
+        productId: item.productId,
+        variantId: item.variantId,
+        productName: item.productName,
+        quantity: item.quantity,
+      })),
+      itemCount: data.itemCount ?? 0,
       notes: data.notes ?? null,
       createdBy: data.createdBy,
       createdByName: data.createdByName ?? null,

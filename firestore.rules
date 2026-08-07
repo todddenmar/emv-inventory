@@ -205,5 +205,23 @@ service cloud.firestore {
         canAccessBranch(request.resource.data.fromBranchId);
       allow update, delete: if false;
     }
+
+    match /physicalPosSales/{saleId} {
+      allow read: if isStaff() &&
+        (isMasterAdmin() || resource.data.branchId == managerBranchId());
+      allow create: if isStaff() &&
+        request.resource.data.branchId != null &&
+        canAccessBranch(request.resource.data.branchId);
+      allow update, delete: if false;
+    }
+
+    match /physicalSupplierStockIns/{stockInId} {
+      allow read: if isStaff() &&
+        (isMasterAdmin() || resource.data.branchId == managerBranchId());
+      allow create: if isStaff() &&
+        request.resource.data.branchId != null &&
+        canAccessBranch(request.resource.data.branchId);
+      allow update, delete: if false;
+    }
   }
 }

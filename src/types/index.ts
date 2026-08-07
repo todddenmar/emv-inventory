@@ -34,6 +34,8 @@ export interface BranchInventory {
   variantId: string;
   stock: number;
   lowStockThreshold: number;
+  /** When false, variant is hidden from inventory for this branch. Missing legacy docs default to true. */
+  isSelling: boolean;
   updatedAt: Date;
 }
 
@@ -132,7 +134,9 @@ export interface Invite {
 export type InventoryLogReason =
   | "manual_adjustment"
   | "transfer_out"
-  | "transfer_in";
+  | "transfer_in"
+  | "pos_sale"
+  | "supplier_stock_in";
 
 export interface InventoryLog {
   id: string;
@@ -172,6 +176,7 @@ export interface ProductPriceLog {
 export interface BranchTransferItem {
   productId: string;
   productName: string;
+  variantId: string;
   quantity: number;
 }
 
@@ -182,6 +187,48 @@ export interface BranchTransfer {
   toBranchId: string;
   toBranchName: string;
   items: BranchTransferItem[];
+  notes: string | null;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+}
+
+export interface PosSaleItem {
+  productId: string;
+  variantId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface PosSale {
+  id: string;
+  branchId: string;
+  branchName: string;
+  items: PosSaleItem[];
+  itemCount: number;
+  total: number;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+}
+
+export interface SupplierStockInItem {
+  productId: string;
+  variantId: string;
+  productName: string;
+  quantity: number;
+}
+
+export interface SupplierStockIn {
+  id: string;
+  branchId: string;
+  branchName: string;
+  vendorId: string;
+  vendorName: string;
+  items: SupplierStockInItem[];
+  itemCount: number;
   notes: string | null;
   createdBy: string;
   createdByName: string | null;

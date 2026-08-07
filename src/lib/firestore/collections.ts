@@ -8,6 +8,8 @@ export const COLLECTIONS = {
   inventoryLogs: "physicalInventoryLogs",
   productPriceLogs: "physicalProductPriceLogs",
   branchTransfers: "physicalBranchTransfers",
+  posSales: "physicalPosSales",
+  supplierStockIns: "physicalSupplierStockIns",
   /** Auth — shared, not physical-prefixed */
   users: "users",
   invites: "invites",

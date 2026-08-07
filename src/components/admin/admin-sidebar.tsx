@@ -14,6 +14,10 @@ import {
   Building2,
   FileJson,
   TrendingUp,
+  ListChecks,
+  ShoppingCart,
+  History,
+  PackagePlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -21,7 +25,26 @@ import { Badge } from "@/components/ui/badge";
 
 export const adminNavItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, masterOnly: false },
+  { href: "/admin/pos", label: "POS", icon: ShoppingCart, masterOnly: false },
   { href: "/admin/inventory", label: "Inventory", icon: Warehouse, masterOnly: false },
+  {
+    href: "/admin/stock-in",
+    label: "Supplier stock in",
+    icon: PackagePlus,
+    masterOnly: false,
+  },
+  {
+    href: "/admin/adjustment-history",
+    label: "Adjustment history",
+    icon: History,
+    masterOnly: false,
+  },
+  {
+    href: "/admin/assortment",
+    label: "Branch assortment",
+    icon: ListChecks,
+    masterOnly: false,
+  },
   { href: "/admin/transfers", label: "Transfers", icon: ArrowRightLeft, masterOnly: false },
   {
     href: "/admin/price-changes",

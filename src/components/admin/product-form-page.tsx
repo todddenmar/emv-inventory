@@ -48,7 +48,6 @@ import { normalizeImageOrder } from "@/lib/products";
 import { canPublishProduct, productStatusLabel } from "@/lib/products-catalog";
 import { formatProductTags, parseProductTags } from "@/lib/product-tags";
 import { slugify } from "@/lib/slug";
-import { isHtmlEmpty } from "@/lib/html";
 import { mergeVariantsOnOptionChange } from "@/lib/product-variants";
 import { parseSpecsText } from "@/lib/specs";
 import { useSlugField } from "@/hooks/use-slug-field";
@@ -64,9 +63,7 @@ import type {
 
 const publishSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  description: z
-    .string()
-    .refine((value) => !isHtmlEmpty(value), "Description is required"),
+  description: z.string(),
 });
 
 type ProductFormValues = z.infer<typeof publishSchema>;
@@ -447,7 +444,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           </div>
 
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">Description (optional)</Label>
             <Controller
               name="description"
               control={control}
@@ -481,7 +478,15 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
               }
             >
               <SelectTrigger id="vendor" disabled={saving || publishing}>
-                <SelectValue placeholder="Select vendor" />
+                <SelectValue placeholder="Select vendor">
+                  {(value) => {
+                    if (!value || value === "none") return "No vendor";
+                    return (
+                      vendors.find((vendor) => vendor.id === value)?.name ??
+                      "Select vendor"
+                    );
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No vendor</SelectItem>

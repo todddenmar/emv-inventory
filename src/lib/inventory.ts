@@ -7,6 +7,7 @@ export interface VariantWithStock extends ProductVariant {
   categoryIds: string[];
   stock: number;
   lowStockThreshold: number;
+  isSelling: boolean;
 }
 
 export interface ProductWithStock extends Product {
@@ -19,7 +20,7 @@ export interface ProductWithStock extends Product {
   lowStockThreshold: number;
 }
 
-function resolveInventoryForVariant(
+export function resolveInventoryForVariant(
   product: Product,
   variant: ProductVariant,
   inventory: BranchInventory[]
@@ -34,6 +35,13 @@ function resolveInventoryForVariant(
         row.id.endsWith(`_${product.id}`))
   );
   return legacy;
+}
+
+export function isVariantSelling(
+  entry: BranchInventory | undefined
+): boolean {
+  if (!entry) return false;
+  return entry.isSelling !== false;
 }
 
 export function mergeVariantsWithInventory(
@@ -52,6 +60,7 @@ export function mergeVariantsWithInventory(
         categoryIds: product.categoryIds,
         stock: entry?.stock ?? 0,
         lowStockThreshold: entry?.lowStockThreshold ?? 5,
+        isSelling: isVariantSelling(entry),
       });
     }
   }
@@ -59,20 +68,28 @@ export function mergeVariantsWithInventory(
   return rows;
 }
 
+/** Only variants assigned as selling at the branch (requires an inventory row). */
+export function mergeSellingVariantsWithInventory(
+  products: Product[],
+  inventory: BranchInventory[]
+): VariantWithStock[] {
+  return mergeVariantsWithInventory(products, inventory).filter(
+    (row) => row.isSelling
+  );
+}
+
 export function mergeProductsWithInventory(
   products: Product[],
   inventory: BranchInventory[]
 ): ProductWithStock[] {
   return products.map((product) => {
-    const stocks = product.variants.map((variant) => {
-      const entry = resolveInventoryForVariant(product, variant, inventory);
-      return entry?.stock ?? 0;
-    });
+    const sellingEntries = product.variants
+      .map((variant) => resolveInventoryForVariant(product, variant, inventory))
+      .filter((entry): entry is BranchInventory => isVariantSelling(entry));
+
+    const stocks = sellingEntries.map((entry) => entry.stock);
     const totalStock = stocks.reduce((sum, value) => sum + value, 0);
-    const first = product.variants[0];
-    const defaultEntry = first
-      ? resolveInventoryForVariant(product, first, inventory)
-      : undefined;
+    const first = sellingEntries[0];
     const defaultStock = stocks[0] ?? 0;
 
     return {
@@ -80,7 +97,7 @@ export function mergeProductsWithInventory(
       stock: defaultStock,
       totalStock,
       anyInStock: stocks.some((value) => value > 0),
-      lowStockThreshold: defaultEntry?.lowStockThreshold ?? 5,
+      lowStockThreshold: first?.lowStockThreshold ?? 5,
     };
   });
 }
@@ -107,7 +124,7 @@ export function productHasInStockVariant(
 ): boolean {
   return product.variants.some((variant) => {
     const entry = resolveInventoryForVariant(product, variant, inventory);
-    return (entry?.stock ?? 0) > 0;
+    return isVariantSelling(entry) && (entry?.stock ?? 0) > 0;
   });
 }
 
@@ -119,5 +136,6 @@ export function getVariantStock(
   const variant = product.variants.find((v) => v.id === variantId);
   if (!variant) return 0;
   const entry = resolveInventoryForVariant(product, variant, inventory);
+  if (!isVariantSelling(entry)) return 0;
   return entry?.stock ?? 0;
 }

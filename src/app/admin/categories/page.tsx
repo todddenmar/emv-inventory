@@ -1,9 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Plus, Pencil, Archive, ArchiveRestore, Loader2, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Plus,
+  Pencil,
+  Archive,
+  ArchiveRestore,
+  Loader2,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/link-button";
 import {
   Card,
   CardContent,
@@ -47,31 +57,49 @@ import {
   getCategories,
   resolveCategorySlug,
   restoreCategory,
-  updateCategory,
 } from "@/lib/firestore/categories";
 import { slugify } from "@/lib/slug";
 import { useSlugField } from "@/hooks/use-slug-field";
 import type { Category } from "@/types";
+
+const PAGE_SIZE = 10;
 
 export default function AdminCategoriesPage() {
   const { isMasterAdmin } = useBranchAccess();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Category | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [page, setPage] = useState(1);
   const [name, setName] = useState("");
   const resolveSlug = useCallback(
     (categoryName: string, preferredSlug?: string) =>
-      resolveCategorySlug(categoryName, preferredSlug, editing?.id),
-    [editing?.id]
+      resolveCategorySlug(categoryName, preferredSlug),
+    []
   );
   const { slug, setSlug, syncSlugFromName, resetSlugField } =
     useSlugField(resolveSlug);
   const [tags, setTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  const visibleCategories = useMemo(
+    () =>
+      categories.filter((c) => (showArchived ? c.isArchived : !c.isArchived)),
+    [categories, showArchived]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(visibleCategories.length / PAGE_SIZE));
+
+  const pagedCategories = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return visibleCategories.slice(start, start + PAGE_SIZE);
+  }, [visibleCategories, page]);
+
+  const rangeStart =
+    visibleCategories.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, visibleCategories.length);
 
   const loadCategories = () => {
     getCategories(true)
@@ -83,6 +111,14 @@ export default function AdminCategoriesPage() {
   useEffect(() => {
     loadCategories();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [showArchived]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   if (!isMasterAdmin) {
     return (
@@ -97,18 +133,9 @@ export default function AdminCategoriesPage() {
   }
 
   const openCreate = () => {
-    setEditing(null);
     setName("");
     resetSlugField("", false);
     setTags([]);
-    setDialogOpen(true);
-  };
-
-  const openEdit = (category: Category) => {
-    setEditing(category);
-    setName(category.name);
-    resetSlugField(category.slug, true);
-    setTags(category.tags);
     setDialogOpen(true);
   };
 
@@ -121,21 +148,12 @@ export default function AdminCategoriesPage() {
 
     setSubmitting(true);
     try {
-      if (editing) {
-        await updateCategory(editing.id, {
-          name: name.trim(),
-          slug: slug.trim() || slugify(name),
-          tags,
-        });
-        toast.success("Category updated");
-      } else {
-        await createCategory({
-          name: name.trim(),
-          slug: slug.trim() || slugify(name),
-          tags,
-        });
-        toast.success("Category created");
-      }
+      await createCategory({
+        name: name.trim(),
+        slug: slug.trim() || slugify(name),
+        tags,
+      });
+      toast.success("Category created");
       setDialogOpen(false);
       loadCategories();
     } catch {
@@ -173,19 +191,15 @@ export default function AdminCategoriesPage() {
     }
   };
 
-  const handleRestore = async (id: string) => {
+  const handleRestore = async (categoryId: string) => {
     try {
-      await restoreCategory(id);
+      await restoreCategory(categoryId);
       toast.success("Category restored");
       loadCategories();
     } catch {
       toast.error("Failed to restore category");
     }
   };
-
-  const visibleCategories = categories.filter((c) =>
-    showArchived ? c.isArchived : !c.isArchived
-  );
 
   return (
     <div>
@@ -215,9 +229,7 @@ export default function AdminCategoriesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {editing ? "Edit category" : "Add category"}
-            </DialogTitle>
+            <DialogTitle>Add category</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -228,7 +240,7 @@ export default function AdminCategoriesPage() {
                 onChange={(e) => {
                   const nextName = e.target.value;
                   setName(nextName);
-                  if (!editing) syncSlugFromName(nextName);
+                  syncSlugFromName(nextName);
                 }}
                 placeholder="e.g. Beverages"
               />
@@ -251,7 +263,7 @@ export default function AdminCategoriesPage() {
             </div>
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editing ? "Update" : "Create"}
+              Create
             </Button>
           </form>
         </DialogContent>
@@ -261,11 +273,14 @@ export default function AdminCategoriesPage() {
         <CardHeader>
           <CardTitle>All categories</CardTitle>
           <CardDescription>
-            {visibleCategories.length}{" "}
-            {showArchived ? "archived" : "active"} categories
+            {visibleCategories.length === 0
+              ? `0 ${showArchived ? "archived" : "active"} categories`
+              : `Showing ${rangeStart}–${rangeEnd} of ${visibleCategories.length} ${
+                  showArchived ? "archived" : "active"
+                } categor${visibleCategories.length === 1 ? "y" : "ies"}`}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {loading ? (
             <p className="text-muted-foreground">Loading...</p>
           ) : visibleCategories.length === 0 ? (
@@ -273,72 +288,109 @@ export default function AdminCategoriesPage() {
               {showArchived ? "No archived categories." : "No categories yet."}
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Tags</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleCategories.map((category) => (
-                  <TableRow key={category.id}>
-                    <TableCell className="font-medium">{category.name}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {category.tags.length === 0 ? (
-                          <span className="text-muted-foreground text-sm">—</span>
-                        ) : (
-                          category.tags.map((tag) => (
-                            <Badge key={tag} variant="outline">
-                              {tag}
-                            </Badge>
-                          ))
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {!category.isArchived && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEdit(category)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {category.isArchived ? (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRestore(category.id)}
-                          >
-                            <ArchiveRestore className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setPermanentDeleteId(category.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteId(category.id)}
-                        >
-                          <Archive className="h-4 w-4 text-destructive" />
-                        </Button>
-                      )}
-                    </TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Tags</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {pagedCategories.map((category) => (
+                    <TableRow key={category.id}>
+                      <TableCell className="font-medium">
+                        {category.name}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {category.tags.length === 0 ? (
+                            <span className="text-muted-foreground text-sm">
+                              —
+                            </span>
+                          ) : (
+                            category.tags.map((tag) => (
+                              <Badge key={tag} variant="outline">
+                                {tag}
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {!category.isArchived && (
+                          <LinkButton
+                            href={`/admin/categories/${category.id}`}
+                            variant="ghost"
+                            size="icon"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            <span className="sr-only">Edit category</span>
+                          </LinkButton>
+                        )}
+                        {category.isArchived ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleRestore(category.id)}
+                            >
+                              <ArchiveRestore className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setPermanentDeleteId(category.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteId(category.id)}
+                          >
+                            <Archive className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {visibleCategories.length > PAGE_SIZE && (
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="mr-1 h-4 w-4" />
+                    Previous
+                  </Button>
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                  >
+                    Next
+                    <ChevronRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

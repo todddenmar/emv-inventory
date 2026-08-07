@@ -9,6 +9,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   type CollectionReference,
@@ -58,6 +59,15 @@ export async function getCategories(
     : categories.filter((c) => !c.isArchived);
 }
 
+export async function getCategory(id: string): Promise<Category | null> {
+  const snap = await getDoc(
+    doc(getClientDb(), COLLECTIONS.categories, id).withConverter(
+      categoryConverter
+    )
+  );
+  return snap.exists() ? snap.data() : null;
+}
+
 export async function getCategoryBySlug(
   slug: string
 ): Promise<Category | null> {
@@ -71,10 +81,10 @@ export async function getCategoryBySlug(
 }
 
 export async function createCategory(
-  data: Pick<Category, "name" | "tags"> & { slug?: string }
+  data: Pick<Category, "name" | "tags"> & { slug?: string; id?: string }
 ): Promise<string> {
   const slug = await resolveCategorySlug(data.name, data.slug);
-  const docRef = await addDoc(collection(getClientDb(), COLLECTIONS.categories), {
+  const payload = {
     name: data.name,
     slug,
     tags: data.tags,
@@ -82,7 +92,18 @@ export async function createCategory(
     archivedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  };
+
+  if (data.id?.trim()) {
+    const id = data.id.trim();
+    await setDoc(doc(getClientDb(), COLLECTIONS.categories, id), payload);
+    return id;
+  }
+
+  const docRef = await addDoc(
+    collection(getClientDb(), COLLECTIONS.categories),
+    payload
+  );
   return docRef.id;
 }
 

@@ -94,6 +94,43 @@ export async function getProducts(
   return products;
 }
 
+export async function getProductsByCategoryId(
+  categoryId: string,
+  includeArchived = false
+): Promise<Product[]> {
+  const trimmed = categoryId.trim();
+  if (!trimmed) return [];
+
+  const snapshot = await getDocs(
+    query(productsRef(), where("categoryIds", "array-contains", trimmed))
+  );
+  let products = snapshot.docs.map((d) => d.data());
+
+  if (!includeArchived) {
+    products = products.filter((p) => !p.isArchived);
+  }
+
+  return products.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+  );
+}
+
+export async function removeProductFromCategory(
+  productId: string,
+  categoryId: string
+): Promise<Product | null> {
+  const product = await getProduct(productId);
+  if (!product) return null;
+
+  const nextCategoryIds = product.categoryIds.filter((id) => id !== categoryId);
+  if (nextCategoryIds.length === product.categoryIds.length) {
+    return product;
+  }
+
+  await updateProduct(productId, { categoryIds: nextCategoryIds });
+  return { ...product, categoryIds: nextCategoryIds };
+}
+
 export async function getProduct(id: string): Promise<Product | null> {
   const snap = await getDoc(doc(productsRef(), id));
   return snap.exists() ? snap.data() : null;

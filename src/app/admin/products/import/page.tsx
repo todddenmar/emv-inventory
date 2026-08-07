@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  Database,
   Download,
+  ExternalLink,
   FileJson,
   Loader2,
   MoreHorizontal,
@@ -59,6 +61,19 @@ import {
 } from "@/components/ui/table";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getClientAuth } from "@/lib/firebase";
+import {
+  createCategory,
+  getCategories,
+} from "@/lib/firestore/categories";
+import { getProducts } from "@/lib/firestore/products";
+import { getVendors } from "@/lib/firestore/vendors";
+import {
+  getImportProductDbStatus,
+  importProductToDatabase,
+  resolveImportCategoryId,
+  type ImportProductDbStatus,
+} from "@/lib/import-products-db";
+import emvCategoriesSample from "@/lib/sample-data/emv-categories.json";
 import emvProductsSample from "@/lib/sample-data/emv-products.json";
 import {
   addImportVariant,
@@ -77,12 +92,31 @@ import {
   updateImportVariant,
   type ParsedImportProduct,
 } from "@/lib/product-json-import";
+import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
+import type { Category, Product, Vendor } from "@/types";
 
 const SAMPLE_FILE_NAME = "emv-products.json";
+const CATEGORIES_SAMPLE_FILE_NAME = "emv-categories.json";
 const PRODUCTS_PAGE_SIZE = 10;
 
 type BulkActionKind = "category" | "productType";
+
+type SampleCategoryRow = {
+  id: string;
+  slug: string;
+  name: string;
+};
+
+function buildSampleCategoryRows(
+  entries: Array<{ id: string; name: string }>
+): SampleCategoryRow[] {
+  return entries.map((entry) => ({
+    id: crypto.randomUUID(),
+    slug: slugify(entry.id) || crypto.randomUUID(),
+    name: entry.name.trim(),
+  }));
+}
 
 function downloadFileStamp(date = new Date()): string {
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -119,6 +153,25 @@ function matchesQuery(value: string, query: string): boolean {
   return value.toLowerCase().includes(query.trim().toLowerCase());
 }
 
+function ImportDbStatusBadge({
+  status,
+  loading,
+}: {
+  status: ImportProductDbStatus | undefined;
+  loading: boolean;
+}) {
+  if (loading) {
+    return <Badge variant="outline">Checking…</Badge>;
+  }
+  if (!status) {
+    return <Badge variant="outline">Unknown</Badge>;
+  }
+  if (status.kind === "in_database") {
+    return <Badge variant="secondary">In database</Badge>;
+  }
+  return <Badge>Ready to import</Badge>;
+}
+
 export default function ProductJsonImportPage() {
   const { isMasterAdmin } = useBranchAccess();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -129,6 +182,26 @@ export default function ProductJsonImportPage() {
   const [products, setProducts] = useState<ParsedImportProduct[]>([]);
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
+
+  const [sampleCategoryRows, setSampleCategoryRows] = useState<
+    SampleCategoryRow[]
+  >(() => buildSampleCategoryRows(emvCategoriesSample));
+  const [dbCategories, setDbCategories] = useState<Category[]>([]);
+  const [dbVendors, setDbVendors] = useState<Vendor[]>([]);
+  const [dbProducts, setDbProducts] = useState<Product[]>([]);
+  const [loadingDbCategories, setLoadingDbCategories] = useState(true);
+  const [loadingDbProducts, setLoadingDbProducts] = useState(true);
+  const [importingCategories, setImportingCategories] = useState(false);
+  const [importingProductIds, setImportingProductIds] = useState<string[]>([]);
+  const [importingSelectedProducts, setImportingSelectedProducts] =
+    useState(false);
+  const [assignCategoryOpen, setAssignCategoryOpen] = useState(false);
+  const [assignCategoryMode, setAssignCategoryMode] = useState<
+    "single" | "bulk"
+  >("single");
+  const [assignCategoryProduct, setAssignCategoryProduct] =
+    useState<ParsedImportProduct | null>(null);
+  const [assignCategoryId, setAssignCategoryId] = useState<string>("none");
 
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -190,6 +263,58 @@ export default function ProductJsonImportPage() {
   const productTypeNames = useMemo(
     () => listProductTypeNames(products),
     [products]
+  );
+
+  const existingCategorySlugs = useMemo(() => {
+    const slugs = new Set<string>();
+    for (const category of dbCategories) {
+      const slug = category.slug.trim().toLowerCase();
+      if (slug) slugs.add(slug);
+    }
+    return slugs;
+  }, [dbCategories]);
+
+  const existingCategoryNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const category of dbCategories) {
+      const name = category.name.trim().toLowerCase();
+      if (name) names.add(name);
+    }
+    return names;
+  }, [dbCategories]);
+
+  const sampleCategoriesReadyCount = useMemo(
+    () =>
+      sampleCategoryRows.filter(
+        (row) =>
+          !existingCategorySlugs.has(row.slug.toLowerCase()) &&
+          !existingCategoryNames.has(row.name.toLowerCase())
+      ).length,
+    [sampleCategoryRows, existingCategorySlugs, existingCategoryNames]
+  );
+
+  const importProductDbStatusById = useMemo(() => {
+    const map = new Map<string, ImportProductDbStatus>();
+    for (const product of products) {
+      map.set(
+        product.id,
+        getImportProductDbStatus(
+          product,
+          dbProducts,
+          dbCategories,
+          dbVendors
+        )
+      );
+    }
+    return map;
+  }, [products, dbProducts, dbCategories, dbVendors]);
+
+  const selectedReadyToImportCount = useMemo(
+    () =>
+      selectedProductIds.filter(
+        (id) => importProductDbStatusById.get(id)?.kind === "ready"
+      ).length,
+    [selectedProductIds, importProductDbStatusById]
   );
 
   const activeCategoryTab = useMemo(
@@ -295,6 +420,35 @@ export default function ProductJsonImportPage() {
     if (!result.ok) {
       toast.error("Sample catalog has no products");
     }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingDbCategories(true);
+    setLoadingDbProducts(true);
+
+    Promise.all([getCategories(true), getVendors(), getProducts(false, true)])
+      .then(([categories, vendors, productsInDb]) => {
+        if (cancelled) return;
+        setDbCategories(categories);
+        setDbVendors(vendors);
+        setDbProducts(productsInDb);
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!cancelled) {
+          toast.error("Failed to load database catalog");
+        }
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingDbCategories(false);
+        setLoadingDbProducts(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -407,6 +561,270 @@ export default function ProductJsonImportPage() {
     }
   };
 
+  const handleImportSampleCategories = async () => {
+    if (sampleCategoriesReadyCount === 0) {
+      toast.message("All sample categories are already in the database");
+      return;
+    }
+
+    setImportingCategories(true);
+    let created = 0;
+    let skipped = 0;
+    const createdRows: Category[] = [];
+    const seenSlugs = new Set(existingCategorySlugs);
+    const seenNames = new Set(existingCategoryNames);
+
+    try {
+      for (const row of sampleCategoryRows) {
+        const slugKey = row.slug.toLowerCase();
+        const nameKey = row.name.toLowerCase();
+        if (seenSlugs.has(slugKey) || seenNames.has(nameKey)) {
+          skipped += 1;
+          continue;
+        }
+
+        await createCategory({
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+          tags: [],
+        });
+        created += 1;
+        seenSlugs.add(slugKey);
+        seenNames.add(nameKey);
+        createdRows.push({
+          id: row.id,
+          name: row.name,
+          slug: row.slug,
+          tags: [],
+          isArchived: false,
+          archivedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      }
+
+      if (createdRows.length > 0) {
+        setDbCategories((prev) =>
+          [...prev, ...createdRows].sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+          )
+        );
+      }
+
+      if (created > 0) {
+        toast.success(
+          `Added ${created} categor${created === 1 ? "y" : "ies"} to the database` +
+            (skipped > 0 ? ` · skipped ${skipped} existing` : "")
+        );
+      } else {
+        toast.message(
+          skipped > 0
+            ? "No new categories — all already exist"
+            : "No categories to import"
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to add categories to the database"
+      );
+    } finally {
+      setImportingCategories(false);
+    }
+  };
+
+  const mergeImportedProductIntoState = (
+    product: Product,
+    vendorCreated: Vendor | null
+  ) => {
+    setDbProducts((prev) => {
+      if (prev.some((existing) => existing.id === product.id)) return prev;
+      return [...prev, product].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+      );
+    });
+    if (vendorCreated) {
+      setDbVendors((prev) => {
+        if (prev.some((vendor) => vendor.id === vendorCreated.id)) return prev;
+        return [...prev, vendorCreated].sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+        );
+      });
+    }
+  };
+
+  const suggestedCategoryId = (product: ParsedImportProduct) =>
+    resolveImportCategoryId(product.categoryName, dbCategories) ?? "none";
+
+  const openAssignCategoryForProduct = (product: ParsedImportProduct) => {
+    const status = importProductDbStatusById.get(product.id);
+    if (status?.kind === "in_database") {
+      toast.message(`“${product.name}” is already in the database`);
+      return;
+    }
+    setAssignCategoryMode("single");
+    setAssignCategoryProduct(product);
+    setAssignCategoryId(suggestedCategoryId(product));
+    setAssignCategoryOpen(true);
+  };
+
+  const openAssignCategoryForSelected = () => {
+    const readyProducts = products.filter((product) => {
+      if (!selectedProductIds.includes(product.id)) return false;
+      return importProductDbStatusById.get(product.id)?.kind === "ready";
+    });
+
+    if (readyProducts.length === 0) {
+      toast.message("No selected products are ready to import");
+      return;
+    }
+
+    const firstSuggested = suggestedCategoryId(readyProducts[0]);
+    const allSame = readyProducts.every(
+      (product) => suggestedCategoryId(product) === firstSuggested
+    );
+
+    setAssignCategoryMode("bulk");
+    setAssignCategoryProduct(null);
+    setAssignCategoryId(allSame ? firstSuggested : "none");
+    setAssignCategoryOpen(true);
+  };
+
+  const selectedCategoryIdForImport =
+    assignCategoryId === "none" ? null : assignCategoryId;
+
+  const handleImportProductToDb = async (
+    product: ParsedImportProduct,
+    categoryId: string | null
+  ) => {
+    setImportingProductIds((prev) => [...prev, product.id]);
+    try {
+      const result = await importProductToDatabase(
+        product,
+        dbCategories,
+        dbVendors,
+        dbProducts,
+        { categoryId }
+      );
+      mergeImportedProductIntoState(result.product, result.vendorCreated);
+      if (result.created) {
+        toast.success(
+          `Added “${product.name}” with ${product.variants.length} variant${
+            product.variants.length === 1 ? "" : "s"
+          }`
+        );
+      } else {
+        toast.message(`“${product.name}” was already in the database`);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : `Failed to add “${product.name}”`
+      );
+    } finally {
+      setImportingProductIds((prev) => prev.filter((id) => id !== product.id));
+    }
+  };
+
+  const handleImportSelectedProductsToDb = async (
+    categoryId: string | null
+  ) => {
+    const readyProducts = products.filter((product) => {
+      if (!selectedProductIds.includes(product.id)) return false;
+      return importProductDbStatusById.get(product.id)?.kind === "ready";
+    });
+
+    if (readyProducts.length === 0) {
+      toast.message("No selected products are ready to import");
+      return;
+    }
+
+    setImportingSelectedProducts(true);
+    let created = 0;
+    let skipped = 0;
+    let failed = 0;
+    let workingProducts = [...dbProducts];
+    let workingVendors = [...dbVendors];
+
+    try {
+      for (const product of readyProducts) {
+        try {
+          const result = await importProductToDatabase(
+            product,
+            dbCategories,
+            workingVendors,
+            workingProducts,
+            { categoryId }
+          );
+          if (result.vendorCreated) {
+            workingVendors = [...workingVendors, result.vendorCreated];
+            setDbVendors((prev) => {
+              if (prev.some((vendor) => vendor.id === result.vendorCreated!.id)) {
+                return prev;
+              }
+              return [...prev, result.vendorCreated!].sort((a, b) =>
+                a.name.localeCompare(b.name, undefined, {
+                  sensitivity: "base",
+                })
+              );
+            });
+          }
+          if (result.created) {
+            created += 1;
+            workingProducts = [...workingProducts, result.product];
+            setDbProducts((prev) => {
+              if (prev.some((existing) => existing.id === result.product.id)) {
+                return prev;
+              }
+              return [...prev, result.product].sort((a, b) =>
+                a.name.localeCompare(b.name, undefined, {
+                  sensitivity: "base",
+                })
+              );
+            });
+          } else {
+            skipped += 1;
+          }
+        } catch (error) {
+          console.error(error);
+          failed += 1;
+        }
+      }
+
+      if (created > 0) {
+        toast.success(
+          `Added ${created} product${created === 1 ? "" : "s"} to the database` +
+            (skipped > 0 ? ` · skipped ${skipped}` : "") +
+            (failed > 0 ? ` · failed ${failed}` : "")
+        );
+      } else if (failed > 0) {
+        toast.error(`Failed to import ${failed} product${failed === 1 ? "" : "s"}`);
+      } else {
+        toast.message("No new products were added");
+      }
+    } finally {
+      setImportingSelectedProducts(false);
+    }
+  };
+
+  const handleConfirmAssignCategory = async () => {
+    const categoryId = selectedCategoryIdForImport;
+    setAssignCategoryOpen(false);
+
+    if (assignCategoryMode === "single" && assignCategoryProduct) {
+      await handleImportProductToDb(assignCategoryProduct, categoryId);
+      setAssignCategoryProduct(null);
+      return;
+    }
+
+    await handleImportSelectedProductsToDb(categoryId);
+  };
+
   const handleSaveSample = async () => {
     if (products.length === 0 && extraCategories.length === 0) {
       toast.error("Nothing to save");
@@ -467,8 +885,7 @@ export default function ProductJsonImportPage() {
     toast.success("Downloaded current catalog JSON");
   };
 
-  const handleCreateCategory = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleCreateCategory = () => {
     const name = newCategoryName.trim();
 
     if (!name) {
@@ -506,8 +923,7 @@ export default function ProductJsonImportPage() {
     setEditCategoryOpen(true);
   };
 
-  const handleEditCategory = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleEditCategory = () => {
     const from = editingCategoryFrom.trim();
     const to = editCategoryFormName.trim();
 
@@ -571,8 +987,7 @@ export default function ProductJsonImportPage() {
     setEditProductOpen(true);
   };
 
-  const handleEditProduct = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleEditProduct = () => {
     const name = editName.trim();
     const productType = editProductType.trim();
     const categoryName = editCategoryName.trim();
@@ -620,8 +1035,7 @@ export default function ProductJsonImportPage() {
     setCreateProductOpen(true);
   };
 
-  const handleCreateProduct = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleCreateProduct = () => {
     const created = createImportProduct({
       name: createProductName,
       productType: createProductType,
@@ -651,8 +1065,7 @@ export default function ProductJsonImportPage() {
     setCreateVariantOpen(true);
   };
 
-  const handleCreateVariant = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleCreateVariant = () => {
     const name = createVariantName.trim();
     const price =
       createVariantPrice.trim() === "" ? 0 : Number(createVariantPrice);
@@ -688,8 +1101,7 @@ export default function ProductJsonImportPage() {
     setEditVariantOpen(true);
   };
 
-  const handleEditVariant = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleEditVariant = () => {
     const name = editVariantName.trim();
     const price =
       editVariantPrice.trim() === "" ? 0 : Number(editVariantPrice);
@@ -734,8 +1146,7 @@ export default function ProductJsonImportPage() {
     setBulkActionOpen(true);
   };
 
-  const handleBulkAction = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleBulkAction = () => {
     if (selectedProductIds.length === 0) {
       toast.error("Select at least one product");
       return;
@@ -792,15 +1203,112 @@ export default function ProductJsonImportPage() {
         <div>
           <h1 className="text-2xl font-bold">Product catalog</h1>
           <p className="text-muted-foreground">
-            Browse by category, then assign selected products to a product type
-            or another category. Save writes the current catalog to{" "}
-            {SAMPLE_FILE_NAME}.
+            Browse the catalog, then add products to the database with their
+            variants. Status shows whether each product is already imported.
           </p>
         </div>
         <LinkButton href="/admin/products" variant="outline">
           Back to products
         </LinkButton>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Database className="h-4 w-4" />
+            Physical store categories
+          </CardTitle>
+          <CardDescription>
+            Preview from{" "}
+            <Badge variant="secondary">{CATEGORIES_SAMPLE_FILE_NAME}</Badge>
+            . File <code className="text-xs">id</code> becomes the category
+            slug; each row gets a new random unique database id.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={() => void handleImportSampleCategories()}
+              disabled={
+                importingCategories ||
+                loadingDbCategories ||
+                sampleCategoriesReadyCount === 0
+              }
+            >
+              {importingCategories ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Database className="mr-2 h-4 w-4" />
+              )}
+              Add {sampleCategoriesReadyCount} to database
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setSampleCategoryRows(
+                  buildSampleCategoryRows(emvCategoriesSample)
+                )
+              }
+              disabled={importingCategories}
+            >
+              Regenerate ids
+            </Button>
+            <Badge variant="outline">
+              {sampleCategoryRows.length} in file
+            </Badge>
+            {loadingDbCategories ? (
+              <Badge variant="secondary">Checking database…</Badge>
+            ) : (
+              <Badge variant="secondary">
+                {sampleCategoryRows.length - sampleCategoriesReadyCount} already
+                exist
+              </Badge>
+            )}
+          </div>
+
+          <div className="max-h-80 overflow-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Slug</TableHead>
+                  <TableHead className="min-w-[220px]">Id</TableHead>
+                  <TableHead className="w-[120px]">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sampleCategoryRows.map((row) => {
+                  const exists =
+                    existingCategorySlugs.has(row.slug.toLowerCase()) ||
+                    existingCategoryNames.has(row.name.toLowerCase());
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium">{row.name}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {row.slug}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {row.id}
+                      </TableCell>
+                      <TableCell>
+                        {loadingDbCategories ? (
+                          <Badge variant="outline">…</Badge>
+                        ) : exists ? (
+                          <Badge variant="secondary">Exists</Badge>
+                        ) : (
+                          <Badge>New</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -1181,6 +1689,7 @@ export default function ProductJsonImportPage() {
                         </Button>
                         <Button
                           type="button"
+                          variant="outline"
                           disabled={
                             selectedProductIds.length === 0 ||
                             bulkCategoryOptions.length === 0
@@ -1188,6 +1697,22 @@ export default function ProductJsonImportPage() {
                           onClick={() => openBulkAction("category")}
                         >
                           Assign to category
+                        </Button>
+                        <Button
+                          type="button"
+                          disabled={
+                            importingSelectedProducts ||
+                            loadingDbProducts ||
+                            selectedReadyToImportCount === 0
+                          }
+                          onClick={() => openAssignCategoryForSelected()}
+                        >
+                          {importingSelectedProducts ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Database className="mr-2 h-4 w-4" />
+                          )}
+                          Add {selectedReadyToImportCount} to database
                         </Button>
                       </div>
                     </div>
@@ -1253,6 +1778,12 @@ export default function ProductJsonImportPage() {
                           const checked = selectedProductIds.includes(
                             product.id
                           );
+                          const dbStatus = importProductDbStatusById.get(
+                            product.id
+                          );
+                          const importingThis = importingProductIds.includes(
+                            product.id
+                          );
                           return (
                             <div
                               key={product.id}
@@ -1279,10 +1810,14 @@ export default function ProductJsonImportPage() {
                                       Category {product.categoryName} · vendor{" "}
                                       {product.vendorName || "—"}
                                     </p>
-                                    <div className="mt-1.5">
+                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
                                       <Badge variant="outline">
                                         Type: {product.productType || "—"}
                                       </Badge>
+                                      <ImportDbStatusBadge
+                                        status={dbStatus}
+                                        loading={loadingDbProducts}
+                                      />
                                     </div>
                                   </div>
                                   <div className="flex shrink-0 items-center gap-2">
@@ -1299,8 +1834,13 @@ export default function ProductJsonImportPage() {
                                             type="button"
                                             variant="ghost"
                                             size="icon"
+                                            disabled={importingThis}
                                           >
-                                            <MoreHorizontal className="h-4 w-4" />
+                                            {importingThis ? (
+                                              <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                              <MoreHorizontal className="h-4 w-4" />
+                                            )}
                                             <span className="sr-only">
                                               Product actions
                                             </span>
@@ -1324,6 +1864,35 @@ export default function ProductJsonImportPage() {
                                           <Plus className="h-4 w-4" />
                                           Add variant
                                         </DropdownMenuItem>
+                                        {dbStatus?.kind === "in_database" ? (
+                                          <DropdownMenuItem
+                                            onClick={() => {
+                                              window.open(
+                                                `/admin/products/${dbStatus.match.productId}`,
+                                                "_blank",
+                                                "noopener,noreferrer"
+                                              );
+                                            }}
+                                          >
+                                            <ExternalLink className="h-4 w-4" />
+                                            Open in products
+                                          </DropdownMenuItem>
+                                        ) : (
+                                          <DropdownMenuItem
+                                            disabled={
+                                              importingThis ||
+                                              loadingDbProducts
+                                            }
+                                            onClick={() =>
+                                              openAssignCategoryForProduct(
+                                                product
+                                              )
+                                            }
+                                          >
+                                            <Database className="h-4 w-4" />
+                                            Add to database
+                                          </DropdownMenuItem>
+                                        )}
                                       </DropdownMenuContent>
                                     </DropdownMenu>
                                   </div>
@@ -1480,6 +2049,98 @@ export default function ProductJsonImportPage() {
         </Card>
       )}
 
+      <Dialog
+        open={assignCategoryOpen}
+        onOpenChange={(open) => {
+          if (
+            importingSelectedProducts ||
+            importingProductIds.length > 0
+          ) {
+            return;
+          }
+          setAssignCategoryOpen(open);
+          if (!open) setAssignCategoryProduct(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign category</DialogTitle>
+            <DialogDescription>
+              {assignCategoryMode === "single" && assignCategoryProduct
+                ? `Choose a database category before adding “${assignCategoryProduct.name}”. Import catalog category: ${assignCategoryProduct.categoryName || "—"}.`
+                : `Choose a database category for ${selectedReadyToImportCount} selected product${
+                    selectedReadyToImportCount === 1 ? "" : "s"
+                  }.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Database category</Label>
+            <Select
+              value={assignCategoryId}
+              onValueChange={(value) => setAssignCategoryId(value ?? "none")}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select category">
+                  {(value) => {
+                    if (!value || value === "none") return "No category";
+                    return (
+                      dbCategories.find((category) => category.id === value)
+                        ?.name ?? "Select category"
+                    );
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No category</SelectItem>
+                {dbCategories
+                  .filter((category) => !category.isArchived)
+                  .map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {dbCategories.filter((category) => !category.isArchived).length ===
+              0 && (
+              <p className="text-sm text-muted-foreground">
+                No database categories yet. You can still add without one, or
+                import categories first.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAssignCategoryOpen(false);
+                setAssignCategoryProduct(null);
+              }}
+              disabled={
+                importingSelectedProducts || importingProductIds.length > 0
+              }
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleConfirmAssignCategory()}
+              disabled={
+                importingSelectedProducts || importingProductIds.length > 0
+              }
+            >
+              {importingSelectedProducts || importingProductIds.length > 0 ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Database className="mr-2 h-4 w-4" />
+              )}
+              Add to database
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={createCategoryOpen} onOpenChange={setCreateCategoryOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1489,7 +2150,7 @@ export default function ProductJsonImportPage() {
               this category with bulk actions.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateCategory} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="new-category-name">Name</Label>
               <Input
@@ -1508,9 +2169,11 @@ export default function ProductJsonImportPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit">Create</Button>
+              <Button type="button" onClick={handleCreateCategory}>
+                Create
+              </Button>
             </DialogFooter>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1523,7 +2186,7 @@ export default function ProductJsonImportPage() {
               updated.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditCategory} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-category-name">Name</Label>
               <Input
@@ -1542,11 +2205,15 @@ export default function ProductJsonImportPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={!editCategoryFormName.trim()}>
+              <Button
+                type="button"
+                disabled={!editCategoryFormName.trim()}
+                onClick={handleEditCategory}
+              >
                 Save
               </Button>
             </DialogFooter>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1563,7 +2230,7 @@ export default function ProductJsonImportPage() {
               {selectedProductIds.length === 1 ? "" : "s"}.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleBulkAction} className="space-y-4">
+          <div className="space-y-4">
             {bulkActionKind === "productType" ? (
               <div className="space-y-2">
                 <Label htmlFor="bulk-product-type">Product type</Label>
@@ -1613,17 +2280,18 @@ export default function ProductJsonImportPage() {
                 Cancel
               </Button>
               <Button
-                type="submit"
+                type="button"
                 disabled={
                   bulkActionKind === "productType"
                     ? !bulkAssignProductType
                     : !bulkAssignCategory
                 }
+                onClick={handleBulkAction}
               >
                 Assign
               </Button>
             </DialogFooter>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1636,7 +2304,7 @@ export default function ProductJsonImportPage() {
               assignment.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditProduct} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-product-name">Name</Label>
               <Input
@@ -1713,13 +2381,14 @@ export default function ProductJsonImportPage() {
                 Cancel
               </Button>
               <Button
-                type="submit"
+                type="button"
                 disabled={!editName.trim() || !editProductType || !editCategoryName}
+                onClick={handleEditProduct}
               >
                 Save
               </Button>
             </DialogFooter>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1731,7 +2400,7 @@ export default function ProductJsonImportPage() {
               Create a product in “{activeCategory}”.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateProduct} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="create-product-name">Name</Label>
               <Input
@@ -1775,15 +2444,16 @@ export default function ProductJsonImportPage() {
                 Cancel
               </Button>
               <Button
-                type="submit"
+                type="button"
                 disabled={
                   !createProductName.trim() || !createProductType.trim()
                 }
+                onClick={handleCreateProduct}
               >
                 Create
               </Button>
             </DialogFooter>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1795,7 +2465,7 @@ export default function ProductJsonImportPage() {
               Add a variant to “{createVariantProductName}”.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateVariant} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="create-variant-name">Name</Label>
               <Input
@@ -1827,13 +2497,14 @@ export default function ProductJsonImportPage() {
                 Cancel
               </Button>
               <Button
-                type="submit"
+                type="button"
                 disabled={!createVariantName.trim() || Number(createVariantPrice) < 0 || Number.isNaN(Number(createVariantPrice))}
+                onClick={handleCreateVariant}
               >
                 Create
               </Button>
             </DialogFooter>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1845,7 +2516,7 @@ export default function ProductJsonImportPage() {
               Update variant for “{editVariantProductName}”.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleEditVariant} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-variant-name">Name</Label>
               <Input
@@ -1877,17 +2548,18 @@ export default function ProductJsonImportPage() {
                 Cancel
               </Button>
               <Button
-                type="submit"
+                type="button"
                 disabled={
                   !editVariantName.trim() ||
                   Number(editVariantPrice) < 0 ||
                   Number.isNaN(Number(editVariantPrice))
                 }
+                onClick={handleEditVariant}
               >
                 Save
               </Button>
             </DialogFooter>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 

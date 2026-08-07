@@ -155,6 +155,7 @@ async function applyStockDelta(
     if (snap.exists()) {
       tx.update(invRef, {
         stock: newStock,
+        isSelling: true,
         ...(lowStockThreshold !== undefined
           ? { lowStockThreshold }
           : {}),
@@ -168,6 +169,7 @@ async function applyStockDelta(
         variantId: ctx.variantId,
         stock: newStock,
         lowStockThreshold: threshold,
+        isSelling: true,
         updatedAt: serverTimestamp(),
       });
     }
@@ -221,6 +223,7 @@ export async function setBranchStockWithLog(
       if (snap.exists()) {
         tx.update(invRef, {
           lowStockThreshold,
+          isSelling: true,
           updatedAt: serverTimestamp(),
         });
       } else {
@@ -231,6 +234,7 @@ export async function setBranchStockWithLog(
           variantId,
           stock,
           lowStockThreshold,
+          isSelling: true,
           updatedAt: serverTimestamp(),
         });
       }
@@ -287,6 +291,70 @@ export function buildVariantStockMap(
   inventory: BranchInventory[]
 ): Record<string, number> {
   return Object.fromEntries(inventory.map((i) => [i.variantId, i.stock]));
+}
+
+export async function setVariantSelling(
+  branchId: string,
+  productId: string,
+  variantId: string,
+  isSelling: boolean
+): Promise<void> {
+  const db = getClientDb();
+  const invId = inventoryDocId(branchId, variantId);
+  const invRef = doc(db, COLLECTIONS.branchInventory, invId).withConverter(
+    branchInventoryConverter
+  );
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(invRef);
+    if (snap.exists()) {
+      tx.update(invRef, {
+        isSelling,
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    }
+
+    tx.set(invRef, {
+      id: invId,
+      branchId,
+      productId,
+      variantId,
+      stock: 0,
+      lowStockThreshold: 5,
+      isSelling,
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+export interface VariantSellingTarget {
+  productId: string;
+  variantId: string;
+}
+
+export async function setVariantsSellingBulk(
+  branchId: string,
+  targets: VariantSellingTarget[],
+  isSelling: boolean
+): Promise<void> {
+  if (targets.length === 0) return;
+
+  // Firestore batches are limited to 500 ops; chunk to stay safe.
+  const chunkSize = 400;
+  for (let i = 0; i < targets.length; i += chunkSize) {
+    const chunk = targets.slice(i, i + chunkSize);
+    await Promise.all(
+      chunk.map((target) =>
+        setVariantSelling(
+          branchId,
+          target.productId,
+          target.variantId,
+          isSelling
+        )
+      )
+    );
+  }
 }
 
 /** @deprecated Use buildVariantStockMap */

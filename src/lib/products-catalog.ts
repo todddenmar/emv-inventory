@@ -1,4 +1,3 @@
-import { isHtmlEmpty } from "@/lib/html-text";
 import { optionValuesKey } from "@/lib/product-variants";
 import type { Product } from "@/types";
 
@@ -22,9 +21,6 @@ export function canPublishProduct(product: Product): {
   }
   if (!product.name.trim()) {
     return { ok: false, reason: "Name is required" };
-  }
-  if (isHtmlEmpty(product.description)) {
-    return { ok: false, reason: "Description is required" };
   }
   if (product.categoryIds.length === 0) {
     return { ok: false, reason: "Select at least one category" };

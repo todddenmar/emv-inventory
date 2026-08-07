@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { LinkButton } from "@/components/ui/link-button";
 import {
@@ -11,6 +11,11 @@ import {
   Trash2,
   MoreHorizontal,
   FileJson,
+  Loader2,
+  Tags,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,6 +37,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -47,7 +60,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { CategoryMultiSelect } from "@/components/admin/category-multi-select";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   archiveProduct,
@@ -56,6 +71,7 @@ import {
   publishProduct,
   restoreProduct,
   unpublishProduct,
+  updateProduct,
 } from "@/lib/firestore/products";
 import { getCategories } from "@/lib/firestore/categories";
 import { getProductThumbnailUrl } from "@/lib/products";
@@ -67,6 +83,13 @@ import { getProductPriceRange, getDefaultVariant } from "@/lib/product-variants"
 import { formatCurrency } from "@/lib/format";
 import type { Category, Product } from "@/types";
 
+const PAGE_SIZE = 10;
+
+function matchesQuery(value: string, query: string): boolean {
+  if (!query.trim()) return true;
+  return value.toLowerCase().includes(query.trim().toLowerCase());
+}
+
 export default function AdminProductsPage() {
   const { isMasterAdmin } = useBranchAccess();
   const [products, setProducts] = useState<Product[]>([]);
@@ -75,11 +98,47 @@ export default function AdminProductsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [categoryEditProduct, setCategoryEditProduct] =
+    useState<Product | null>(null);
+  const [editCategoryIds, setEditCategoryIds] = useState<string[]>([]);
+  const [savingCategories, setSavingCategories] = useState(false);
 
-  const categoryMap = Object.fromEntries(
-    categories.map((c) => [c.id, c])
+  const categoryMap = useMemo(
+    () => Object.fromEntries(categories.map((c) => [c.id, c])),
+    [categories]
   );
+
+  const visibleProducts = useMemo(() => {
+    const archivedFiltered = products.filter((p) =>
+      showArchived ? p.isArchived : !p.isArchived
+    );
+
+    const query = search.trim();
+    if (!query) return archivedFiltered;
+
+    return archivedFiltered.filter((product) => {
+      if (matchesQuery(product.name, query)) return true;
+      if (matchesQuery(product.productType, query)) return true;
+      if (matchesQuery(product.slug, query)) return true;
+      return product.categoryIds.some((id) =>
+        matchesQuery(categoryMap[id]?.name ?? "", query)
+      );
+    });
+  }, [products, showArchived, search, categoryMap]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE));
+
+  const pagedProducts = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return visibleProducts.slice(start, start + PAGE_SIZE);
+  }, [visibleProducts, page]);
+
+  const rangeStart =
+    visibleProducts.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, visibleProducts.length);
 
   const loadData = () => {
     Promise.all([getProducts(false, true), getCategories()])
@@ -94,6 +153,50 @@ export default function AdminProductsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [showArchived, search]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const openCategoryEditor = (product: Product) => {
+    setCategoryEditProduct(product);
+    setEditCategoryIds([...product.categoryIds]);
+  };
+
+  const closeCategoryEditor = () => {
+    if (savingCategories) return;
+    setCategoryEditProduct(null);
+    setEditCategoryIds([]);
+  };
+
+  const handleSaveCategories = async () => {
+    if (!categoryEditProduct) return;
+
+    setSavingCategories(true);
+    try {
+      await updateProduct(categoryEditProduct.id, {
+        categoryIds: editCategoryIds,
+      });
+      setProducts((prev) =>
+        prev.map((product) =>
+          product.id === categoryEditProduct.id
+            ? { ...product, categoryIds: editCategoryIds }
+            : product
+        )
+      );
+      toast.success("Categories updated");
+      setCategoryEditProduct(null);
+      setEditCategoryIds([]);
+    } catch {
+      toast.error("Failed to update categories");
+    } finally {
+      setSavingCategories(false);
+    }
+  };
 
   const handleArchive = async () => {
     if (!deleteId) return;
@@ -175,10 +278,6 @@ export default function AdminProductsPage() {
     );
   }
 
-  const visibleProducts = products.filter((p) =>
-    showArchived ? p.isArchived : !p.isArchived
-  );
-
   return (
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -209,33 +308,60 @@ export default function AdminProductsPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Catalog</CardTitle>
-          <CardDescription>
-            {visibleProducts.length}{" "}
-            {showArchived ? "archived" : "active"} products
-          </CardDescription>
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Catalog</CardTitle>
+              <CardDescription>
+                {visibleProducts.length === 0
+                  ? search.trim()
+                    ? "No matches"
+                    : `0 ${showArchived ? "archived" : "active"} products`
+                  : `Showing ${rangeStart}–${rangeEnd} of ${visibleProducts.length}${
+                      search.trim()
+                        ? ` match${visibleProducts.length === 1 ? "" : "es"}`
+                        : ` ${showArchived ? "archived" : "active"} product${
+                            visibleProducts.length === 1 ? "" : "s"
+                          }`
+                    }`}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:max-w-sm">
+              <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search products, types, categories…"
+                className="pl-9"
+              />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {loading ? (
             <p className="text-muted-foreground">Loading...</p>
           ) : visibleProducts.length === 0 ? (
             <p className="text-muted-foreground">
-              {showArchived ? "No archived products." : "No products yet."}
+              {search.trim()
+                ? "No products match your search."
+                : showArchived
+                  ? "No archived products."
+                  : "No products yet."}
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Categories</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-12 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleProducts.map((product) => {
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Categories</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-12 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pagedProducts.map((product) => {
                   const thumb = getProductThumbnailUrl(product);
                   const published = isProductPublished(product);
 
@@ -259,12 +385,38 @@ export default function AdminProductsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {product.categoryIds.map((id) => (
-                            <Badge key={id} variant="secondary" className="text-xs">
-                              {categoryMap[id]?.name ?? "Unknown"}
-                            </Badge>
-                          ))}
+                        <div className="flex items-center gap-2">
+                          <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                            {product.categoryIds.length === 0 ? (
+                              <span className="text-sm text-muted-foreground">
+                                No categories
+                              </span>
+                            ) : (
+                              product.categoryIds.map((id) => (
+                                <Badge
+                                  key={id}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {categoryMap[id]?.name ?? "Unknown"}
+                                </Badge>
+                              ))
+                            )}
+                          </div>
+                          {!product.isArchived && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="shrink-0"
+                              onClick={() => openCategoryEditor(product)}
+                            >
+                              <Tags className="h-4 w-4" />
+                              <span className="sr-only">
+                                Change categories
+                              </span>
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -356,9 +508,85 @@ export default function AdminProductsPage() {
                 })}
               </TableBody>
             </Table>
+
+              {visibleProducts.length > PAGE_SIZE && (
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft className="mr-1 h-4 w-4" />
+                    Previous
+                  </Button>
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                  >
+                    Next
+                    <ChevronRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={!!categoryEditProduct}
+        onOpenChange={(open) => {
+          if (!open) closeCategoryEditor();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change categories</DialogTitle>
+            <DialogDescription>
+              {categoryEditProduct
+                ? `Update categories for “${
+                    categoryEditProduct.name.trim() || "Untitled draft"
+                  }”.`
+                : "Update product categories."}
+            </DialogDescription>
+          </DialogHeader>
+          <CategoryMultiSelect
+            categories={categories}
+            selectedIds={editCategoryIds}
+            onChange={setEditCategoryIds}
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeCategoryEditor}
+              disabled={savingCategories}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSaveCategories()}
+              disabled={savingCategories}
+            >
+              {savingCategories ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>

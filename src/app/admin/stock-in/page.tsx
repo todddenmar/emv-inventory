@@ -29,95 +29,109 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { InventoryActivityFeed } from "@/components/admin/inventory-activity-feed";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
 import { getBranches } from "@/lib/firestore/branches";
+import { getVendors } from "@/lib/firestore/vendors";
 import { getProducts } from "@/lib/firestore/products";
 import { getBranchInventory } from "@/lib/firestore/inventory";
 import {
-  createBranchTransfer,
-  getBranchTransfers,
-} from "@/lib/firestore/transfers";
-import { mergeSellingVariantsWithInventory } from "@/lib/inventory";
+  completeSupplierStockIn,
+  getSupplierStockIns,
+} from "@/lib/firestore/supplier-stock-ins";
+import { mergeVariantsWithInventory } from "@/lib/inventory";
+import { isProductPublished } from "@/lib/products-catalog";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { formatDate } from "@/lib/format";
-import type { Branch, BranchTransfer, Product } from "@/types";
+import type {
+  Branch,
+  Product,
+  SupplierStockIn,
+  Vendor,
+} from "@/types";
 
-interface TransferLine {
+interface StockInLine {
   productId: string;
   productName: string;
   variantId: string;
   quantity: number;
-  available: number;
+  currentStock: number;
 }
 
-export default function AdminTransfersPage() {
+export default function AdminStockInPage() {
   const { isMasterAdmin, assignedBranchId } = useBranchAccess();
   const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [fromBranchId, setFromBranchId] = useState("");
-  const [toBranchId, setToBranchId] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const [vendorId, setVendorId] = useState("");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<TransferLine[]>([]);
+  const [lines, setLines] = useState<StockInLine[]>([]);
   const [selectedVariantKey, setSelectedVariantKey] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [sellingVariants, setSellingVariants] = useState<
-    ReturnType<typeof mergeSellingVariantsWithInventory>
+  const [variantRows, setVariantRows] = useState<
+    ReturnType<typeof mergeVariantsWithInventory>
   >([]);
-  const [transfers, setTransfers] = useState<BranchTransfer[]>([]);
+  const [history, setHistory] = useState<SupplierStockIn[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const defaultFromBranch = isMasterAdmin ? "" : assignedBranchId ?? "";
+  const defaultBranch = isMasterAdmin ? "" : assignedBranchId ?? "";
 
   useEffect(() => {
-    Promise.all([getBranches(true), getProducts(), getBranchTransfers()])
-      .then(([b, p, t]) => {
+    Promise.all([getBranches(true), getVendors(), getProducts()])
+      .then(([b, v, p]) => {
         setBranches(b);
-        setProducts(p.filter((x) => !x.isArchived));
-        setTransfers(t);
-        if (defaultFromBranch) setFromBranchId(defaultFromBranch);
+        setVendors(v);
+        setProducts(p.filter((x) => !x.isArchived && isProductPublished(x)));
+        if (defaultBranch) setBranchId(defaultBranch);
+        else if (isMasterAdmin && b[0]) setBranchId(b[0].id);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [defaultFromBranch]);
+  }, [defaultBranch, isMasterAdmin]);
 
   useEffect(() => {
-    if (!fromBranchId) {
-      setSellingVariants([]);
+    if (!branchId) {
+      setVariantRows([]);
+      setHistory([]);
       return;
     }
-    getBranchInventory(fromBranchId)
-      .then((inv) => {
-        const rows = mergeSellingVariantsWithInventory(
-          products.filter((x) => !x.isArchived),
-          inv
-        );
-        setSellingVariants(rows);
+
+    Promise.all([
+      getBranchInventory(branchId),
+      getSupplierStockIns({
+        branchId: isMasterAdmin ? branchId : assignedBranchId,
+        max: 30,
+      }),
+    ])
+      .then(([inv, stockIns]) => {
+        setVariantRows(mergeVariantsWithInventory(products, inv));
+        setHistory(stockIns);
       })
       .catch(console.error);
-  }, [fromBranchId, products]);
+  }, [branchId, products, isMasterAdmin, assignedBranchId]);
 
-  const fromBranch = branches.find((b) => b.id === fromBranchId);
-  const toBranch = branches.find((b) => b.id === toBranchId);
-  const destinationOptions = branches.filter((b) => b.id !== fromBranchId);
-
-  const branchSelectLabel = (value: string | null) => {
-    if (!value) return null;
-    const branch = branches.find((b) => b.id === value);
-    return branch ? `${branch.name} (${branch.code})` : null;
-  };
+  const branch = branches.find((b) => b.id === branchId);
+  const vendor = vendors.find((v) => v.id === vendorId);
 
   const availableVariants = useMemo(
     () =>
-      sellingVariants.filter(
-        (v) =>
-          v.stock > 0 && !lines.some((l) => l.variantId === v.id)
-      ),
-    [sellingVariants, lines]
+      variantRows.filter((v) => !lines.some((l) => l.variantId === v.id)),
+    [variantRows, lines]
   );
+
+  const branchSelectLabel = (value: string | null) => {
+    if (!value) return null;
+    const b = branches.find((row) => row.id === value);
+    return b ? `${b.name} (${b.code})` : null;
+  };
+
+  const vendorSelectLabel = (value: string | null) => {
+    if (!value) return null;
+    return vendors.find((v) => v.id === value)?.name ?? null;
+  };
 
   const variantSelectLabel = (value: string | null) => {
     if (!value) return null;
@@ -128,7 +142,7 @@ export default function AdminTransfersPage() {
     if (!row) return null;
     const product = products.find((p) => p.id === row.productId);
     const label = formatVariantLabel(row, product?.options ?? []);
-    return `${row.productName}${label !== "Default" ? ` — ${label}` : ""} (${row.stock} available)`;
+    return `${row.productName}${label !== "Default" ? ` — ${label}` : ""} (stock ${row.stock})`;
   };
 
   const addLine = () => {
@@ -136,14 +150,17 @@ export default function AdminTransfersPage() {
       toast.error("Select a variant");
       return;
     }
-    const [productId, variantId] = selectedVariantKey.split("::");
-    const row = sellingVariants.find(
-      (v) => v.productId === productId && v.id === variantId
-    );
+    const [, variantId] = selectedVariantKey.split("::");
+    const row = variantRows.find((v) => v.id === variantId);
     if (!row) {
       toast.error("Select a variant");
       return;
     }
+    if (quantity <= 0) {
+      toast.error("Quantity must be greater than zero");
+      return;
+    }
+
     const product = products.find((p) => p.id === row.productId);
     const variantLabel = formatVariantLabel(row, product?.options ?? []);
     const productName =
@@ -151,10 +168,6 @@ export default function AdminTransfersPage() {
         ? row.productName
         : `${row.productName} — ${variantLabel}`;
 
-    if (quantity <= 0 || quantity > row.stock) {
-      toast.error(`Enter a quantity between 1 and ${row.stock}`);
-      return;
-    }
     setLines((prev) => [
       ...prev,
       {
@@ -162,7 +175,7 @@ export default function AdminTransfersPage() {
         productName,
         variantId: row.id,
         quantity,
-        available: row.stock,
+        currentStock: row.stock,
       },
     ]);
     setSelectedVariantKey("");
@@ -173,9 +186,9 @@ export default function AdminTransfersPage() {
     setLines((prev) => prev.filter((l) => l.variantId !== variantId));
   };
 
-  const handleTransfer = async () => {
-    if (!user || !fromBranch || !toBranch) {
-      toast.error("Select source and destination branches");
+  const handleSubmit = async () => {
+    if (!user || !branch || !vendor) {
+      toast.error("Select branch and supplier");
       return;
     }
     if (lines.length === 0) {
@@ -185,108 +198,114 @@ export default function AdminTransfersPage() {
 
     setSubmitting(true);
     try {
-      await createBranchTransfer({
-        fromBranchId: fromBranch.id,
-        fromBranchName: fromBranch.name,
-        toBranchId: toBranch.id,
-        toBranchName: toBranch.name,
+      await completeSupplierStockIn({
+        branchId: branch.id,
+        branchName: branch.name,
+        vendorId: vendor.id,
+        vendorName: vendor.name,
         items: lines.map((l) => ({
           productId: l.productId,
-          productName: l.productName,
           variantId: l.variantId,
+          productName: l.productName,
           quantity: l.quantity,
         })),
         notes: notes.trim() || null,
         createdBy: user.uid,
         createdByName: user.displayName ?? user.email,
       });
-      toast.success("Transfer completed");
+      toast.success("Stock in recorded");
       setLines([]);
       setNotes("");
-      setToBranchId("");
-      const [inv, t] = await Promise.all([
-        getBranchInventory(fromBranch.id),
-        getBranchTransfers(),
+      const [inv, stockIns] = await Promise.all([
+        getBranchInventory(branch.id),
+        getSupplierStockIns({ branchId: branch.id, max: 30 }),
       ]);
-      setSellingVariants(
-        mergeSellingVariantsWithInventory(
-          products.filter((x) => !x.isArchived),
-          inv
-        )
-      );
-      setTransfers(t);
+      setVariantRows(mergeVariantsWithInventory(products, inv));
+      setHistory(stockIns);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Transfer failed");
+      toast.error(err instanceof Error ? err.message : "Stock in failed");
     } finally {
       setSubmitting(false);
     }
   };
 
   if (loading) {
-    return <p className="text-muted-foreground">Loading transfers...</p>;
+    return <p className="text-muted-foreground">Loading stock in...</p>;
+  }
+
+  if (branches.length === 0) {
+    return (
+      <p className="text-muted-foreground">
+        Create a branch before recording supplier stock in.
+      </p>
+    );
+  }
+
+  if (vendors.length === 0) {
+    return (
+      <p className="text-muted-foreground">
+        Add a vendor/supplier first under Vendors.
+      </p>
+    );
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Stock transfers</h1>
+        <h1 className="text-2xl font-bold">Supplier stock in</h1>
         <p className="text-muted-foreground">
-          Move inventory between branches with a full audit trail
+          Receive inventory into a branch from a supplier
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>New transfer</CardTitle>
+          <CardTitle>New stock in</CardTitle>
           <CardDescription>
-            {isMasterAdmin
-              ? "Transfer selling variants from any branch to another"
-              : `Transfer stock out of ${fromBranch?.name ?? "your branch"}`}
+            Increases branch stock and marks variants as selling
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>From branch</Label>
+              <Label>Branch</Label>
               <Select
-                value={fromBranchId}
+                value={branchId}
                 onValueChange={(v) => {
-                  setFromBranchId(v ?? "");
+                  setBranchId(v ?? "");
                   setLines([]);
-                  setToBranchId("");
                 }}
                 disabled={!isMasterAdmin}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select source branch">
+                  <SelectValue placeholder="Select branch">
                     {(value) => branchSelectLabel(value as string | null)}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {branches.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name} ({branch.code})
+                  {branches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.name} ({b.code})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>To branch</Label>
+              <Label>Supplier</Label>
               <Select
-                value={toBranchId}
-                onValueChange={(v) => setToBranchId(v ?? "")}
-                disabled={!fromBranchId}
+                value={vendorId}
+                onValueChange={(v) => setVendorId(v ?? "")}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select destination branch">
-                    {(value) => branchSelectLabel(value as string | null)}
+                  <SelectValue placeholder="Select supplier">
+                    {(value) => vendorSelectLabel(value as string | null)}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {destinationOptions.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name} ({branch.code})
+                  {vendors.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -294,7 +313,7 @@ export default function AdminTransfersPage() {
             </div>
           </div>
 
-          {fromBranchId && (
+          {branchId && (
             <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end">
               <div className="flex-1 space-y-2">
                 <Label>Variant</Label>
@@ -303,18 +322,20 @@ export default function AdminTransfersPage() {
                   onValueChange={(v) => setSelectedVariantKey(v ?? "")}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select selling variant">
+                    <SelectValue placeholder="Select variant">
                       {(value) => variantSelectLabel(value as string | null)}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {availableVariants.length === 0 ? (
                       <SelectItem value="__none" disabled>
-                        No selling variants with stock
+                        No variants available
                       </SelectItem>
                     ) : (
                       availableVariants.map((row) => {
-                        const product = products.find((p) => p.id === row.productId);
+                        const product = products.find(
+                          (p) => p.id === row.productId
+                        );
                         const label = formatVariantLabel(
                           row,
                           product?.options ?? []
@@ -325,8 +346,8 @@ export default function AdminTransfersPage() {
                             value={`${row.productId}::${row.id}`}
                           >
                             {row.productName}
-                            {label !== "Default" ? ` — ${label}` : ""} (
-                            {row.stock} available)
+                            {label !== "Default" ? ` — ${label}` : ""} (stock{" "}
+                            {row.stock})
                           </SelectItem>
                         );
                       })
@@ -356,7 +377,8 @@ export default function AdminTransfersPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Variant</TableHead>
-                    <TableHead>Quantity</TableHead>
+                    <TableHead>Current</TableHead>
+                    <TableHead>Qty in</TableHead>
                     <TableHead className="text-right">Remove</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -364,7 +386,12 @@ export default function AdminTransfersPage() {
                   {lines.map((line) => (
                     <TableRow key={line.variantId}>
                       <TableCell>{line.productName}</TableCell>
-                      <TableCell>{line.quantity}</TableCell>
+                      <TableCell className="tabular-nums">
+                        {line.currentStock}
+                      </TableCell>
+                      <TableCell className="tabular-nums text-green-600">
+                        +{line.quantity}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
@@ -386,56 +413,56 @@ export default function AdminTransfersPage() {
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Reason or reference for this transfer..."
+              placeholder="Invoice number, delivery reference..."
               rows={2}
             />
           </div>
 
           <Button
-            onClick={handleTransfer}
-            disabled={submitting || lines.length === 0 || !toBranchId}
+            onClick={handleSubmit}
+            disabled={
+              submitting || lines.length === 0 || !vendorId || !branchId
+            }
           >
             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Complete transfer
+            Complete stock in
           </Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Transfer history</CardTitle>
-          <CardDescription>Recent branch-to-branch movements</CardDescription>
+          <CardTitle>Recent stock ins</CardTitle>
+          <CardDescription>Supplier receipts for this branch</CardDescription>
         </CardHeader>
         <CardContent>
-          {transfers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No transfers yet.</p>
+          {history.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No stock ins yet.</p>
           ) : (
             <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
-                    <TableHead>From</TableHead>
-                    <TableHead>To</TableHead>
+                    <TableHead>Supplier</TableHead>
                     <TableHead>Items</TableHead>
                     <TableHead>By</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transfers.map((transfer) => (
-                    <TableRow key={transfer.id}>
+                  {history.map((entry) => (
+                    <TableRow key={entry.id}>
                       <TableCell className="whitespace-nowrap text-sm">
-                        {formatDate(transfer.createdAt)}
+                        {formatDate(entry.createdAt)}
                       </TableCell>
-                      <TableCell>{transfer.fromBranchName}</TableCell>
-                      <TableCell>{transfer.toBranchName}</TableCell>
+                      <TableCell>{entry.vendorName}</TableCell>
                       <TableCell className="max-w-xs text-sm">
-                        {transfer.items
+                        {entry.items
                           .map((i) => `${i.productName} ×${i.quantity}`)
                           .join(", ")}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {transfer.createdByName ?? "Staff"}
+                        {entry.createdByName ?? "Staff"}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -445,12 +472,6 @@ export default function AdminTransfersPage() {
           )}
         </CardContent>
       </Card>
-
-      <InventoryActivityFeed
-        branchId={isMasterAdmin ? null : assignedBranchId}
-        showViewAll={false}
-        max={20}
-      />
     </div>
   );
 }

@@ -1,0 +1,549 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Loader2, ShoppingCart } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  PosCartPanel,
+  type PosCartLine,
+} from "@/components/admin/pos-cart";
+import { useBranchAccess } from "@/hooks/use-branch-access";
+import { useAuthStore } from "@/stores/auth-store";
+import { getBranches } from "@/lib/firestore/branches";
+import { getCategories } from "@/lib/firestore/categories";
+import { getBranchInventory } from "@/lib/firestore/inventory";
+import { getProductsByCategoryId } from "@/lib/firestore/products";
+import { completePosSale } from "@/lib/firestore/pos-sales";
+import { mergeSellingVariantsWithInventory } from "@/lib/inventory";
+import { isProductPublished } from "@/lib/products-catalog";
+import { getProductThumbnailUrl } from "@/lib/products";
+import { formatVariantLabel } from "@/lib/product-variants";
+import { formatCurrency } from "@/lib/format";
+import type { Branch, BranchInventory, Category, Product } from "@/types";
+import type { VariantWithStock } from "@/lib/inventory";
+
+export default function AdminPosPage() {
+  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const user = useAuthStore((s) => s.user);
+
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [inventory, setInventory] = useState<BranchInventory[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [categoryCache, setCategoryCache] = useState<Record<string, Product[]>>(
+    {}
+  );
+  const [loadingBootstrap, setLoadingBootstrap] = useState(true);
+  const [loadingCategory, setLoadingCategory] = useState(false);
+  const [search, setSearch] = useState("");
+  const [cart, setCart] = useState<PosCartLine[]>([]);
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [charging, setCharging] = useState(false);
+
+  const activeBranchId = isMasterAdmin
+    ? selectedBranchId
+    : assignedBranchId ?? "";
+
+  const activeBranch = branches.find((b) => b.id === activeBranchId);
+
+  useEffect(() => {
+    async function bootstrap() {
+      try {
+        const [branchList, cats] = await Promise.all([
+          getBranches(true),
+          getCategories(),
+        ]);
+        setBranches(branchList);
+        const activeCats = cats.filter((c) => !c.isArchived);
+        setCategories(activeCats);
+
+        const initialBranch = isMasterAdmin
+          ? branchList[0]?.id ?? ""
+          : assignedBranchId ?? branchList[0]?.id ?? "";
+        setSelectedBranchId(initialBranch);
+
+        if (activeCats.length > 0) {
+          setSelectedCategoryId(activeCats[0].id);
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load POS");
+      } finally {
+        setLoadingBootstrap(false);
+      }
+    }
+
+    bootstrap();
+  }, [isMasterAdmin, assignedBranchId]);
+
+  useEffect(() => {
+    if (!activeBranchId) {
+      setInventory([]);
+      return;
+    }
+
+    getBranchInventory(activeBranchId)
+      .then(setInventory)
+      .catch((err) => {
+        console.error(err);
+        toast.error("Failed to load branch stock");
+      });
+
+    setCategoryCache({});
+    setCart([]);
+  }, [activeBranchId]);
+
+  const loadCategory = useCallback(
+    async (categoryId: string) => {
+      if (!categoryId || categoryCache[categoryId]) return;
+      setLoadingCategory(true);
+      try {
+        const products = await getProductsByCategoryId(categoryId, false);
+        setCategoryCache((prev) => ({
+          ...prev,
+          [categoryId]: products.filter((p) => isProductPublished(p)),
+        }));
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load category products");
+      } finally {
+        setLoadingCategory(false);
+      }
+    },
+    [categoryCache]
+  );
+
+  useEffect(() => {
+    if (!selectedCategoryId) return;
+    loadCategory(selectedCategoryId).catch(console.error);
+  }, [selectedCategoryId, loadCategory]);
+
+  const categoryProducts = categoryCache[selectedCategoryId] ?? [];
+
+  const sellingVariants = useMemo(
+    () => mergeSellingVariantsWithInventory(categoryProducts, inventory),
+    [categoryProducts, inventory]
+  );
+
+  const filteredVariants = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return sellingVariants;
+    return sellingVariants.filter((row) => {
+      const product = categoryProducts.find((p) => p.id === row.productId);
+      const label = formatVariantLabel(row, product?.options ?? []);
+      return (
+        row.productName.toLowerCase().includes(q) ||
+        row.sku.toLowerCase().includes(q) ||
+        label.toLowerCase().includes(q)
+      );
+    });
+  }, [sellingVariants, search, categoryProducts]);
+
+  const cartTotal = cart.reduce(
+    (sum, line) => sum + line.unitPrice * line.quantity,
+    0
+  );
+  const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
+
+  const stockForVariant = (variantId: string) =>
+    inventory.find((row) => row.variantId === variantId)?.stock ??
+    sellingVariants.find((row) => row.id === variantId)?.stock ??
+    0;
+
+  const addVariant = (row: VariantWithStock) => {
+    const stock = stockForVariant(row.id);
+    if (stock <= 0) {
+      toast.error("Out of stock");
+      return;
+    }
+
+    const product = categoryProducts.find((p) => p.id === row.productId);
+    const variantLabel = formatVariantLabel(row, product?.options ?? []);
+
+    setCart((prev) => {
+      const existing = prev.find((line) => line.variantId === row.id);
+      if (existing) {
+        if (existing.quantity >= stock) {
+          toast.error("Not enough stock");
+          return prev;
+        }
+        return prev.map((line) =>
+          line.variantId === row.id
+            ? {
+                ...line,
+                quantity: line.quantity + 1,
+                maxStock: stock,
+              }
+            : line
+        );
+      }
+
+      return [
+        ...prev,
+        {
+          productId: row.productId,
+          variantId: row.id,
+          productName: row.productName,
+          variantLabel,
+          unitPrice: row.price,
+          quantity: 1,
+          maxStock: stock,
+        },
+      ];
+    });
+  };
+
+  const incrementLine = (variantId: string) => {
+    setCart((prev) =>
+      prev.map((line) => {
+        if (line.variantId !== variantId) return line;
+        const stock = stockForVariant(variantId);
+        if (line.quantity >= stock) {
+          toast.error("Not enough stock");
+          return line;
+        }
+        return { ...line, quantity: line.quantity + 1, maxStock: stock };
+      })
+    );
+  };
+
+  const decrementLine = (variantId: string) => {
+    setCart((prev) =>
+      prev.map((line) =>
+        line.variantId === variantId
+          ? { ...line, quantity: Math.max(1, line.quantity - 1) }
+          : line
+      )
+    );
+  };
+
+  const removeLine = (variantId: string) => {
+    setCart((prev) => prev.filter((line) => line.variantId !== variantId));
+  };
+
+  const clearCart = () => setCart([]);
+
+  const handleCharge = async () => {
+    if (!user || !activeBranch || cart.length === 0) return;
+
+    setCharging(true);
+    try {
+      await completePosSale({
+        branchId: activeBranch.id,
+        branchName: activeBranch.name,
+        items: cart.map((line) => ({
+          productId: line.productId,
+          variantId: line.variantId,
+          productName:
+            line.variantLabel && line.variantLabel !== "Default"
+              ? `${line.productName} — ${line.variantLabel}`
+              : line.productName,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          lineTotal: line.unitPrice * line.quantity,
+        })),
+        createdBy: user.uid,
+        createdByName: user.displayName ?? user.email,
+      });
+
+      toast.success("Sale completed");
+      setCart([]);
+      setConfirmOpen(false);
+      setMobileCartOpen(false);
+
+      const inv = await getBranchInventory(activeBranch.id);
+      setInventory(inv);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Sale failed");
+    } finally {
+      setCharging(false);
+    }
+  };
+
+  const branchSelectLabel = (value: string | null) => {
+    if (!value) return null;
+    const branch = branches.find((b) => b.id === value);
+    return branch ? `${branch.name} (${branch.code})` : null;
+  };
+
+  if (loadingBootstrap) {
+    return (
+      <p className="text-muted-foreground">Loading point of sale...</p>
+    );
+  }
+
+  if (branches.length === 0) {
+    return (
+      <p className="text-muted-foreground">
+        Create a branch before using POS.
+      </p>
+    );
+  }
+
+  if (categories.length === 0) {
+    return (
+      <p className="text-muted-foreground">
+        Add categories and assign products before using POS.
+      </p>
+    );
+  }
+
+  const cartPanel = (
+    <PosCartPanel
+      lines={cart}
+      charging={charging}
+      onIncrement={incrementLine}
+      onDecrement={decrementLine}
+      onRemove={removeLine}
+      onClear={clearCart}
+      onCharge={() => setConfirmOpen(true)}
+      className="h-full"
+    />
+  );
+
+  return (
+    <div className="-m-4 flex h-[calc(100dvh-3.5rem)] flex-col md:-m-6 md:h-[calc(100dvh-4rem)]">
+      <div className="flex flex-col gap-3 border-b bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold">Point of sale</h1>
+          <p className="text-sm text-muted-foreground">
+            {activeBranch?.name ?? "Select a branch"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isMasterAdmin && (
+            <Select
+              value={selectedBranchId}
+              onValueChange={(v) => setSelectedBranchId(v ?? "")}
+            >
+              <SelectTrigger className="w-full sm:w-56">
+                <SelectValue placeholder="Select branch">
+                  {(value) => branchSelectLabel(value as string | null)}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name} ({branch.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            className="relative lg:hidden"
+            onClick={() => setMobileCartOpen(true)}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            {cartCount > 0 ? (
+              <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1">
+                {cartCount}
+              </Badge>
+            ) : null}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="space-y-3 border-b px-4 py-3">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {categories.map((category) => {
+                const active = category.id === selectedCategoryId;
+                return (
+                  <Button
+                    key={category.id}
+                    type="button"
+                    size="sm"
+                    variant={active ? "default" : "outline"}
+                    className="shrink-0"
+                    onClick={() => {
+                      setSelectedCategoryId(category.id);
+                      setSearch("");
+                    }}
+                  >
+                    {category.name}
+                  </Button>
+                );
+              })}
+            </div>
+            <Input
+              placeholder="Search in this category..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-md"
+            />
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-24 lg:pb-4">
+            {loadingCategory && !categoryCache[selectedCategoryId] ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading products...
+              </div>
+            ) : filteredVariants.length === 0 ? (
+              <p className="py-16 text-center text-muted-foreground">
+                No selling variants in this category for the selected branch.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {filteredVariants.map((row) => {
+                  const product = categoryProducts.find(
+                    (p) => p.id === row.productId
+                  );
+                  const thumb = product
+                    ? getProductThumbnailUrl(product)
+                    : null;
+                  const variantLabel = formatVariantLabel(
+                    row,
+                    product?.options ?? []
+                  );
+                  const outOfStock = row.stock <= 0;
+                  const inCart =
+                    cart.find((line) => line.variantId === row.id)?.quantity ??
+                    0;
+
+                  return (
+                    <button
+                      key={row.id}
+                      type="button"
+                      disabled={outOfStock}
+                      onClick={() => addVariant(row)}
+                      className="flex min-h-[140px] flex-col overflow-hidden rounded-xl border bg-card text-left transition hover:border-primary/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <div className="aspect-[4/3] w-full bg-muted">
+                        {thumb ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={thumb}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                            No image
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-1 flex-col gap-1 p-3">
+                        <p className="line-clamp-2 text-sm font-medium leading-snug">
+                          {row.productName}
+                        </p>
+                        {variantLabel !== "Default" ? (
+                          <p className="line-clamp-1 text-xs text-muted-foreground">
+                            {variantLabel}
+                          </p>
+                        ) : null}
+                        <div className="mt-auto flex items-end justify-between gap-2 pt-2">
+                          <span className="text-sm font-semibold tabular-nums">
+                            {formatCurrency(row.price)}
+                          </span>
+                          <Badge
+                            variant={outOfStock ? "outline" : "secondary"}
+                            className="text-xs"
+                          >
+                            {outOfStock
+                              ? "Out"
+                              : inCart > 0
+                                ? `${row.stock} · ${inCart}`
+                                : `${row.stock}`}
+                          </Badge>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <aside className="hidden w-[360px] shrink-0 border-l lg:block xl:w-[400px]">
+          {cartPanel}
+        </aside>
+      </div>
+
+      {cartCount > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background p-3 lg:hidden">
+          <Button
+            type="button"
+            className="h-12 w-full text-base"
+            onClick={() => setMobileCartOpen(true)}
+          >
+            Cart · {cartCount} · {formatCurrency(cartTotal)}
+          </Button>
+        </div>
+      )}
+
+      <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
+        <SheetContent
+          side="bottom"
+          className="flex h-[85dvh] flex-col gap-0 p-0 sm:max-w-none"
+          showCloseButton
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Current sale</SheetTitle>
+          </SheetHeader>
+          {cartPanel}
+        </SheetContent>
+      </Sheet>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Complete sale?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Charge {formatCurrency(cartTotal)} and deduct stock at{" "}
+              {activeBranch?.name}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={charging}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={charging}
+              onClick={(e) => {
+                e.preventDefault();
+                handleCharge().catch(console.error);
+              }}
+            >
+              {charging ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Confirm charge
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

@@ -15,7 +15,7 @@ import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getProducts } from "@/lib/firestore/products";
 import { getBranchInventory } from "@/lib/firestore/inventory";
 import { getBranch, getBranches } from "@/lib/firestore/branches";
-import { mergeProductsWithInventory, getLowStockItems } from "@/lib/inventory";
+import { mergeSellingVariantsWithInventory, getLowStockVariants } from "@/lib/inventory";
 import type { Branch } from "@/types";
 
 export default function AdminDashboardPage() {
@@ -44,16 +44,16 @@ export default function AdminDashboardPage() {
           getBranch(scopeBranchId),
         ]);
         setBranch(b);
-        const withStock = mergeProductsWithInventory(products, inv);
-        setLowStockCount(getLowStockItems(withStock).length);
+        const selling = mergeSellingVariantsWithInventory(products, inv);
+        setLowStockCount(getLowStockVariants(selling).length);
       } else if (isMasterAdmin && branches.length > 0) {
         let totalLow = 0;
         const inventories = await Promise.all(
           branches.map((b) => getBranchInventory(b.id))
         );
         for (const inv of inventories) {
-          totalLow += getLowStockItems(
-            mergeProductsWithInventory(products, inv)
+          totalLow += getLowStockVariants(
+            mergeSellingVariantsWithInventory(products, inv)
           ).length;
         }
         setLowStockCount(totalLow);

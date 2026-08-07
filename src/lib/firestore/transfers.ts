@@ -55,16 +55,19 @@ export async function createBranchTransfer(
       if (item.quantity <= 0) {
         throw new Error("Transfer quantity must be greater than zero");
       }
+      if (!item.variantId) {
+        throw new Error(`Missing variant for ${item.productName}`);
+      }
 
       const sourceRef = doc(
         db,
         COLLECTIONS.branchInventory,
-        inventoryDocId(input.fromBranchId, item.productId)
+        inventoryDocId(input.fromBranchId, item.variantId)
       );
       const destRef = doc(
         db,
         COLLECTIONS.branchInventory,
-        inventoryDocId(input.toBranchId, item.productId)
+        inventoryDocId(input.toBranchId, item.variantId)
       );
 
       const [sourceSnap, destSnap] = await Promise.all([
@@ -105,14 +108,19 @@ export async function createBranchTransfer(
       if (row.destExists) {
         tx.update(row.destRef, {
           stock: destNew,
+          isSelling: true,
+          variantId: row.item.variantId,
+          productId: row.item.productId,
           updatedAt: serverTimestamp(),
         });
       } else {
         tx.set(row.destRef, {
           branchId: input.toBranchId,
           productId: row.item.productId,
+          variantId: row.item.variantId,
           stock: destNew,
           lowStockThreshold: row.destThreshold,
+          isSelling: true,
           updatedAt: serverTimestamp(),
         });
       }
@@ -121,6 +129,7 @@ export async function createBranchTransfer(
         branchId: input.fromBranchId,
         branchName: input.fromBranchName,
         productId: row.item.productId,
+        variantId: row.item.variantId,
         productName: row.item.productName,
         delta: -row.item.quantity,
         previousStock: row.sourceStock,
@@ -137,6 +146,7 @@ export async function createBranchTransfer(
         branchId: input.toBranchId,
         branchName: input.toBranchName,
         productId: row.item.productId,
+        variantId: row.item.variantId,
         productName: row.item.productName,
         delta: row.item.quantity,
         previousStock: row.destStock,

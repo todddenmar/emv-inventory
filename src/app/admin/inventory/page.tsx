@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, Save, AlertTriangle } from "lucide-react";
+import { History, Loader2, Save, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  InventoryAdjustmentHistorySheet,
+  type AdjustmentHistoryTarget,
+} from "@/components/admin/inventory-adjustment-history-sheet";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getBranches } from "@/lib/firestore/branches";
 import {
@@ -39,7 +43,7 @@ import {
 import { getProducts } from "@/lib/firestore/products";
 import { getCategories } from "@/lib/firestore/categories";
 import { getProductThumbnailUrl } from "@/lib/products";
-import { mergeVariantsWithInventory, getLowStockVariants } from "@/lib/inventory";
+import { mergeSellingVariantsWithInventory, getLowStockVariants } from "@/lib/inventory";
 import { formatCurrency } from "@/lib/format";
 import { isProductOnSale } from "@/lib/product-pricing";
 import { formatVariantLabel } from "@/lib/product-variants";
@@ -63,6 +67,9 @@ export default function AdminInventoryPage() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
+  const [historyTarget, setHistoryTarget] =
+    useState<AdjustmentHistoryTarget | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const activeBranchId = isMasterAdmin ? selectedBranchId : assignedBranchId ?? "";
 
@@ -92,7 +99,7 @@ export default function AdminInventoryPage() {
     setCategories(cats.filter((c) => !c.isArchived));
 
     if (branchId !== "all") {
-      const variantRows = mergeVariantsWithInventory(p, inv);
+      const variantRows = mergeSellingVariantsWithInventory(p, inv);
       const nextDraft: StockDraft = {};
       for (const row of variantRows) {
         nextDraft[row.id] = {
@@ -120,7 +127,7 @@ export default function AdminInventoryPage() {
 
   const variantsWithStock = useMemo(() => {
     if (activeBranchId === "all") return [];
-    return mergeVariantsWithInventory(products, branchInventory);
+    return mergeSellingVariantsWithInventory(products, branchInventory);
   }, [products, branchInventory, activeBranchId]);
 
   const getStockValues = (
@@ -193,7 +200,9 @@ export default function AdminInventoryPage() {
   const branchSummaries = useMemo(() => {
     if (!isMasterAdmin) return [];
     return branches.map((branch) => {
-      const rows = inventory.filter((i) => i.branchId === branch.id);
+      const rows = inventory.filter(
+        (i) => i.branchId === branch.id && i.isSelling !== false
+      );
       const stocked = rows.filter((r) => r.stock > 0).length;
       const low = rows.filter(
         (r) => r.stock > 0 && r.stock <= r.lowStockThreshold
@@ -361,7 +370,10 @@ export default function AdminInventoryPage() {
             <CardHeader>
               <CardTitle>{activeBranch?.name} stock</CardTitle>
               <CardDescription>
-                Set stock per variant for this branch
+                Stock for variants this branch sells.{" "}
+                <Link href="/admin/assortment" className="underline underline-offset-2">
+                  Manage assortment
+                </Link>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -420,7 +432,7 @@ export default function AdminInventoryPage() {
                       <TableHead className="w-32">Compare at</TableHead>
                       <TableHead className="w-28">Stock</TableHead>
                       <TableHead className="w-28">Low at</TableHead>
-                      <TableHead className="w-24 text-right">Save</TableHead>
+                      <TableHead className="w-28 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -430,7 +442,20 @@ export default function AdminInventoryPage() {
                           colSpan={7}
                           className="py-8 text-center text-muted-foreground"
                         >
-                          No variants match your filters.
+                          {variantsWithStock.length === 0 ? (
+                            <>
+                              No selling variants for this branch.{" "}
+                              <Link
+                                href="/admin/assortment"
+                                className="underline underline-offset-2"
+                              >
+                                Assign variants in Branch assortment
+                              </Link>
+                              .
+                            </>
+                          ) : (
+                            "No variants match your filters."
+                          )}
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -544,18 +569,37 @@ export default function AdminInventoryPage() {
                             />
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={savingId === row.id}
-                              onClick={() => saveStock(row.id, row.productId)}
-                            >
-                              {savingId === row.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Save className="h-4 w-4" />
-                              )}
-                            </Button>
+                            <div className="inline-flex items-center justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title="Adjustment history"
+                                onClick={() => {
+                                  setHistoryTarget({
+                                    branchId: activeBranchId,
+                                    variantId: row.id,
+                                    productName: row.productName,
+                                    variantLabel,
+                                    branchName: activeBranch?.name ?? null,
+                                  });
+                                  setHistoryOpen(true);
+                                }}
+                              >
+                                <History className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={savingId === row.id}
+                                onClick={() => saveStock(row.id, row.productId)}
+                              >
+                                {savingId === row.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Save className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -568,6 +612,15 @@ export default function AdminInventoryPage() {
           </Card>
         </>
       )}
+
+      <InventoryAdjustmentHistorySheet
+        target={historyTarget}
+        open={historyOpen}
+        onOpenChange={(open) => {
+          setHistoryOpen(open);
+          if (!open) setHistoryTarget(null);
+        }}
+      />
     </div>
   );
 }
