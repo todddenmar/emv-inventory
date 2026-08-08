@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { History, Loader2, Save, AlertTriangle } from "lucide-react";
+import { History, Loader2, MoreHorizontal, Save, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -42,8 +48,9 @@ import {
 } from "@/lib/firestore/inventory";
 import { getProducts } from "@/lib/firestore/products";
 import { getCategories } from "@/lib/firestore/categories";
-import { getProductThumbnailUrl } from "@/lib/products";
+import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
 import { mergeSellingVariantsWithInventory, getLowStockVariants } from "@/lib/inventory";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatCurrency } from "@/lib/format";
 import { isProductOnSale } from "@/lib/product-pricing";
 import { formatVariantLabel } from "@/lib/product-variants";
@@ -55,6 +62,7 @@ type StockFilter = "all" | "low" | "in_stock" | "out_of_stock";
 
 export default function AdminInventoryPage() {
   const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { catalogImageSource } = useAppSettings();
   const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -371,7 +379,7 @@ export default function AdminInventoryPage() {
               <CardTitle>{activeBranch?.name} stock</CardTitle>
               <CardDescription>
                 Stock for variants this branch sells.{" "}
-                <Link href="/admin/assortment" className="underline underline-offset-2">
+                <Link href="/admin/settings/assortment" className="underline underline-offset-2">
                   Manage assortment
                 </Link>
               </CardDescription>
@@ -432,7 +440,7 @@ export default function AdminInventoryPage() {
                       <TableHead className="w-32">Compare at</TableHead>
                       <TableHead className="w-28">Stock</TableHead>
                       <TableHead className="w-28">Low at</TableHead>
-                      <TableHead className="w-28 text-right">Actions</TableHead>
+                      <TableHead className="w-14 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -446,7 +454,7 @@ export default function AdminInventoryPage() {
                             <>
                               No selling variants for this branch.{" "}
                               <Link
-                                href="/admin/assortment"
+                                href="/admin/settings/assortment"
                                 className="underline underline-offset-2"
                               >
                                 Assign variants in Branch assortment
@@ -461,7 +469,11 @@ export default function AdminInventoryPage() {
                     ) : (
                     filteredVariants.map((row) => {
                       const product = products.find((p) => p.id === row.productId);
-                      const thumb = product ? getProductThumbnailUrl(product) : null;
+                      const showImages = showCatalogImages(catalogImageSource);
+                      const thumb =
+                        product && showImages
+                          ? getCatalogImageUrl(product, row, catalogImageSource)
+                          : null;
                       const values = getStockValues(row.id, row);
                       const isLow = isLowStockRow(row);
                       const onSale = isProductOnSale({
@@ -477,16 +489,18 @@ export default function AdminInventoryPage() {
                         <TableRow key={row.id}>
                           <TableCell>
                             <div className="flex min-w-[220px] items-center gap-3">
-                              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
-                                {thumb ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={thumb}
-                                    alt=""
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : null}
-                              </div>
+                              {showImages ? (
+                                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
+                                  {thumb ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={thumb}
+                                      alt=""
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : null}
+                                </div>
+                              ) : null}
                               <div>
                                 <Link
                                   href={`/admin/products/${row.productId}`}
@@ -503,13 +517,17 @@ export default function AdminInventoryPage() {
                                   <div className="mt-1 flex flex-wrap gap-1">
                                     {row.categoryIds.map((id) =>
                                       categoryMap[id] ? (
-                                        <Badge
+                                        <Link
                                           key={id}
-                                          variant="secondary"
-                                          className="text-xs"
+                                          href={`/admin/categories/${id}`}
                                         >
-                                          {categoryMap[id].name}
-                                        </Badge>
+                                          <Badge
+                                            variant="secondary"
+                                            className="text-xs"
+                                          >
+                                            {categoryMap[id].name}
+                                          </Badge>
+                                        </Link>
                                       ) : null
                                     )}
                                   </div>
@@ -569,37 +587,51 @@ export default function AdminInventoryPage() {
                             />
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="inline-flex items-center justify-end gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                title="Adjustment history"
-                                onClick={() => {
-                                  setHistoryTarget({
-                                    branchId: activeBranchId,
-                                    variantId: row.id,
-                                    productName: row.productName,
-                                    variantLabel,
-                                    branchName: activeBranch?.name ?? null,
-                                  });
-                                  setHistoryOpen(true);
-                                }}
-                              >
-                                <History className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={savingId === row.id}
-                                onClick={() => saveStock(row.id, row.productId)}
-                              >
-                                {savingId === row.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                render={
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    disabled={savingId === row.id}
+                                  >
+                                    {savingId === row.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    )}
+                                    <span className="sr-only">Actions</span>
+                                  </Button>
+                                }
+                              />
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setHistoryTarget({
+                                      branchId: activeBranchId,
+                                      variantId: row.id,
+                                      productName: row.productName,
+                                      variantLabel,
+                                      branchName: activeBranch?.name ?? null,
+                                    });
+                                    setHistoryOpen(true);
+                                  }}
+                                >
+                                  <History className="h-4 w-4" />
+                                  Adjustment history
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  disabled={savingId === row.id}
+                                  onClick={() =>
+                                    void saveStock(row.id, row.productId)
+                                  }
+                                >
                                   <Save className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </div>
+                                  Save stock
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       );

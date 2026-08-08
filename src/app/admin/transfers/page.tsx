@@ -29,6 +29,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  VariantPickerButton,
+  VariantSearchDialog,
+} from "@/components/admin/variant-search-dialog";
 import { InventoryActivityFeed } from "@/components/admin/inventory-activity-feed";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
@@ -39,7 +43,10 @@ import {
   createBranchTransfer,
   getBranchTransfers,
 } from "@/lib/firestore/transfers";
-import { mergeSellingVariantsWithInventory } from "@/lib/inventory";
+import {
+  mergeSellingVariantsWithInventory,
+  type VariantWithStock,
+} from "@/lib/inventory";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { formatDate } from "@/lib/format";
 import type { Branch, BranchTransfer, Product } from "@/types";
@@ -52,6 +59,10 @@ interface TransferLine {
   available: number;
 }
 
+function firstDestinationId(branches: Branch[], fromId: string) {
+  return branches.find((b) => b.id !== fromId)?.id ?? "";
+}
+
 export default function AdminTransfersPage() {
   const { isMasterAdmin, assignedBranchId } = useBranchAccess();
   const user = useAuthStore((s) => s.user);
@@ -61,11 +72,14 @@ export default function AdminTransfersPage() {
   const [toBranchId, setToBranchId] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<TransferLine[]>([]);
-  const [selectedVariantKey, setSelectedVariantKey] = useState("");
+  const [selectedVariant, setSelectedVariant] = useState<VariantWithStock | null>(
+    null
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [sellingVariants, setSellingVariants] = useState<
-    ReturnType<typeof mergeSellingVariantsWithInventory>
-  >([]);
+  const [sellingVariants, setSellingVariants] = useState<VariantWithStock[]>(
+    []
+  );
   const [transfers, setTransfers] = useState<BranchTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -78,7 +92,11 @@ export default function AdminTransfersPage() {
         setBranches(b);
         setProducts(p.filter((x) => !x.isArchived));
         setTransfers(t);
-        if (defaultFromBranch) setFromBranchId(defaultFromBranch);
+        const fromId = defaultFromBranch || b[0]?.id || "";
+        if (fromId) {
+          setFromBranchId(fromId);
+          setToBranchId(firstDestinationId(b, fromId));
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -113,37 +131,29 @@ export default function AdminTransfersPage() {
   const availableVariants = useMemo(
     () =>
       sellingVariants.filter(
-        (v) =>
-          v.stock > 0 && !lines.some((l) => l.variantId === v.id)
+        (v) => v.stock > 0 && !lines.some((l) => l.variantId === v.id)
       ),
     [sellingVariants, lines]
   );
 
-  const variantSelectLabel = (value: string | null) => {
-    if (!value) return null;
-    const [productId, variantId] = value.split("::");
-    const row = availableVariants.find(
-      (v) => v.productId === productId && v.id === variantId
+  const selectedVariantLabel = useMemo(() => {
+    if (!selectedVariant) return null;
+    const product = products.find((p) => p.id === selectedVariant.productId);
+    const label = formatVariantLabel(
+      selectedVariant,
+      product?.options ?? []
     );
-    if (!row) return null;
-    const product = products.find((p) => p.id === row.productId);
-    const label = formatVariantLabel(row, product?.options ?? []);
-    return `${row.productName}${label !== "Default" ? ` — ${label}` : ""} (${row.stock} available)`;
-  };
+    return `${selectedVariant.productName}${
+      label !== "Default" ? ` — ${label}` : ""
+    } (${selectedVariant.stock} available)`;
+  }, [selectedVariant, products]);
 
   const addLine = () => {
-    if (!selectedVariantKey.includes("::")) {
+    if (!selectedVariant) {
       toast.error("Select a variant");
       return;
     }
-    const [productId, variantId] = selectedVariantKey.split("::");
-    const row = sellingVariants.find(
-      (v) => v.productId === productId && v.id === variantId
-    );
-    if (!row) {
-      toast.error("Select a variant");
-      return;
-    }
+    const row = selectedVariant;
     const product = products.find((p) => p.id === row.productId);
     const variantLabel = formatVariantLabel(row, product?.options ?? []);
     const productName =
@@ -165,7 +175,7 @@ export default function AdminTransfersPage() {
         available: row.stock,
       },
     ]);
-    setSelectedVariantKey("");
+    setSelectedVariant(null);
     setQuantity(1);
   };
 
@@ -203,7 +213,7 @@ export default function AdminTransfersPage() {
       toast.success("Transfer completed");
       setLines([]);
       setNotes("");
-      setToBranchId("");
+      setToBranchId(firstDestinationId(branches, fromBranch.id));
       const [inv, t] = await Promise.all([
         getBranchInventory(fromBranch.id),
         getBranchTransfers(),
@@ -251,9 +261,11 @@ export default function AdminTransfersPage() {
               <Select
                 value={fromBranchId}
                 onValueChange={(v) => {
-                  setFromBranchId(v ?? "");
+                  const nextFrom = v ?? "";
+                  setFromBranchId(nextFrom);
                   setLines([]);
-                  setToBranchId("");
+                  setSelectedVariant(null);
+                  setToBranchId(firstDestinationId(branches, nextFrom));
                 }}
                 disabled={!isMasterAdmin}
               >
@@ -298,41 +310,11 @@ export default function AdminTransfersPage() {
             <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end">
               <div className="flex-1 space-y-2">
                 <Label>Variant</Label>
-                <Select
-                  value={selectedVariantKey}
-                  onValueChange={(v) => setSelectedVariantKey(v ?? "")}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select selling variant">
-                      {(value) => variantSelectLabel(value as string | null)}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableVariants.length === 0 ? (
-                      <SelectItem value="__none" disabled>
-                        No selling variants with stock
-                      </SelectItem>
-                    ) : (
-                      availableVariants.map((row) => {
-                        const product = products.find((p) => p.id === row.productId);
-                        const label = formatVariantLabel(
-                          row,
-                          product?.options ?? []
-                        );
-                        return (
-                          <SelectItem
-                            key={row.id}
-                            value={`${row.productId}::${row.id}`}
-                          >
-                            {row.productName}
-                            {label !== "Default" ? ` — ${label}` : ""} (
-                            {row.stock} available)
-                          </SelectItem>
-                        );
-                      })
-                    )}
-                  </SelectContent>
-                </Select>
+                <VariantPickerButton
+                  selectedLabel={selectedVariantLabel}
+                  placeholder="Search and select variant"
+                  onClick={() => setPickerOpen(true)}
+                />
               </div>
               <div className="w-full space-y-2 sm:w-28">
                 <Label>Qty</Label>
@@ -450,6 +432,17 @@ export default function AdminTransfersPage() {
         branchId={isMasterAdmin ? null : assignedBranchId}
         showViewAll={false}
         max={20}
+      />
+
+      <VariantSearchDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        variants={availableVariants}
+        products={products}
+        title="Select variant to transfer"
+        stockLabel={(stock) => `${stock} available`}
+        emptyMessage="No selling variants with stock match your search."
+        onSelect={setSelectedVariant}
       />
     </div>
   );

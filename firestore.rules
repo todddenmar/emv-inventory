@@ -49,6 +49,12 @@ service cloud.firestore {
       allow update: if isMasterAdmin();
     }
 
+    match /settings/app {
+      allow read: if isStaff();
+      allow create, update: if isMasterAdmin();
+      allow delete: if false;
+    }
+
     match /invites/{inviteId} {
       allow read: if true;
       allow create: if isMasterAdmin();

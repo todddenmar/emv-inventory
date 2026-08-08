@@ -294,7 +294,7 @@ export default function AdminProductsPage() {
           </Button>
           {!showArchived && (
             <>
-              <LinkButton href="/admin/products/import" variant="outline">
+              <LinkButton href="/admin/settings/import" variant="outline">
                 <FileJson className="mr-2 h-4 w-4" />
                 Product JSON import
               </LinkButton>
@@ -379,9 +379,12 @@ export default function AdminProductsPage() {
                               />
                             ) : null}
                           </div>
-                          <span className="font-medium">
+                          <Link
+                            href={`/admin/products/${product.id}`}
+                            className="font-medium hover:underline"
+                          >
                             {product.name.trim() || "Untitled draft"}
-                          </span>
+                          </Link>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -393,13 +396,14 @@ export default function AdminProductsPage() {
                               </span>
                             ) : (
                               product.categoryIds.map((id) => (
-                                <Badge
-                                  key={id}
-                                  variant="secondary"
-                                  className="text-xs"
-                                >
-                                  {categoryMap[id]?.name ?? "Unknown"}
-                                </Badge>
+                                <Link key={id} href={`/admin/categories/${id}`}>
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    {categoryMap[id]?.name ?? "Unknown"}
+                                  </Badge>
+                                </Link>
                               ))
                             )}
                           </div>

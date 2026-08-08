@@ -131,6 +131,22 @@ export async function removeProductFromCategory(
   return { ...product, categoryIds: nextCategoryIds };
 }
 
+export async function addProductToCategory(
+  productId: string,
+  categoryId: string
+): Promise<Product | null> {
+  const product = await getProduct(productId);
+  if (!product) return null;
+
+  if (product.categoryIds.includes(categoryId)) {
+    return product;
+  }
+
+  const nextCategoryIds = [...product.categoryIds, categoryId];
+  await updateProduct(productId, { categoryIds: nextCategoryIds });
+  return { ...product, categoryIds: nextCategoryIds };
+}
+
 export async function getProduct(id: string): Promise<Product | null> {
   const snap = await getDoc(doc(productsRef(), id));
   return snap.exists() ? snap.data() : null;

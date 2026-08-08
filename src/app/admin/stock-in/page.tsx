@@ -29,6 +29,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  VariantPickerButton,
+  VariantSearchDialog,
+} from "@/components/admin/variant-search-dialog";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
 import { getBranches } from "@/lib/firestore/branches";
@@ -39,7 +43,10 @@ import {
   completeSupplierStockIn,
   getSupplierStockIns,
 } from "@/lib/firestore/supplier-stock-ins";
-import { mergeVariantsWithInventory } from "@/lib/inventory";
+import {
+  mergeVariantsWithInventory,
+  type VariantWithStock,
+} from "@/lib/inventory";
 import { isProductPublished } from "@/lib/products-catalog";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { formatDate } from "@/lib/format";
@@ -68,11 +75,12 @@ export default function AdminStockInPage() {
   const [vendorId, setVendorId] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<StockInLine[]>([]);
-  const [selectedVariantKey, setSelectedVariantKey] = useState("");
+  const [selectedVariant, setSelectedVariant] = useState<VariantWithStock | null>(
+    null
+  );
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [variantRows, setVariantRows] = useState<
-    ReturnType<typeof mergeVariantsWithInventory>
-  >([]);
+  const [variantRows, setVariantRows] = useState<VariantWithStock[]>([]);
   const [history, setHistory] = useState<SupplierStockIn[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -87,6 +95,7 @@ export default function AdminStockInPage() {
         setProducts(p.filter((x) => !x.isArchived && isProductPublished(x)));
         if (defaultBranch) setBranchId(defaultBranch);
         else if (isMasterAdmin && b[0]) setBranchId(b[0].id);
+        if (v[0]) setVendorId(v[0].id);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -133,26 +142,20 @@ export default function AdminStockInPage() {
     return vendors.find((v) => v.id === value)?.name ?? null;
   };
 
-  const variantSelectLabel = (value: string | null) => {
-    if (!value) return null;
-    const [productId, variantId] = value.split("::");
-    const row = availableVariants.find(
-      (v) => v.productId === productId && v.id === variantId
+  const selectedVariantLabel = useMemo(() => {
+    if (!selectedVariant) return null;
+    const product = products.find((p) => p.id === selectedVariant.productId);
+    const label = formatVariantLabel(
+      selectedVariant,
+      product?.options ?? []
     );
-    if (!row) return null;
-    const product = products.find((p) => p.id === row.productId);
-    const label = formatVariantLabel(row, product?.options ?? []);
-    return `${row.productName}${label !== "Default" ? ` — ${label}` : ""} (stock ${row.stock})`;
-  };
+    return `${selectedVariant.productName}${
+      label !== "Default" ? ` — ${label}` : ""
+    } (stock ${selectedVariant.stock})`;
+  }, [selectedVariant, products]);
 
   const addLine = () => {
-    if (!selectedVariantKey.includes("::")) {
-      toast.error("Select a variant");
-      return;
-    }
-    const [, variantId] = selectedVariantKey.split("::");
-    const row = variantRows.find((v) => v.id === variantId);
-    if (!row) {
+    if (!selectedVariant) {
       toast.error("Select a variant");
       return;
     }
@@ -161,6 +164,7 @@ export default function AdminStockInPage() {
       return;
     }
 
+    const row = selectedVariant;
     const product = products.find((p) => p.id === row.productId);
     const variantLabel = formatVariantLabel(row, product?.options ?? []);
     const productName =
@@ -178,7 +182,7 @@ export default function AdminStockInPage() {
         currentStock: row.stock,
       },
     ]);
-    setSelectedVariantKey("");
+    setSelectedVariant(null);
     setQuantity(1);
   };
 
@@ -274,6 +278,7 @@ export default function AdminStockInPage() {
                 onValueChange={(v) => {
                   setBranchId(v ?? "");
                   setLines([]);
+                  setSelectedVariant(null);
                 }}
                 disabled={!isMasterAdmin}
               >
@@ -317,43 +322,11 @@ export default function AdminStockInPage() {
             <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end">
               <div className="flex-1 space-y-2">
                 <Label>Variant</Label>
-                <Select
-                  value={selectedVariantKey}
-                  onValueChange={(v) => setSelectedVariantKey(v ?? "")}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select variant">
-                      {(value) => variantSelectLabel(value as string | null)}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableVariants.length === 0 ? (
-                      <SelectItem value="__none" disabled>
-                        No variants available
-                      </SelectItem>
-                    ) : (
-                      availableVariants.map((row) => {
-                        const product = products.find(
-                          (p) => p.id === row.productId
-                        );
-                        const label = formatVariantLabel(
-                          row,
-                          product?.options ?? []
-                        );
-                        return (
-                          <SelectItem
-                            key={row.id}
-                            value={`${row.productId}::${row.id}`}
-                          >
-                            {row.productName}
-                            {label !== "Default" ? ` — ${label}` : ""} (stock{" "}
-                            {row.stock})
-                          </SelectItem>
-                        );
-                      })
-                    )}
-                  </SelectContent>
-                </Select>
+                <VariantPickerButton
+                  selectedLabel={selectedVariantLabel}
+                  placeholder="Search and select variant"
+                  onClick={() => setPickerOpen(true)}
+                />
               </div>
               <div className="w-full space-y-2 sm:w-28">
                 <Label>Qty</Label>
@@ -472,6 +445,16 @@ export default function AdminStockInPage() {
           )}
         </CardContent>
       </Card>
+
+      <VariantSearchDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        variants={availableVariants}
+        products={products}
+        title="Select variant to stock in"
+        stockLabel={(stock) => `Stock ${stock}`}
+        onSelect={setSelectedVariant}
+      />
     </div>
   );
 }

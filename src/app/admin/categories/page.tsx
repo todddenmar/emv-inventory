@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Plus,
   Pencil,
@@ -301,7 +302,12 @@ export default function AdminCategoriesPage() {
                   {pagedCategories.map((category) => (
                     <TableRow key={category.id}>
                       <TableCell className="font-medium">
-                        {category.name}
+                        <Link
+                          href={`/admin/categories/${category.id}`}
+                          className="hover:underline"
+                        >
+                          {category.name}
+                        </Link>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">

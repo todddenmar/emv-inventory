@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, ShoppingCart } from "lucide-react";
+import { Loader2, Search, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,14 +42,16 @@ import { getProductsByCategoryId } from "@/lib/firestore/products";
 import { completePosSale } from "@/lib/firestore/pos-sales";
 import { mergeSellingVariantsWithInventory } from "@/lib/inventory";
 import { isProductPublished } from "@/lib/products-catalog";
-import { getProductThumbnailUrl } from "@/lib/products";
+import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { formatCurrency } from "@/lib/format";
+import { useAppSettings } from "@/hooks/use-app-settings";
 import type { Branch, BranchInventory, Category, Product } from "@/types";
 import type { VariantWithStock } from "@/lib/inventory";
 
 export default function AdminPosPage() {
   const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { catalogImageSource } = useAppSettings();
   const user = useAuthStore((s) => s.user);
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -62,6 +64,7 @@ export default function AdminPosPage() {
   );
   const [loadingBootstrap, setLoadingBootstrap] = useState(true);
   const [loadingCategory, setLoadingCategory] = useState(false);
+  const [categorySearch, setCategorySearch] = useState("");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<PosCartLine[]>([]);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
@@ -147,6 +150,16 @@ export default function AdminPosPage() {
   }, [selectedCategoryId, loadCategory]);
 
   const categoryProducts = categoryCache[selectedCategoryId] ?? [];
+
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter(
+      (category) =>
+        category.name.toLowerCase().includes(q) ||
+        category.tags.some((tag) => tag.toLowerCase().includes(q))
+    );
+  }, [categories, categorySearch]);
 
   const sellingVariants = useMemo(
     () => mergeSellingVariantsWithInventory(categoryProducts, inventory),
@@ -330,7 +343,7 @@ export default function AdminPosPage() {
   );
 
   return (
-    <div className="-m-4 flex h-[calc(100dvh-3.5rem)] flex-col md:-m-6 md:h-[calc(100dvh-4rem)]">
+    <div className="-m-4 flex h-[calc(100dvh-3.5rem-4rem)] flex-col md:-m-6 lg:h-[calc(100dvh-4rem)]">
       <div className="flex flex-col gap-3 border-b bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold">Point of sale</h1>
@@ -377,35 +390,53 @@ export default function AdminPosPage() {
       <div className="flex min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="space-y-3 border-b px-4 py-3">
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {categories.map((category) => {
-                const active = category.id === selectedCategoryId;
-                return (
-                  <Button
-                    key={category.id}
-                    type="button"
-                    size="sm"
-                    variant={active ? "default" : "outline"}
-                    className="shrink-0"
-                    onClick={() => {
-                      setSelectedCategoryId(category.id);
-                      setSearch("");
-                    }}
-                  >
-                    {category.name}
-                  </Button>
-                );
-              })}
+            <div className="relative max-w-md">
+              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search categories..."
+                value={categorySearch}
+                onChange={(e) => setCategorySearch(e.target.value)}
+                className="pl-9"
+              />
             </div>
-            <Input
-              placeholder="Search in this category..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
-            />
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {filteredCategories.length === 0 ? (
+                <p className="py-1 text-sm text-muted-foreground">
+                  No categories match “{categorySearch.trim()}”.
+                </p>
+              ) : (
+                filteredCategories.map((category) => {
+                  const active = category.id === selectedCategoryId;
+                  return (
+                    <Button
+                      key={category.id}
+                      type="button"
+                      size="sm"
+                      variant={active ? "default" : "outline"}
+                      className="shrink-0"
+                      onClick={() => {
+                        setSelectedCategoryId(category.id);
+                        setSearch("");
+                      }}
+                    >
+                      {category.name}
+                    </Button>
+                  );
+                })
+              )}
+            </div>
+            <div className="relative max-w-md">
+              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search in this category..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-24 lg:pb-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-40 lg:pb-4">
             {loadingCategory && !categoryCache[selectedCategoryId] ? (
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -421,9 +452,10 @@ export default function AdminPosPage() {
                   const product = categoryProducts.find(
                     (p) => p.id === row.productId
                   );
-                  const thumb = product
-                    ? getProductThumbnailUrl(product)
-                    : null;
+                  const thumb =
+                    product && showCatalogImages(catalogImageSource)
+                      ? getCatalogImageUrl(product, row, catalogImageSource)
+                      : null;
                   const variantLabel = formatVariantLabel(
                     row,
                     product?.options ?? []
@@ -441,20 +473,22 @@ export default function AdminPosPage() {
                       onClick={() => addVariant(row)}
                       className="flex min-h-[140px] flex-col overflow-hidden rounded-xl border bg-card text-left transition hover:border-primary/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <div className="aspect-[4/3] w-full bg-muted">
-                        {thumb ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={thumb}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                            No image
-                          </div>
-                        )}
-                      </div>
+                      {showCatalogImages(catalogImageSource) ? (
+                        <div className="aspect-[4/3] w-full bg-muted">
+                          {thumb ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                              No image
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
                       <div className="flex flex-1 flex-col gap-1 p-3">
                         <p className="line-clamp-2 text-sm font-medium leading-snug">
                           {row.productName}
@@ -494,7 +528,12 @@ export default function AdminPosPage() {
       </div>
 
       {cartCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background p-3 lg:hidden">
+        <div
+          className="fixed inset-x-0 z-40 border-t bg-background p-3 lg:hidden"
+          style={{
+            bottom: "calc(4rem + env(safe-area-inset-bottom))",
+          }}
+        >
           <Button
             type="button"
             className="h-12 w-full text-base"

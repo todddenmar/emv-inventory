@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,47 @@ interface ProductOptionsEditorProps {
   options: ProductOption[];
   onChange: (options: ProductOption[]) => void;
   disabled?: boolean;
+}
+
+function OptionValueInput({
+  disabled,
+  onAdd,
+}: {
+  disabled?: boolean;
+  onAdd: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const submit = () => {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    onAdd(trimmed);
+    setDraft("");
+  };
+
+  return (
+    <div className="flex gap-2">
+      <Input
+        value={draft}
+        placeholder="Add value and press Enter"
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          submit();
+        }}
+      />
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={disabled}
+        onClick={submit}
+      >
+        Add
+      </Button>
+    </div>
+  );
 }
 
 export function ProductOptionsEditor({
@@ -161,26 +203,10 @@ export function ProductOptionsEditor({
                     </Badge>
                   ))}
                 </div>
-                <form
-                  className="flex gap-2"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const input = e.currentTarget.elements.namedItem(
-                      `value-${index}`
-                    ) as HTMLInputElement;
-                    addValue(index, input.value);
-                    input.value = "";
-                  }}
-                >
-                  <Input
-                    name={`value-${index}`}
-                    placeholder="Add value and press Enter"
-                    disabled={disabled}
-                  />
-                  <Button type="submit" variant="secondary" disabled={disabled}>
-                    Add
-                  </Button>
-                </form>
+                <OptionValueInput
+                  disabled={disabled}
+                  onAdd={(value) => addValue(index, value)}
+                />
               </div>
             </div>
           ))}

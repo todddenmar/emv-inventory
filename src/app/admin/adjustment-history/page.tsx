@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -31,6 +32,7 @@ import { getBranches } from "@/lib/firestore/branches";
 import {
   getInventoryLogs,
   inventoryLogReasonLabel,
+  toDateInputValue,
 } from "@/lib/firestore/inventory-logs";
 import { formatDate } from "@/lib/format";
 import type { Branch, InventoryLog, InventoryLogReason } from "@/types";
@@ -54,6 +56,7 @@ export default function AdminAdjustmentHistoryPage() {
   const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
   const [reasonFilter, setReasonFilter] = useState<ReasonFilter>("all");
   const [search, setSearch] = useState("");
+  const [date, setDate] = useState(() => toDateInputValue());
 
   const scopeBranchId = isMasterAdmin
     ? selectedBranchId === "all"
@@ -83,11 +86,12 @@ export default function AdminAdjustmentHistoryPage() {
     getInventoryLogs({
       branchId: scopeBranchId,
       max: 200,
+      date,
     })
       .then(setLogs)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [scopeBranchId, isMasterAdmin, assignedBranchId]);
+  }, [scopeBranchId, isMasterAdmin, assignedBranchId, date]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -117,6 +121,17 @@ export default function AdminAdjustmentHistoryPage() {
     );
   };
 
+  const dateLabel = useMemo(() => {
+    try {
+      const [y, m, d] = date.split("-").map(Number);
+      return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(
+        new Date(y, m - 1, d)
+      );
+    } catch {
+      return date;
+    }
+  }, [date]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -133,15 +148,25 @@ export default function AdminAdjustmentHistoryPage() {
             Inventory movements
           </CardTitle>
           <CardDescription>
-            Showing up to 200 most recent entries
+            Showing up to 200 entries for {dateLabel}
             {scopeBranchId
-              ? ` for ${branches.find((b) => b.id === scopeBranchId)?.name ?? "this branch"}`
-              : " across all branches"}
+              ? ` · ${branches.find((b) => b.id === scopeBranchId)?.name ?? "this branch"}`
+              : " · all branches"}
             .
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
+            <div className="space-y-2">
+              <Label htmlFor="adjustment-date">Date</Label>
+              <Input
+                id="adjustment-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value || toDateInputValue())}
+                className="w-full lg:w-44"
+              />
+            </div>
             <Input
               placeholder="Search product, branch, staff, or reference..."
               value={search}

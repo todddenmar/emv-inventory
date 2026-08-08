@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Sheet,
   SheetContent,
@@ -22,6 +24,7 @@ import {
 import {
   getVariantInventoryLogs,
   inventoryLogReasonLabel,
+  toDateInputValue,
 } from "@/lib/firestore/inventory-logs";
 import { formatDate } from "@/lib/format";
 import type { InventoryLog } from "@/types";
@@ -47,6 +50,13 @@ export function InventoryAdjustmentHistorySheet({
 }: InventoryAdjustmentHistorySheetProps) {
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [date, setDate] = useState(() => toDateInputValue());
+
+  useEffect(() => {
+    if (open) {
+      setDate(toDateInputValue());
+    }
+  }, [open, target?.variantId, target?.branchId]);
 
   useEffect(() => {
     if (!open || !target) {
@@ -60,6 +70,7 @@ export function InventoryAdjustmentHistorySheet({
       branchId: target.branchId,
       variantId: target.variantId,
       max: 50,
+      date,
     })
       .then((rows) => {
         if (!cancelled) setLogs(rows);
@@ -72,7 +83,7 @@ export function InventoryAdjustmentHistorySheet({
     return () => {
       cancelled = true;
     };
-  }, [open, target]);
+  }, [open, target, date]);
 
   const subtitleParts = [
     target?.productName,
@@ -102,11 +113,22 @@ export function InventoryAdjustmentHistorySheet({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto p-4">
+          <div className="mb-4 space-y-2">
+            <Label htmlFor="sheet-adjustment-date">Date</Label>
+            <Input
+              id="sheet-adjustment-date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value || toDateInputValue())}
+              className="max-w-xs"
+            />
+          </div>
+
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading history...</p>
           ) : logs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No adjustments recorded for this variant yet.
+              No adjustments for this variant on the selected date.
             </p>
           ) : (
             <div className="overflow-x-auto rounded-md border">
