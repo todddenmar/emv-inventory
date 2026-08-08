@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Package, AlertTriangle, Warehouse, ArrowRightLeft } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  BarChart3,
+  Loader2,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import {
   Card,
   CardContent,
@@ -12,11 +18,98 @@ import {
 import { LinkButton } from "@/components/ui/link-button";
 import { InventoryActivityFeed } from "@/components/admin/inventory-activity-feed";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import {
+  firstDayMonthsAgo,
+  toDateInputValue,
+  toMonthKey,
+} from "@/lib/dates";
 import { getProducts } from "@/lib/firestore/products";
 import { getBranchInventory } from "@/lib/firestore/inventory";
 import { getBranch, getBranches } from "@/lib/firestore/branches";
-import { mergeSellingVariantsWithInventory, getLowStockVariants } from "@/lib/inventory";
-import type { Branch } from "@/types";
+import { getPosSales } from "@/lib/firestore/pos-sales";
+import {
+  mergeSellingVariantsWithInventory,
+  getLowStockVariants,
+} from "@/lib/inventory";
+import { formatCurrency } from "@/lib/format";
+import {
+  percentChange,
+  salesByMonth,
+  type SalesMonthRow,
+} from "@/lib/reports";
+import { cn } from "@/lib/utils";
+import type { Branch, PosSale } from "@/types";
+
+function MonthChangeBadge({
+  current,
+  previous,
+}: {
+  current: number;
+  previous: number;
+}) {
+  const change = percentChange(current, previous);
+  if (change === null) {
+    return (
+      <span className="text-xs text-muted-foreground">vs last month: new</span>
+    );
+  }
+  if (change === 0) {
+    return (
+      <span className="text-xs text-muted-foreground">vs last month: 0%</span>
+    );
+  }
+  const up = change > 0;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 text-xs font-medium",
+        up ? "text-emerald-700" : "text-red-700"
+      )}
+    >
+      {up ? (
+        <TrendingUp className="h-3.5 w-3.5" />
+      ) : (
+        <TrendingDown className="h-3.5 w-3.5" />
+      )}
+      {up ? "+" : ""}
+      {change.toFixed(1)}% vs last month
+    </span>
+  );
+}
+
+function MonthlySalesChart({ rows }: { rows: SalesMonthRow[] }) {
+  const maxRevenue = Math.max(...rows.map((row) => row.revenue), 0);
+
+  return (
+    <div className="flex h-52 items-end gap-1.5 sm:gap-2">
+      {rows.map((row) => {
+        const height =
+          maxRevenue > 0
+            ? Math.max((row.revenue / maxRevenue) * 100, row.revenue > 0 ? 4 : 0)
+            : 0;
+        return (
+          <div
+            key={row.month}
+            className="flex min-w-0 flex-1 flex-col items-center gap-2"
+            title={`${row.label}: ${formatCurrency(row.revenue)} · ${row.receipts} receipt${row.receipts === 1 ? "" : "s"}`}
+          >
+            <div className="flex h-40 w-full items-end justify-center">
+              <div
+                className="w-full max-w-8 rounded-t-md bg-primary/80 transition-[height]"
+                style={{ height: `${height}%` }}
+              />
+            </div>
+            <p className="w-full truncate text-center text-[10px] text-muted-foreground sm:text-xs">
+              {row.label.replace(/ (\d{4})$/, (_, year: string) =>
+                ` '${year.slice(2)}`
+              )}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function AdminDashboardPage() {
   const { isMasterAdmin, assignedBranchId } = useBranchAccess();
@@ -24,7 +117,9 @@ export default function AdminDashboardPage() {
   const [branchCount, setBranchCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
+  const [sales, setSales] = useState<PosSale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [salesLoading, setSalesLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
@@ -64,6 +159,45 @@ export default function AdminDashboardPage() {
 
     load().catch(console.error).finally(() => setLoading(false));
   }, [isMasterAdmin, assignedBranchId]);
+
+  useEffect(() => {
+    async function loadSales() {
+      if (!isMasterAdmin && !assignedBranchId) {
+        setSales([]);
+        setSalesLoading(false);
+        return;
+      }
+
+      setSalesLoading(true);
+      try {
+        const fromDate = firstDayMonthsAgo(11);
+        const toDate = toDateInputValue();
+        const rows = await getPosSales({
+          branchId: isMasterAdmin ? null : assignedBranchId,
+          fromDate,
+          toDate,
+          max: 5000,
+        });
+        setSales(rows);
+      } catch (error) {
+        console.error(error);
+        setSales([]);
+      } finally {
+        setSalesLoading(false);
+      }
+    }
+
+    void loadSales();
+  }, [isMasterAdmin, assignedBranchId]);
+
+  const monthRows = useMemo(() => {
+    const toMonth = toMonthKey();
+    const fromMonth = firstDayMonthsAgo(11).slice(0, 7);
+    return salesByMonth(sales, fromMonth, toMonth);
+  }, [sales]);
+
+  const thisMonth = monthRows[monthRows.length - 1];
+  const priorMonth = monthRows[monthRows.length - 2];
 
   if (loading) {
     return <p className="text-muted-foreground">Loading dashboard...</p>;
@@ -123,46 +257,82 @@ export default function AdminDashboardPage() {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Warehouse className="h-5 w-5" />
-              Inventory
+      <Card>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BarChart3 className="h-4 w-4" />
+              Monthly sales
             </CardTitle>
-            <CardDescription>Branch stock levels</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <LinkButton href="/admin/inventory">Manage inventory</LinkButton>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ArrowRightLeft className="h-5 w-5" />
-              Transfers
-            </CardTitle>
-            <CardDescription>Move stock between branches</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <LinkButton href="/admin/transfers">Manage transfers</LinkButton>
-          </CardContent>
-        </Card>
-        {isMasterAdmin && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Products
-              </CardTitle>
-              <CardDescription>Manage product catalog</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <LinkButton href="/admin/products">Manage products</LinkButton>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            <CardDescription>
+              Last 12 months ·{" "}
+              {isMasterAdmin
+                ? "all branches"
+                : (branch?.name ?? "your branch")}
+            </CardDescription>
+          </div>
+          <LinkButton href="/admin/reports" variant="outline" size="sm">
+            Open reports
+          </LinkButton>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {salesLoading ? (
+            <div className="flex items-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading sales…
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">This month</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">
+                    {formatCurrency(thisMonth?.revenue ?? 0)}
+                  </p>
+                  <div className="mt-1">
+                    <MonthChangeBadge
+                      current={thisMonth?.revenue ?? 0}
+                      previous={priorMonth?.revenue ?? 0}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Receipts</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">
+                    {thisMonth?.receipts ?? 0}
+                  </p>
+                  <div className="mt-1">
+                    <MonthChangeBadge
+                      current={thisMonth?.receipts ?? 0}
+                      previous={priorMonth?.receipts ?? 0}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">Items sold</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">
+                    {thisMonth?.itemsSold ?? 0}
+                  </p>
+                  <div className="mt-1">
+                    <MonthChangeBadge
+                      current={thisMonth?.itemsSold ?? 0}
+                      previous={priorMonth?.itemsSold ?? 0}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {monthRows.every((row) => row.receipts === 0) ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No POS sales in the last 12 months yet.
+                </p>
+              ) : (
+                <MonthlySalesChart rows={monthRows} />
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <InventoryActivityFeed
         branchId={isMasterAdmin ? null : assignedBranchId}

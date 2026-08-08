@@ -61,3 +61,55 @@ export function eachDateInRange(fromDate: string, toDate: string): string[] {
   }
   return dates;
 }
+
+/** Calendar month key `YYYY-MM`. */
+export function toMonthKey(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+export function formatMonthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  if (!y || !m) return monthKey;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    year: "numeric",
+  }).format(new Date(y, m - 1, 1));
+}
+
+export function startOfMonthDateInput(monthKey: string): string {
+  return `${monthKey}-01`;
+}
+
+export function endOfMonthDateInput(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return `${monthKey}-${String(lastDay).padStart(2, "0")}`;
+}
+
+export function shiftMonthKey(monthKey: string, months: number): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  const date = new Date(y, m - 1 + months, 1);
+  return toMonthKey(date);
+}
+
+/** Inclusive list of month keys from `fromMonth` through `toMonth` (`YYYY-MM`). */
+export function eachMonthInRange(
+  fromMonth: string,
+  toMonth: string
+): string[] {
+  const months: string[] = [];
+  let cursor = fromMonth;
+  while (cursor <= toMonth) {
+    months.push(cursor);
+    cursor = shiftMonthKey(cursor, 1);
+  }
+  return months;
+}
+
+/** First day of the month that is `monthsBack` months before today (0 = this month). */
+export function firstDayMonthsAgo(monthsBack: number, now = new Date()): string {
+  const monthKey = shiftMonthKey(toMonthKey(now), -monthsBack);
+  return startOfMonthDateInput(monthKey);
+}

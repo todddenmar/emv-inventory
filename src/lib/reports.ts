@@ -1,4 +1,10 @@
-import { eachDateInRange, toDateInputValue } from "@/lib/dates";
+import {
+  eachDateInRange,
+  eachMonthInRange,
+  formatMonthLabel,
+  toDateInputValue,
+  toMonthKey,
+} from "@/lib/dates";
 import type { InventoryLog, InventoryLogReason, PosSale } from "@/types";
 
 export interface SalesTotals {
@@ -10,6 +16,14 @@ export interface SalesTotals {
 
 export interface SalesDayRow {
   date: string;
+  revenue: number;
+  receipts: number;
+  itemsSold: number;
+}
+
+export interface SalesMonthRow {
+  month: string;
+  label: string;
   revenue: number;
   receipts: number;
   itemsSold: number;
@@ -79,6 +93,32 @@ export function salesByDay(
   for (const sale of sales) {
     const date = toDateInputValue(sale.createdAt);
     const row = map.get(date);
+    if (!row) continue;
+    row.revenue += sale.total;
+    row.receipts += 1;
+    row.itemsSold += sale.itemCount;
+  }
+  return [...map.values()];
+}
+
+export function salesByMonth(
+  sales: PosSale[],
+  fromMonth: string,
+  toMonth: string
+): SalesMonthRow[] {
+  const map = new Map<string, SalesMonthRow>();
+  for (const month of eachMonthInRange(fromMonth, toMonth)) {
+    map.set(month, {
+      month,
+      label: formatMonthLabel(month),
+      revenue: 0,
+      receipts: 0,
+      itemsSold: 0,
+    });
+  }
+  for (const sale of sales) {
+    const month = toMonthKey(sale.createdAt);
+    const row = map.get(month);
     if (!row) continue;
     row.revenue += sale.total;
     row.receipts += 1;
