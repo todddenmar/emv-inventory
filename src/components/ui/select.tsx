@@ -2,33 +2,21 @@
 
 import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
+import type { SelectRootProps } from "@base-ui/react/select"
 
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-function normalizeSelectValue<T>(value: T): T | null {
-  if (value === "" || value === undefined) return null
-  return value
-}
-
-function Select({
+function Select<Value = string, Multiple extends boolean | undefined = false>({
   value,
   defaultValue,
-  onValueChange,
   ...props
-}: SelectPrimitive.Root.Props) {
+}: SelectRootProps<Value, Multiple>) {
   return (
     <SelectPrimitive.Root
-      value={value !== undefined ? normalizeSelectValue(value) : value}
-      defaultValue={
-        defaultValue !== undefined
-          ? normalizeSelectValue(defaultValue)
-          : defaultValue
-      }
-      onValueChange={(next, eventDetails) => {
-        onValueChange?.(next, eventDetails)
-      }}
       {...props}
+      value={(value as unknown) === "" ? null : value}
+      defaultValue={(defaultValue as unknown) === "" ? null : defaultValue}
     />
   )
 }

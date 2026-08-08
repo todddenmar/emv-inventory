@@ -100,7 +100,7 @@ export function AdminBottomNav() {
       };
     });
 
-  const barHrefs = new Set(barItems.map((item) => item.href));
+  const barHrefs = new Set<string>(barItems.map((item) => item.href));
 
   const moreItems = adminNavItems.filter(
     (item) =>
