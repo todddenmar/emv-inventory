@@ -88,7 +88,13 @@ export default function AdminPriceChangesPage() {
           }
         >
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter" />
+            <SelectValue placeholder="Filter">
+              {(value) => {
+                if (value === "increase") return "Increases only";
+                if (value === "decrease") return "Decreases only";
+                return "All changes";
+              }}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All changes</SelectItem>

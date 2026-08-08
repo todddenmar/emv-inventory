@@ -1614,7 +1614,13 @@ export default function ProductJsonImportPage() {
                           }
                         >
                           <SelectTrigger className="w-full">
-                            <SelectValue placeholder="All product types" />
+                            <SelectValue placeholder="All product types">
+                              {(value) =>
+                                !value || value === "all"
+                                  ? "All product types"
+                                  : String(value)
+                              }
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">
@@ -2256,7 +2262,9 @@ export default function ProductJsonImportPage() {
                   onValueChange={(value) => setBulkAssignCategory(value ?? "")}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder="Select category">
+                      {(value) => (value ? String(value) : null)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {bulkCategoryOptions.map((tab) => (
@@ -2346,7 +2354,9 @@ export default function ProductJsonImportPage() {
                 onValueChange={(value) => setEditCategoryName(value ?? "")}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder="Select category">
+                    {(value) => (value ? String(value) : null)}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {categoryTabs.map((tab) => (

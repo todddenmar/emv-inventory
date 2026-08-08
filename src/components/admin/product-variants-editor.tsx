@@ -122,7 +122,15 @@ export function ProductVariantsEditor({
                     disabled={disabled}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Default" />
+                      <SelectValue placeholder="Default">
+                        {(value) => {
+                          if (!value || value === "none") return "Default gallery";
+                          const image = images.find((img) => img.id === value);
+                          return image
+                            ? `Image ${image.order + 1}`
+                            : null;
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Default gallery</SelectItem>

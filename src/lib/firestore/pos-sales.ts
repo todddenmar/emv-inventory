@@ -1,13 +1,21 @@
 import {
   collection,
   doc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
   runTransaction,
   serverTimestamp,
+  where,
+  type QueryConstraint,
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
+import { posSaleConverter } from "@/lib/firestore/converters";
 import { inventoryDocId } from "@/lib/firestore/inventory";
-import type { PosSaleItem } from "@/types";
+import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
+import type { PosSale, PosSaleItem } from "@/types";
 
 export interface CompletePosSaleInput {
   branchId: string;
@@ -15,6 +23,50 @@ export interface CompletePosSaleInput {
   items: PosSaleItem[];
   createdBy: string;
   createdByName?: string | null;
+}
+
+export async function getPosSales(options?: {
+  branchId?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
+  max?: number;
+}): Promise<PosSale[]> {
+  const ref = collection(getClientDb(), COLLECTIONS.posSales).withConverter(
+    posSaleConverter
+  );
+  const max = options?.max ?? 500;
+  const from = options?.fromDate ? startOfLocalDay(options.fromDate) : null;
+  const to = options?.toDate ? endOfLocalDay(options.toDate) : null;
+  const constraints: QueryConstraint[] = [];
+
+  if (options?.branchId) {
+    constraints.push(where("branchId", "==", options.branchId));
+  }
+  if (from) constraints.push(where("createdAt", ">=", from));
+  if (to) constraints.push(where("createdAt", "<=", to));
+  constraints.push(orderBy("createdAt", "desc"), limit(max));
+
+  try {
+    const snapshot = await getDocs(query(ref, ...constraints));
+    return snapshot.docs.map((d) => d.data());
+  } catch (error) {
+    console.warn("getPosSales date query failed, using fallback", error);
+    const fallback: QueryConstraint[] = [];
+    if (options?.branchId) {
+      fallback.push(where("branchId", "==", options.branchId));
+    }
+    fallback.push(orderBy("createdAt", "desc"), limit(Math.max(max * 5, 1000)));
+    const snapshot = await getDocs(query(ref, ...fallback));
+    let rows = snapshot.docs.map((d) => d.data());
+    if (from || to) {
+      rows = rows.filter((sale) => {
+        if (from && sale.createdAt < from) return false;
+        if (to && sale.createdAt > to) return false;
+        return true;
+      });
+    }
+    return rows.slice(0, max);
+  }
 }
 
 export async function completePosSale(

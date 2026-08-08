@@ -10,25 +10,17 @@ import {
 import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { inventoryLogConverter } from "@/lib/firestore/converters";
+import {
+  endOfLocalDay,
+  startOfLocalDay,
+} from "@/lib/dates";
 import type { InventoryLog, InventoryLogReason } from "@/types";
 
-/** Local calendar date as `YYYY-MM-DD` for `<input type="date">`. */
-export function toDateInputValue(date: Date = new Date()): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-export function startOfLocalDay(dateInput: string): Date {
-  const [y, m, d] = dateInput.split("-").map(Number);
-  return new Date(y, m - 1, d, 0, 0, 0, 0);
-}
-
-export function endOfLocalDay(dateInput: string): Date {
-  const [y, m, d] = dateInput.split("-").map(Number);
-  return new Date(y, m - 1, d, 23, 59, 59, 999);
-}
+export {
+  toDateInputValue,
+  startOfLocalDay,
+  endOfLocalDay,
+} from "@/lib/dates";
 
 export function isInventoryLogOnDate(
   log: InventoryLog,
@@ -43,25 +35,48 @@ export function isInventoryLogOnDate(
   );
 }
 
+function resolveLogRange(options?: {
+  date?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
+}): { from: Date; to: Date } | null {
+  if (options?.fromDate && options?.toDate) {
+    return {
+      from: startOfLocalDay(options.fromDate),
+      to: endOfLocalDay(options.toDate),
+    };
+  }
+  if (options?.date) {
+    return {
+      from: startOfLocalDay(options.date),
+      to: endOfLocalDay(options.date),
+    };
+  }
+  return null;
+}
+
 export async function getInventoryLogs(options?: {
   branchId?: string | null;
   max?: number;
   /** Local `YYYY-MM-DD`. When set, only logs on that calendar day are returned. */
   date?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
 }): Promise<InventoryLog[]> {
   const ref = collection(getClientDb(), COLLECTIONS.inventoryLogs).withConverter(
     inventoryLogConverter
   );
   const max = options?.max ?? 50;
+  const range = resolveLogRange(options);
   const constraints: QueryConstraint[] = [];
 
   if (options?.branchId) {
     constraints.push(where("branchId", "==", options.branchId));
   }
 
-  if (options?.date) {
-    constraints.push(where("createdAt", ">=", startOfLocalDay(options.date)));
-    constraints.push(where("createdAt", "<=", endOfLocalDay(options.date)));
+  if (range) {
+    constraints.push(where("createdAt", ">=", range.from));
+    constraints.push(where("createdAt", "<=", range.to));
   }
 
   constraints.push(orderBy("createdAt", "desc"), limit(max));
@@ -78,12 +93,15 @@ export async function getInventoryLogs(options?: {
     }
     fallbackConstraints.push(
       orderBy("createdAt", "desc"),
-      limit(options?.date ? Math.max(max * 10, 500) : max)
+      limit(range ? Math.max(max * 10, 500) : max)
     );
     const snapshot = await getDocs(query(ref, ...fallbackConstraints));
     let rows = snapshot.docs.map((d) => d.data());
-    if (options?.date) {
-      rows = rows.filter((log) => isInventoryLogOnDate(log, options.date!));
+    if (range) {
+      rows = rows.filter(
+        (log) =>
+          log.createdAt >= range.from && log.createdAt <= range.to
+      );
     }
     return rows.slice(0, max);
   }
@@ -95,20 +113,23 @@ export async function getVariantInventoryLogs(options: {
   variantId: string;
   max?: number;
   date?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
 }): Promise<InventoryLog[]> {
   const ref = collection(getClientDb(), COLLECTIONS.inventoryLogs).withConverter(
     inventoryLogConverter
   );
   const max = options.max ?? 50;
+  const range = resolveLogRange(options);
 
   try {
     const constraints: QueryConstraint[] = [
       where("branchId", "==", options.branchId),
       where("variantId", "==", options.variantId),
     ];
-    if (options.date) {
-      constraints.push(where("createdAt", ">=", startOfLocalDay(options.date)));
-      constraints.push(where("createdAt", "<=", endOfLocalDay(options.date)));
+    if (range) {
+      constraints.push(where("createdAt", ">=", range.from));
+      constraints.push(where("createdAt", "<=", range.to));
     }
     constraints.push(orderBy("createdAt", "desc"), limit(max));
 
@@ -120,6 +141,8 @@ export async function getVariantInventoryLogs(options: {
       branchId: options.branchId,
       max: Math.max(max * 6, 200),
       date: options.date,
+      fromDate: options.fromDate,
+      toDate: options.toDate,
     });
     return branchLogs
       .filter((log) => log.variantId === options.variantId)

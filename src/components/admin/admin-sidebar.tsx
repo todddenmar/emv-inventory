@@ -15,6 +15,7 @@ import {
   History,
   PackagePlus,
   Settings,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -25,6 +26,12 @@ export const adminNavItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, masterOnly: false },
   { href: "/admin/pos", label: "POS", icon: ShoppingCart, masterOnly: false },
   { href: "/admin/inventory", label: "Inventory", icon: Warehouse, masterOnly: false },
+  {
+    href: "/admin/reports",
+    label: "Reports",
+    icon: BarChart3,
+    masterOnly: false,
+  },
   {
     href: "/admin/stock-in",
     label: "Supplier stock in",

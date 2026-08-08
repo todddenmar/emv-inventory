@@ -284,7 +284,17 @@ export default function AdminBranchesPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select manager" />
+                  <SelectValue placeholder="Select manager">
+                    {(value) => {
+                      if (!value || value === "none") return "No manager";
+                      const manager = managers.find((m) => m.uid === value);
+                      return (
+                        manager?.displayName ||
+                        manager?.email ||
+                        null
+                      );
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No manager</SelectItem>

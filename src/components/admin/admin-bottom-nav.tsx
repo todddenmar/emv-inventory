@@ -26,6 +26,7 @@ const bottomNavCandidates = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/pos", label: "POS" },
   { href: "/admin/inventory", label: "Inventory" },
+  { href: "/admin/reports", label: "Reports" },
   { href: "/admin/transfers", label: "Transfers" },
   { href: "/admin/stock-in", label: "Stock in" },
   { href: "/admin/settings", label: "Settings" },

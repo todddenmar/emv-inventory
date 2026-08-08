@@ -298,7 +298,11 @@ export default function AdminUsersPage() {
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
+                    <SelectValue placeholder="Select role">
+                      {(value) =>
+                        value ? formatUserRole(value as UserRole) : null
+                      }
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {roleOptions.map((option) => (
@@ -318,7 +322,15 @@ export default function AdminUsersPage() {
                     onValueChange={(v) => setBranchId(v ?? "")}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select branch" />
+                      <SelectValue placeholder="Select branch">
+                        {(value) => {
+                          if (!value) return null;
+                          const branch = branches.find((b) => b.id === value);
+                          return branch
+                            ? `${branch.name} (${branch.code})`
+                            : null;
+                        }}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {branches.map((branch) => (

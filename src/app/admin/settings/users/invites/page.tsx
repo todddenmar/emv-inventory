@@ -148,7 +148,15 @@ export default function AdminInvitesPage() {
                 <Label>Branch</Label>
                 <Select value={branchId} onValueChange={(v) => setBranchId(v ?? "")}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select branch" />
+                    <SelectValue placeholder="Select branch">
+                      {(value) => {
+                        if (!value) return null;
+                        const branch = branches.find((b) => b.id === value);
+                        return branch
+                          ? `${branch.name} (${branch.code})`
+                          : null;
+                      }}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {branches.map((branch) => (
