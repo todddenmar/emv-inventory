@@ -48,7 +48,7 @@ import type { Branch, BranchInventory, Category, Product } from "@/types";
 type SellingFilter = "all" | "selling" | "not_selling";
 
 export default function AdminAssortmentPage() {
-  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
   const { catalogImageSource } = useAppSettings();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -62,14 +62,14 @@ export default function AdminAssortmentPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sellingFilter, setSellingFilter] = useState<SellingFilter>("all");
 
-  const activeBranchId = isMasterAdmin ? selectedBranchId : assignedBranchId ?? "";
+  const activeBranchId = isElevatedAdmin ? selectedBranchId : assignedBranchId ?? "";
 
   const loadBranches = async () => {
     const all = await getBranches(true);
     setBranches(all);
     if (!selectedBranchId && all.length > 0) {
       setSelectedBranchId(
-        isMasterAdmin ? all[0].id : assignedBranchId ?? all[0].id
+        isElevatedAdmin ? all[0].id : assignedBranchId ?? all[0].id
       );
     }
   };
@@ -213,7 +213,7 @@ export default function AdminAssortmentPage() {
             sells. Unassigning keeps existing stock.
           </p>
         </div>
-        {isMasterAdmin && (
+        {isElevatedAdmin && (
           <Select
             value={selectedBranchId}
             onValueChange={(v) => setSelectedBranchId(v ?? "")}

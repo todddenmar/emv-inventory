@@ -2,21 +2,21 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    function isMasterAdmin() {
+    function isElevatedAdmin() {
       return request.auth != null &&
-        request.auth.token.role == 'master-admin';
+        request.auth.token.role in ['master-admin', 'admin'];
     }
 
     // Shared product images (online shop + inventory)
     match /products/{productId}/{fileName} {
       allow read: if true;
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     // Online shop homepage assets
     match /homepage/{allPaths=**} {
       allow read: if true;
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
   }
 }

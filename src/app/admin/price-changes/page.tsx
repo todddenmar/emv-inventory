@@ -34,7 +34,7 @@ import type { PriceChangeDirection, ProductPriceLog } from "@/types";
 type DirectionFilter = "all" | PriceChangeDirection;
 
 export default function AdminPriceChangesPage() {
-  const { isMasterAdmin } = useBranchAccess();
+  const { isElevatedAdmin } = useBranchAccess();
   const isStaff = useIsStaff();
   const [logs, setLogs] = useState<ProductPriceLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ export default function AdminPriceChangesPage() {
           <h1 className="text-2xl font-bold">Price changes</h1>
           <p className="text-muted-foreground">
             Log of product variant price increases and decreases
-            {!isMasterAdmin ? " (read-only)" : ""}
+            {!isElevatedAdmin ? " (read-only)" : ""}
           </p>
         </div>
         <Select

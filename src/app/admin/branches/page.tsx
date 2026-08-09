@@ -50,7 +50,7 @@ import { parseCoordinate } from "@/lib/location";
 import type { AppUser, Branch } from "@/types";
 
 export default function AdminBranchesPage() {
-  const { isMasterAdmin } = useBranchAccess();
+  const { isElevatedAdmin } = useBranchAccess();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [managers, setManagers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,12 +81,12 @@ export default function AdminBranchesPage() {
     loadData();
   }, []);
 
-  if (!isMasterAdmin) {
+  if (!isElevatedAdmin) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only the master-admin can manage branches.
+            Only admins can manage branches.
           </p>
         </CardContent>
       </Card>

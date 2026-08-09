@@ -66,7 +66,7 @@ interface StockInLine {
 }
 
 export default function AdminStockInPage() {
-  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
   const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -85,7 +85,7 @@ export default function AdminStockInPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const defaultBranch = isMasterAdmin ? "" : assignedBranchId ?? "";
+  const defaultBranch = isElevatedAdmin ? "" : assignedBranchId ?? "";
 
   useEffect(() => {
     Promise.all([getBranches(true), getVendors(), getProducts()])
@@ -94,12 +94,12 @@ export default function AdminStockInPage() {
         setVendors(v);
         setProducts(p.filter((x) => !x.isArchived && isProductPublished(x)));
         if (defaultBranch) setBranchId(defaultBranch);
-        else if (isMasterAdmin && b[0]) setBranchId(b[0].id);
+        else if (isElevatedAdmin && b[0]) setBranchId(b[0].id);
         if (v[0]) setVendorId(v[0].id);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [defaultBranch, isMasterAdmin]);
+  }, [defaultBranch, isElevatedAdmin]);
 
   useEffect(() => {
     if (!branchId) {
@@ -111,7 +111,7 @@ export default function AdminStockInPage() {
     Promise.all([
       getBranchInventory(branchId),
       getSupplierStockIns({
-        branchId: isMasterAdmin ? branchId : assignedBranchId,
+        branchId: isElevatedAdmin ? branchId : assignedBranchId,
         max: 30,
       }),
     ])
@@ -120,7 +120,7 @@ export default function AdminStockInPage() {
         setHistory(stockIns);
       })
       .catch(console.error);
-  }, [branchId, products, isMasterAdmin, assignedBranchId]);
+  }, [branchId, products, isElevatedAdmin, assignedBranchId]);
 
   const branch = branches.find((b) => b.id === branchId);
   const vendor = vendors.find((v) => v.id === vendorId);
@@ -280,7 +280,7 @@ export default function AdminStockInPage() {
                   setLines([]);
                   setSelectedVariant(null);
                 }}
-                disabled={!isMasterAdmin}
+                disabled={!isElevatedAdmin}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select branch">

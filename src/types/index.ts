@@ -1,4 +1,4 @@
-export type UserRole = "master-admin" | "manager" | "customer";
+export type UserRole = "master-admin" | "admin" | "manager" | "customer";
 
 export interface AppUser {
   uid: string;
@@ -120,7 +120,7 @@ export interface Invite {
   id: string;
   token: string;
   email: string | null;
-  role: "manager";
+  role: "manager" | "admin";
   branchId: string | null;
   branchName: string | null;
   createdBy: string;

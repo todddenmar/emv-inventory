@@ -47,7 +47,7 @@ import {
 import type { Vendor } from "@/types";
 
 export default function AdminVendorsPage() {
-  const { isMasterAdmin } = useBranchAccess();
+  const { isElevatedAdmin } = useBranchAccess();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -67,12 +67,12 @@ export default function AdminVendorsPage() {
     loadVendors();
   }, []);
 
-  if (!isMasterAdmin) {
+  if (!isElevatedAdmin) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only the master-admin can manage vendors.
+            Only admins can manage vendors.
           </p>
         </CardContent>
       </Card>

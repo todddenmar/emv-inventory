@@ -66,7 +66,7 @@ import type { Category } from "@/types";
 const PAGE_SIZE = 10;
 
 export default function AdminCategoriesPage() {
-  const { isMasterAdmin } = useBranchAccess();
+  const { isElevatedAdmin } = useBranchAccess();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -121,12 +121,12 @@ export default function AdminCategoriesPage() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  if (!isMasterAdmin) {
+  if (!isElevatedAdmin) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only the master-admin can manage categories.
+            Only admins can manage categories.
           </p>
         </CardContent>
       </Card>

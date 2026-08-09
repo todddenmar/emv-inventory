@@ -50,7 +50,7 @@ import type { Branch, BranchInventory, Category, Product } from "@/types";
 import type { VariantWithStock } from "@/lib/inventory";
 
 export default function AdminPosPage() {
-  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
   const { catalogImageSource } = useAppSettings();
   const user = useAuthStore((s) => s.user);
 
@@ -71,7 +71,7 @@ export default function AdminPosPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [charging, setCharging] = useState(false);
 
-  const activeBranchId = isMasterAdmin
+  const activeBranchId = isElevatedAdmin
     ? selectedBranchId
     : assignedBranchId ?? "";
 
@@ -88,7 +88,7 @@ export default function AdminPosPage() {
         const activeCats = cats.filter((c) => !c.isArchived);
         setCategories(activeCats);
 
-        const initialBranch = isMasterAdmin
+        const initialBranch = isElevatedAdmin
           ? branchList[0]?.id ?? ""
           : assignedBranchId ?? branchList[0]?.id ?? "";
         setSelectedBranchId(initialBranch);
@@ -105,7 +105,7 @@ export default function AdminPosPage() {
     }
 
     bootstrap();
-  }, [isMasterAdmin, assignedBranchId]);
+  }, [isElevatedAdmin, assignedBranchId]);
 
   useEffect(() => {
     if (!activeBranchId) {
@@ -352,7 +352,7 @@ export default function AdminPosPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isMasterAdmin && (
+          {isElevatedAdmin && (
             <Select
               value={selectedBranchId}
               onValueChange={(v) => setSelectedBranchId(v ?? "")}

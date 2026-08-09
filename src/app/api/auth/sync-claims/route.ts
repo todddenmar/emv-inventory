@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { isElevatedAdminRole } from "@/lib/roles";
 import type { UserRole } from "@/types";
 
 export async function POST(request: Request) {
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
 
   if (body.uid && body.uid !== decoded.uid) {
     const actorDoc = await adminDb.collection("users").doc(decoded.uid).get();
-    if (actorDoc.data()?.role !== "master-admin") {
+    if (!isElevatedAdminRole(actorDoc.data()?.role as UserRole | undefined)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     targetUid = body.uid;

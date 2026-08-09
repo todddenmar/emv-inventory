@@ -1,6 +1,10 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import type { AppUser } from "@/types";
+import {
+  isElevatedAdminRole,
+  isMasterAdminRole,
+  isStaffRole,
+} from "@/lib/roles";
 
 interface AuthState {
   user: AppUser | null;
@@ -20,12 +24,17 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
 export function useIsStaff(): boolean {
   const user = useAuthStore((s) => s.user);
-  return user?.role === "master-admin" || user?.role === "manager";
+  return isStaffRole(user?.role);
 }
 
 export function useIsMasterAdmin(): boolean {
   const user = useAuthStore((s) => s.user);
-  return user?.role === "master-admin";
+  return isMasterAdminRole(user?.role);
+}
+
+export function useIsElevatedAdmin(): boolean {
+  const user = useAuthStore((s) => s.user);
+  return isElevatedAdminRole(user?.role);
 }
 
 export function useAssignedBranchId(): string | null {

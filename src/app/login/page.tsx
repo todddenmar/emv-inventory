@@ -16,6 +16,7 @@ import { OpenInBrowserPrompt } from "@/components/auth/open-in-browser-prompt";
 import { signInWithGoogle, signOutUser } from "@/lib/auth";
 import { isInAppBrowser } from "@/lib/in-app-browser";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
+import { isStaffRole } from "@/lib/roles";
 import { useAuthStore, useIsStaff } from "@/stores/auth-store";
 
 function LoginContent() {
@@ -54,8 +55,7 @@ function LoginContent() {
     try {
       const appUser = await signInWithGoogle(inviteToken);
       useAuthStore.getState().setUser(appUser);
-      const staff =
-        appUser.role === "master-admin" || appUser.role === "manager";
+      const staff = isStaffRole(appUser.role);
 
       if (!staff) {
         await signOutUser();
@@ -94,7 +94,7 @@ function LoginContent() {
           <CardTitle className="text-2xl">Staff sign in</CardTitle>
           <CardDescription>
             {inviteToken
-              ? "Accept your manager invite by signing in with Google"
+              ? "Accept your staff invite by signing in with Google"
               : "Sign in to manage physical store inventory"}
           </CardDescription>
         </CardHeader>

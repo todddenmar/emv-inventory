@@ -319,7 +319,7 @@ export const inviteConverter: FirestoreDataConverter<Invite> = {
       id: snapshot.id,
       token: data.token,
       email: data.email ?? null,
-      role: data.role,
+      role: data.role === "admin" ? "admin" : "manager",
       branchId: data.branchId ?? null,
       branchName: data.branchName ?? null,
       createdBy: data.createdBy,

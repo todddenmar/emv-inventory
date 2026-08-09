@@ -44,15 +44,16 @@ import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getBranches } from "@/lib/firestore/branches";
 import { getAllUsers, updateUserAccess } from "@/lib/firestore/users";
 import { syncAuthClaims } from "@/lib/auth-claims";
+import { isMasterAdminRole, roleAssignableBy } from "@/lib/roles";
 import type { AppUser, Branch, UserRole } from "@/types";
-
-const roleOptions: UserRole[] = ["customer", "manager", "master-admin"];
 
 const roleBadgeVariant = (
   role: UserRole
 ): "default" | "secondary" | "outline" => {
   switch (role) {
     case "master-admin":
+      return "default";
+    case "admin":
       return "default";
     case "manager":
       return "secondary";
@@ -62,7 +63,11 @@ const roleBadgeVariant = (
 };
 
 export default function AdminUsersPage() {
-  const { isMasterAdmin, user: currentUser } = useBranchAccess();
+  const {
+    isElevatedAdmin,
+    isMasterAdmin,
+    user: currentUser,
+  } = useBranchAccess();
   const [users, setUsers] = useState<AppUser[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +78,12 @@ export default function AdminUsersPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const branchMap = Object.fromEntries(branches.map((b) => [b.id, b]));
+
+  const roleOptions = useMemo(() => {
+    const all: UserRole[] = ["customer", "manager", "admin", "master-admin"];
+    if (!currentUser) return all.filter((r) => r !== "master-admin");
+    return all.filter((r) => roleAssignableBy(currentUser.role, r));
+  }, [currentUser]);
 
   const loadData = () => {
     Promise.all([getAllUsers(), getBranches(true)])
@@ -88,10 +99,15 @@ export default function AdminUsersPage() {
     loadData();
   }, []);
 
+  const visibleUsers = useMemo(() => {
+    if (isMasterAdmin) return users;
+    return users.filter((u) => !isMasterAdminRole(u.role));
+  }, [users, isMasterAdmin]);
+
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) => {
+    if (!q) return visibleUsers;
+    return visibleUsers.filter((u) => {
       const haystack = [
         u.displayName,
         u.email,
@@ -104,7 +120,7 @@ export default function AdminUsersPage() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [users, search, branchMap]);
+  }, [visibleUsers, search, branchMap]);
 
   const openEdit = (user: AppUser) => {
     setEditingUser(user);
@@ -147,12 +163,12 @@ export default function AdminUsersPage() {
     }
   };
 
-  if (!isMasterAdmin) {
+  if (!isElevatedAdmin) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only the master-admin can manage user roles.
+            Only admins can manage user roles.
           </p>
         </CardContent>
       </Card>
@@ -165,7 +181,7 @@ export default function AdminUsersPage() {
         <div>
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-muted-foreground">
-            Assign master-admin and manager roles, and link managers to branches
+            Assign admin and manager roles, and link managers to branches
           </p>
         </div>
         <LinkButton href="/admin/settings/users/invites" variant="outline">
@@ -177,7 +193,7 @@ export default function AdminUsersPage() {
         <CardHeader>
           <CardTitle>All users</CardTitle>
           <CardDescription>
-            {users.length} accounts · Managers need a branch assignment
+            {visibleUsers.length} accounts · Managers need a branch assignment
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -345,8 +361,14 @@ export default function AdminUsersPage() {
 
               {role === "master-admin" && (
                 <p className="text-sm text-muted-foreground">
-                  Master admins have full access to catalog, branches, users,
-                  and settings.
+                  Master admins have full access, including product JSON import.
+                </p>
+              )}
+
+              {role === "admin" && (
+                <p className="text-sm text-muted-foreground">
+                  Admins have full catalog and branch access, except product
+                  JSON import.
                 </p>
               )}
 

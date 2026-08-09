@@ -91,7 +91,7 @@ function matchesQuery(value: string, query: string): boolean {
 }
 
 export default function AdminProductsPage() {
-  const { isMasterAdmin } = useBranchAccess();
+  const { isMasterAdmin, isElevatedAdmin } = useBranchAccess();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -266,12 +266,12 @@ export default function AdminProductsPage() {
     }
   };
 
-  if (!isMasterAdmin) {
+  if (!isElevatedAdmin) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only the master-admin can manage the product catalog.
+            Only admins can manage the product catalog.
           </p>
         </CardContent>
       </Card>
@@ -294,10 +294,12 @@ export default function AdminProductsPage() {
           </Button>
           {!showArchived && (
             <>
-              <LinkButton href="/admin/settings/import" variant="outline">
-                <FileJson className="mr-2 h-4 w-4" />
-                Product JSON import
-              </LinkButton>
+              {isMasterAdmin && (
+                <LinkButton href="/admin/settings/import" variant="outline">
+                  <FileJson className="mr-2 h-4 w-4" />
+                  Product JSON import
+                </LinkButton>
+              )}
               <LinkButton href="/admin/products/new">
                 <Plus className="mr-2 h-4 w-4" />
                 Add product

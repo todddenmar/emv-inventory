@@ -112,7 +112,7 @@ function MonthlySalesChart({ rows }: { rows: SalesMonthRow[] }) {
 }
 
 export default function AdminDashboardPage() {
-  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
   const [branch, setBranch] = useState<Branch | null>(null);
   const [branchCount, setBranchCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
@@ -131,7 +131,7 @@ export default function AdminDashboardPage() {
       setProductCount(products.length);
       setBranchCount(branches.length);
 
-      const scopeBranchId = isMasterAdmin ? null : assignedBranchId;
+      const scopeBranchId = isElevatedAdmin ? null : assignedBranchId;
 
       if (scopeBranchId) {
         const [inv, b] = await Promise.all([
@@ -141,7 +141,7 @@ export default function AdminDashboardPage() {
         setBranch(b);
         const selling = mergeSellingVariantsWithInventory(products, inv);
         setLowStockCount(getLowStockVariants(selling).length);
-      } else if (isMasterAdmin && branches.length > 0) {
+      } else if (isElevatedAdmin && branches.length > 0) {
         let totalLow = 0;
         const inventories = await Promise.all(
           branches.map((b) => getBranchInventory(b.id))
@@ -158,11 +158,11 @@ export default function AdminDashboardPage() {
     }
 
     load().catch(console.error).finally(() => setLoading(false));
-  }, [isMasterAdmin, assignedBranchId]);
+  }, [isElevatedAdmin, assignedBranchId]);
 
   useEffect(() => {
     async function loadSales() {
-      if (!isMasterAdmin && !assignedBranchId) {
+      if (!isElevatedAdmin && !assignedBranchId) {
         setSales([]);
         setSalesLoading(false);
         return;
@@ -173,7 +173,7 @@ export default function AdminDashboardPage() {
         const fromDate = firstDayMonthsAgo(11);
         const toDate = toDateInputValue();
         const rows = await getPosSales({
-          branchId: isMasterAdmin ? null : assignedBranchId,
+          branchId: isElevatedAdmin ? null : assignedBranchId,
           fromDate,
           toDate,
           max: 5000,
@@ -188,7 +188,7 @@ export default function AdminDashboardPage() {
     }
 
     void loadSales();
-  }, [isMasterAdmin, assignedBranchId]);
+  }, [isElevatedAdmin, assignedBranchId]);
 
   const monthRows = useMemo(() => {
     const toMonth = toMonthKey();
@@ -207,13 +207,13 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        {!isMasterAdmin && branch && (
+        {!isElevatedAdmin && branch && (
           <p className="text-muted-foreground">{branch.name} branch overview</p>
         )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {isMasterAdmin && (
+        {isElevatedAdmin && (
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Active branches</CardDescription>
@@ -244,7 +244,7 @@ export default function AdminDashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-amber-700">
               <AlertTriangle className="h-5 w-5" />
-              {isMasterAdmin
+              {isElevatedAdmin
                 ? "Low stock across branches"
                 : `Low stock at ${branch?.name}`}
             </CardTitle>
@@ -266,7 +266,7 @@ export default function AdminDashboardPage() {
             </CardTitle>
             <CardDescription>
               Last 12 months ·{" "}
-              {isMasterAdmin
+              {isElevatedAdmin
                 ? "all branches"
                 : (branch?.name ?? "your branch")}
             </CardDescription>
@@ -335,9 +335,9 @@ export default function AdminDashboardPage() {
       </Card>
 
       <InventoryActivityFeed
-        branchId={isMasterAdmin ? null : assignedBranchId}
+        branchId={isElevatedAdmin ? null : assignedBranchId}
         description={
-          isMasterAdmin
+          isElevatedAdmin
             ? "Adjustments and transfers across all branches"
             : "Stock changes for your branch"
         }

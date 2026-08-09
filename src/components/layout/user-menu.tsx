@@ -13,6 +13,7 @@ import {
 import { UserAvatar, formatUserRole } from "@/components/layout/user-avatar";
 import { useAuthStore } from "@/stores/auth-store";
 import { signOutUser } from "@/lib/auth";
+import { isStaffRole } from "@/lib/roles";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -95,8 +96,7 @@ export function UserMenu({
             </p>
           </div>
         </DropdownMenuItem>
-        {showAdminLink &&
-          (user.role === "master-admin" || user.role === "manager") && (
+        {showAdminLink && isStaffRole(user.role) && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => router.push("/admin")}>

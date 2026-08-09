@@ -6,7 +6,11 @@ import {
 } from "firebase/auth";
 import { getClientAuth } from "@/lib/firebase";
 import { assignBranchManager } from "@/lib/firestore/branches";
-import { acceptInvite, getInviteByToken, isInviteValid } from "@/lib/firestore/invites";
+import {
+  acceptInvite,
+  getInviteByToken,
+  isInviteValid,
+} from "@/lib/firestore/invites";
 import { upsertUserOnLogin } from "@/lib/firestore/users";
 
 const googleProvider = new GoogleAuthProvider();
@@ -29,19 +33,29 @@ async function handlePostLogin(user: User, inviteToken?: string) {
     if (invite.email && user.email && invite.email !== user.email) {
       throw new Error("This invite was sent to a different email address");
     }
-    if (!invite.branchId) {
-      throw new Error("This invite is missing a branch assignment");
+
+    if (invite.role === "manager") {
+      if (!invite.branchId) {
+        throw new Error("This invite is missing a branch assignment");
+      }
+
+      const appUser = await upsertUserOnLogin(user, {
+        role: "manager",
+        branchId: invite.branchId,
+      });
+      await assignBranchManager(
+        invite.branchId,
+        user.uid,
+        user.displayName || user.email || "Manager"
+      );
+      await acceptInvite(invite.id, user.uid);
+      return appUser;
     }
 
     const appUser = await upsertUserOnLogin(user, {
-      role: "manager",
-      branchId: invite.branchId,
+      role: "admin",
+      branchId: null,
     });
-    await assignBranchManager(
-      invite.branchId,
-      user.uid,
-      user.displayName || user.email || "Manager"
-    );
     await acceptInvite(invite.id, user.uid);
     return appUser;
   }

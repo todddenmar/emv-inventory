@@ -12,7 +12,7 @@ service cloud.firestore {
 
     function isStaff() {
       return isSignedIn() &&
-        userDoc().data.role in ['master-admin', 'manager'];
+        userDoc().data.role in ['master-admin', 'admin', 'manager'];
     }
 
     function isMasterAdmin() {
@@ -20,12 +20,17 @@ service cloud.firestore {
         userDoc().data.role == 'master-admin';
     }
 
+    function isElevatedAdmin() {
+      return isSignedIn() &&
+        userDoc().data.role in ['master-admin', 'admin'];
+    }
+
     function managerBranchId() {
       return userDoc().data.branchId;
     }
 
     function canAccessBranch(branchId) {
-      return isMasterAdmin() || managerBranchId() == branchId;
+      return isElevatedAdmin() || managerBranchId() == branchId;
     }
 
     function isOnlineShopBranch(branchId) {
@@ -39,7 +44,7 @@ service cloud.firestore {
       allow read: if isStaff();
       allow create: if isSignedIn() && request.auth.uid == userId;
       allow update: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isMasterAdmin();
+      allow update: if isElevatedAdmin();
     }
 
     match /settings/bootstrap {
@@ -51,13 +56,13 @@ service cloud.firestore {
 
     match /settings/app {
       allow read: if isStaff();
-      allow create, update: if isMasterAdmin();
+      allow create, update: if isElevatedAdmin();
       allow delete: if false;
     }
 
     match /invites/{inviteId} {
       allow read: if true;
-      allow create: if isMasterAdmin();
+      allow create: if isElevatedAdmin();
       allow update: if isSignedIn();
     }
 
@@ -67,31 +72,31 @@ service cloud.firestore {
 
     match /settings/site {
       allow read: if true;
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /branches/{branchId} {
       allow read: if resource.data.isActive == true;
       allow read: if isStaff() && canAccessBranch(branchId);
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /branchInventory/{inventoryId} {
       allow read: if resource.data.branchId != null &&
         isOnlineShopBranch(resource.data.branchId);
       allow read: if resource.data.branchId != null &&
-        (isMasterAdmin() || managerBranchId() == resource.data.branchId);
-      allow read: if isMasterAdmin();
+        (isElevatedAdmin() || managerBranchId() == resource.data.branchId);
+      allow read: if isElevatedAdmin();
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
@@ -103,7 +108,7 @@ service cloud.firestore {
         request.resource.data.stock is int &&
         request.resource.data.stock >= 0 &&
         request.resource.data.stock < resource.data.stock;
-      allow delete: if isMasterAdmin();
+      allow delete: if isElevatedAdmin();
     }
 
     match /orders/{orderId} {
@@ -111,24 +116,24 @@ service cloud.firestore {
       allow read: if isSignedIn() &&
         (resource.data.customerId == request.auth.uid ||
           (isStaff() &&
-            (isMasterAdmin() || resource.data.branchId == managerBranchId())));
+            (isElevatedAdmin() || resource.data.branchId == managerBranchId())));
       allow update: if isStaff() &&
-        (isMasterAdmin() || resource.data.branchId == managerBranchId());
+        (isElevatedAdmin() || resource.data.branchId == managerBranchId());
     }
 
     match /homeBanners/{bannerId} {
       allow read: if true;
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /testimonials/{testimonialId} {
       allow read: if true;
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /inventoryLogs/{logId} {
       allow read: if isStaff() &&
-        (isMasterAdmin() || resource.data.branchId == managerBranchId());
+        (isElevatedAdmin() || resource.data.branchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
@@ -140,7 +145,7 @@ service cloud.firestore {
 
     match /branchTransfers/{transferId} {
       allow read: if isStaff() &&
-        (isMasterAdmin() ||
+        (isElevatedAdmin() ||
           resource.data.fromBranchId == managerBranchId() ||
           resource.data.toBranchId == managerBranchId());
       allow create: if isStaff() &&
@@ -155,40 +160,40 @@ service cloud.firestore {
 
     match /physicalProducts/{productId} {
       allow read: if isStaff();
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /physicalCategories/{categoryId} {
       allow read: if isStaff();
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /physicalVendors/{vendorId} {
       allow read: if isStaff();
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /physicalBranches/{branchId} {
       allow read: if isStaff();
-      allow write: if isMasterAdmin();
+      allow write: if isElevatedAdmin();
     }
 
     match /physicalBranchInventory/{inventoryId} {
       allow read: if resource.data.branchId != null &&
-        (isMasterAdmin() || managerBranchId() == resource.data.branchId);
-      allow read: if isMasterAdmin();
+        (isElevatedAdmin() || managerBranchId() == resource.data.branchId);
+      allow read: if isElevatedAdmin();
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
       allow update: if isStaff() &&
         resource.data.branchId != null &&
         canAccessBranch(resource.data.branchId);
-      allow delete: if isMasterAdmin();
+      allow delete: if isElevatedAdmin();
     }
 
     match /physicalInventoryLogs/{logId} {
       allow read: if isStaff() &&
-        (isMasterAdmin() || resource.data.branchId == managerBranchId());
+        (isElevatedAdmin() || resource.data.branchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
@@ -197,13 +202,13 @@ service cloud.firestore {
 
     match /physicalProductPriceLogs/{logId} {
       allow read: if isStaff();
-      allow create: if isMasterAdmin();
+      allow create: if isElevatedAdmin();
       allow update, delete: if false;
     }
 
     match /physicalBranchTransfers/{transferId} {
       allow read: if isStaff() &&
-        (isMasterAdmin() ||
+        (isElevatedAdmin() ||
           resource.data.fromBranchId == managerBranchId() ||
           resource.data.toBranchId == managerBranchId());
       allow create: if isStaff() &&
@@ -214,7 +219,7 @@ service cloud.firestore {
 
     match /physicalPosSales/{saleId} {
       allow read: if isStaff() &&
-        (isMasterAdmin() || resource.data.branchId == managerBranchId());
+        (isElevatedAdmin() || resource.data.branchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
@@ -223,7 +228,7 @@ service cloud.firestore {
 
     match /physicalSupplierStockIns/{stockInId} {
       allow read: if isStaff() &&
-        (isMasterAdmin() || resource.data.branchId == managerBranchId());
+        (isElevatedAdmin() || resource.data.branchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);

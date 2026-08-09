@@ -12,6 +12,12 @@ import {
 import { getClientDb } from "@/lib/firebase";
 import { userConverter } from "@/lib/firestore/converters";
 import { assignBranchManager, getBranch } from "@/lib/firestore/branches";
+import {
+  isElevatedAdminRole,
+  isMasterAdminRole,
+  isStaffRole,
+  roleAssignableBy,
+} from "@/lib/roles";
 import type { AppUser, UserRole } from "@/types";
 import type { User } from "firebase/auth";
 
@@ -47,7 +53,7 @@ export async function getAllUsers(): Promise<AppUser[]> {
 
 export async function getStaffUsers(): Promise<AppUser[]> {
   const users = await getAllUsers();
-  return users.filter((u) => u.role === "master-admin" || u.role === "manager");
+  return users.filter((u) => isStaffRole(u.role));
 }
 
 export async function hasMasterAdmin(): Promise<boolean> {
@@ -159,22 +165,42 @@ export async function updateUserAccess(
     throw new Error("Managers must be assigned to a branch");
   }
 
-  const user = await getUser(uid);
+  const [user, actor] = await Promise.all([getUser(uid), getUser(actorUid)]);
   if (!user) {
     throw new Error("User not found");
+  }
+  if (!actor || !isElevatedAdminRole(actor.role)) {
+    throw new Error("Only admins can update user access");
   }
 
   if (user.isAnonymous && data.role !== "customer") {
     throw new Error("Guest accounts cannot be assigned staff roles");
   }
 
-  if (uid === actorUid && user.role === "master-admin" && data.role !== "master-admin") {
+  if (
+    isMasterAdminRole(user.role) &&
+    !isMasterAdminRole(actor.role)
+  ) {
+    throw new Error("You cannot edit master-admin users");
+  }
+
+  if (!roleAssignableBy(actor.role, data.role)) {
+    throw new Error("You cannot assign that role");
+  }
+
+  if (
+    uid === actorUid &&
+    isMasterAdminRole(user.role) &&
+    !isMasterAdminRole(data.role)
+  ) {
     throw new Error("You cannot remove your own master-admin role");
   }
 
-  if (user.role === "master-admin" && data.role !== "master-admin") {
+  if (isMasterAdminRole(user.role) && !isMasterAdminRole(data.role)) {
     const staff = await getStaffUsers();
-    const masterCount = staff.filter((u) => u.role === "master-admin").length;
+    const masterCount = staff.filter((u) =>
+      isMasterAdminRole(u.role)
+    ).length;
     if (masterCount <= 1) {
       throw new Error("At least one master-admin is required");
     }
@@ -207,7 +233,7 @@ export async function updateUserAccess(
     );
   }
 
-  if (data.role === "master-admin") {
+  if (isMasterAdminRole(data.role)) {
     await updateDoc(doc(getClientDb(), "settings", "bootstrap"), {
       masterAdminUid: uid,
       updatedAt: serverTimestamp(),
@@ -216,5 +242,5 @@ export async function updateUserAccess(
 }
 
 export function isStaff(role: UserRole): boolean {
-  return role === "master-admin" || role === "manager";
+  return isStaffRole(role);
 }

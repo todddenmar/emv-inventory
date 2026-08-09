@@ -69,10 +69,10 @@ export function AdminNavLinks({
   compactLabels?: boolean;
 }) {
   const pathname = usePathname();
-  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
 
   const items = adminNavItems.filter(
-    (item) => isMasterAdmin || !item.masterOnly
+    (item) => isElevatedAdmin || !item.masterOnly
   );
 
   return (
@@ -117,7 +117,7 @@ export function AdminNavLinks({
           </Link>
         );
       })}
-      {!isMasterAdmin && assignedBranchId && (
+      {!isElevatedAdmin && assignedBranchId && (
         <div
           className={cn(
             "px-3 pt-3",

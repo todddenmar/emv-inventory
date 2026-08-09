@@ -64,7 +64,7 @@ function firstDestinationId(branches: Branch[], fromId: string) {
 }
 
 export default function AdminTransfersPage() {
-  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
   const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -84,7 +84,7 @@ export default function AdminTransfersPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const defaultFromBranch = isMasterAdmin ? "" : assignedBranchId ?? "";
+  const defaultFromBranch = isElevatedAdmin ? "" : assignedBranchId ?? "";
 
   useEffect(() => {
     Promise.all([getBranches(true), getProducts(), getBranchTransfers()])
@@ -249,7 +249,7 @@ export default function AdminTransfersPage() {
         <CardHeader>
           <CardTitle>New transfer</CardTitle>
           <CardDescription>
-            {isMasterAdmin
+            {isElevatedAdmin
               ? "Transfer selling variants from any branch to another"
               : `Transfer stock out of ${fromBranch?.name ?? "your branch"}`}
           </CardDescription>
@@ -267,7 +267,7 @@ export default function AdminTransfersPage() {
                   setSelectedVariant(null);
                   setToBranchId(firstDestinationId(branches, nextFrom));
                 }}
-                disabled={!isMasterAdmin}
+                disabled={!isElevatedAdmin}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select source branch">
@@ -429,7 +429,7 @@ export default function AdminTransfersPage() {
       </Card>
 
       <InventoryActivityFeed
-        branchId={isMasterAdmin ? null : assignedBranchId}
+        branchId={isElevatedAdmin ? null : assignedBranchId}
         showViewAll={false}
         max={20}
       />

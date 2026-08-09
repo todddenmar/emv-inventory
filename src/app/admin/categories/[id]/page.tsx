@@ -80,7 +80,7 @@ export default function EditCategoryPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { isMasterAdmin } = useBranchAccess();
+  const { isElevatedAdmin } = useBranchAccess();
 
   const [category, setCategory] = useState<Category | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -157,12 +157,12 @@ export default function EditCategoryPage({
       .slice(0, 50);
   }, [allProducts, assignedIds, addSearch]);
 
-  if (!isMasterAdmin) {
+  if (!isElevatedAdmin) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only the master-admin can manage categories.
+            Only admins can manage categories.
           </p>
         </CardContent>
       </Card>

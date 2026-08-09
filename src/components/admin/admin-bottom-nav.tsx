@@ -77,7 +77,7 @@ function useVisibleSlotCount(enabled: boolean) {
 
 export function AdminBottomNav() {
   const pathname = usePathname();
-  const { isMasterAdmin } = useBranchAccess();
+  const { isElevatedAdmin } = useBranchAccess();
   const [moreOpen, setMoreOpen] = useState(false);
   const { navRef, count: visibleSlotCount } = useVisibleSlotCount(true);
 
@@ -86,7 +86,7 @@ export function AdminBottomNav() {
   const allowedCandidates = bottomNavCandidates.filter((candidate) => {
     const item = navByHref.get(candidate.href);
     if (!item) return false;
-    return isMasterAdmin || !item.masterOnly;
+    return isElevatedAdmin || !item.masterOnly;
   });
 
   const barItems = allowedCandidates
@@ -104,7 +104,7 @@ export function AdminBottomNav() {
 
   const moreItems = adminNavItems.filter(
     (item) =>
-      (isMasterAdmin || !item.masterOnly) && !barHrefs.has(item.href)
+      (isElevatedAdmin || !item.masterOnly) && !barHrefs.has(item.href)
   );
 
   const moreActive = moreItems.some((item) => isNavActive(pathname, item.href));

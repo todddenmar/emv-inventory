@@ -49,7 +49,7 @@ const REASON_OPTIONS: { value: ReasonFilter; label: string }[] = [
 ];
 
 export default function AdminAdjustmentHistoryPage() {
-  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +58,7 @@ export default function AdminAdjustmentHistoryPage() {
   const [search, setSearch] = useState("");
   const [date, setDate] = useState(() => toDateInputValue());
 
-  const scopeBranchId = isMasterAdmin
+  const scopeBranchId = isElevatedAdmin
     ? selectedBranchId === "all"
       ? null
       : selectedBranchId
@@ -68,15 +68,15 @@ export default function AdminAdjustmentHistoryPage() {
     getBranches(true)
       .then((list) => {
         setBranches(list);
-        if (!isMasterAdmin && assignedBranchId) {
+        if (!isElevatedAdmin && assignedBranchId) {
           setSelectedBranchId(assignedBranchId);
         }
       })
       .catch(console.error);
-  }, [isMasterAdmin, assignedBranchId]);
+  }, [isElevatedAdmin, assignedBranchId]);
 
   useEffect(() => {
-    if (!isMasterAdmin && !assignedBranchId) {
+    if (!isElevatedAdmin && !assignedBranchId) {
       setLogs([]);
       setLoading(false);
       return;
@@ -91,7 +91,7 @@ export default function AdminAdjustmentHistoryPage() {
       .then(setLogs)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [scopeBranchId, isMasterAdmin, assignedBranchId, date]);
+  }, [scopeBranchId, isElevatedAdmin, assignedBranchId, date]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -173,7 +173,7 @@ export default function AdminAdjustmentHistoryPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-md"
             />
-            {isMasterAdmin && (
+            {isElevatedAdmin && (
               <Select
                 value={selectedBranchId}
                 onValueChange={(v) => setSelectedBranchId(v ?? "all")}

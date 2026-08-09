@@ -180,7 +180,7 @@ function BarMeter({
 }
 
 export default function AdminReportsPage() {
-  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
   const initial = applyPreset("today");
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -194,7 +194,7 @@ export default function AdminReportsPage() {
   const [prevSales, setPrevSales] = useState<PosSale[]>([]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);
 
-  const scopeBranchId = isMasterAdmin
+  const scopeBranchId = isElevatedAdmin
     ? selectedBranchId === "all"
       ? null
       : selectedBranchId
@@ -207,15 +207,15 @@ export default function AdminReportsPage() {
     getBranches(true)
       .then((list) => {
         setBranches(list);
-        if (!isMasterAdmin && assignedBranchId) {
+        if (!isElevatedAdmin && assignedBranchId) {
           setSelectedBranchId(assignedBranchId);
         }
       })
       .catch(console.error);
-  }, [isMasterAdmin, assignedBranchId]);
+  }, [isElevatedAdmin, assignedBranchId]);
 
   const load = useCallback(async () => {
-    if (!isMasterAdmin && !assignedBranchId) {
+    if (!isElevatedAdmin && !assignedBranchId) {
       setSales([]);
       setPrevSales([]);
       setLogs([]);
@@ -265,7 +265,7 @@ export default function AdminReportsPage() {
     assignedBranchId,
     effectiveFrom,
     effectiveTo,
-    isMasterAdmin,
+    isElevatedAdmin,
     mode,
     scopeBranchId,
   ]);
@@ -419,7 +419,7 @@ export default function AdminReportsPage() {
               </div>
             ) : null}
 
-            {isMasterAdmin ? (
+            {isElevatedAdmin ? (
               <div className="space-y-2">
                 <Label>Branch</Label>
                 <Select

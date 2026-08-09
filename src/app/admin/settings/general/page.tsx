@@ -26,7 +26,7 @@ import { updateAppSettings } from "@/lib/firestore/app-settings";
 import type { CatalogImageSource } from "@/lib/products";
 
 export default function AdminSettingsGeneralPage() {
-  const { isMasterAdmin } = useBranchAccess();
+  const { isElevatedAdmin } = useBranchAccess();
   const { settings, loading, setSettings } = useAppSettings();
   const [catalogImageSource, setCatalogImageSource] =
     useState<CatalogImageSource | null>(null);
@@ -49,12 +49,12 @@ export default function AdminSettingsGeneralPage() {
     imageValue !== settings.catalogImageSource ||
     labelsValue !== settings.hideSidebarLabelsUntilHover;
 
-  if (!isMasterAdmin) {
+  if (!isElevatedAdmin) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only the master-admin can change general settings.
+            Only admins can change general settings.
           </p>
         </CardContent>
       </Card>

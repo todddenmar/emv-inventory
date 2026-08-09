@@ -28,9 +28,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { createInvite, getInvites, isInviteValid } from "@/lib/firestore/invites";
+import {
+  createInvite,
+  getInvites,
+  isInviteValid,
+  type InviteRole,
+} from "@/lib/firestore/invites";
 import { getBranches } from "@/lib/firestore/branches";
-import { useAuthStore, useIsMasterAdmin } from "@/stores/auth-store";
+import { useAuthStore, useIsElevatedAdmin } from "@/stores/auth-store";
+import { formatUserRole } from "@/components/layout/user-avatar";
 import { formatDate } from "@/lib/format";
 import type { Branch, Invite } from "@/types";
 import {
@@ -43,12 +49,13 @@ import {
 
 export default function AdminInvitesPage() {
   const user = useAuthStore((s) => s.user);
-  const isMasterAdmin = useIsMasterAdmin();
+  const isElevatedAdmin = useIsElevatedAdmin();
   const [invites, setInvites] = useState<Invite[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<InviteRole>("manager");
   const [branchId, setBranchId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [lastLink, setLastLink] = useState<string | null>(null);
@@ -67,14 +74,14 @@ export default function AdminInvitesPage() {
     loadInvites();
   }, []);
 
-  if (!isMasterAdmin) {
+  if (!isElevatedAdmin) {
     return (
       <div>
         <h1 className="text-2xl font-bold mb-4">Invites</h1>
         <Card>
           <CardContent className="pt-6">
             <p className="text-muted-foreground">
-              Only the master-admin can create manager invites.
+              Only admins can create staff invites.
             </p>
           </CardContent>
         </Card>
@@ -82,38 +89,49 @@ export default function AdminInvitesPage() {
     );
   }
 
+  const resetForm = () => {
+    setEmail("");
+    setRole("manager");
+    setBranchId("");
+  };
+
   const handleCreateInvite = async () => {
     if (!user) return;
-    if (!branchId) {
+    if (role === "manager" && !branchId) {
       toast.error("Select a branch for this manager");
       return;
     }
     const branch = branches.find((b) => b.id === branchId);
     setSubmitting(true);
     try {
-      const invite = await createInvite(
-        user.uid,
-        user.displayName || user.email || "Admin",
-        email || null,
-        branchId,
-        branch?.name ?? null
-      );
+      const invite = await createInvite({
+        createdBy: user.uid,
+        createdByName: user.displayName || user.email || "Admin",
+        email: email || null,
+        role,
+        branchId: role === "manager" ? branchId : null,
+        branchName: role === "manager" ? (branch?.name ?? null) : null,
+      });
       const link = `${window.location.origin}/invite/${invite.token}`;
       setLastLink(link);
       toast.success("Invite created");
-      setEmail("");
-      setBranchId("");
+      resetForm();
       loadInvites();
 
       if (email) {
-        const subject = encodeURIComponent("Manager invite — El Mio Vicente");
+        const roleLabel = formatUserRole(role);
+        const subject = encodeURIComponent(
+          `${roleLabel} invite — El Mio Vicente`
+        );
         const body = encodeURIComponent(
-          `You've been invited to join as a manager.\n\nAccept your invite here:\n${link}\n\nThis link expires in 7 days.`
+          `You've been invited to join as ${roleLabel.toLowerCase()}.\n\nAccept your invite here:\n${link}\n\nThis link expires in 7 days.`
         );
         window.open(`mailto:${email}?subject=${subject}&body=${body}`);
       }
-    } catch {
-      toast.error("Failed to create invite");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create invite"
+      );
     } finally {
       setSubmitting(false);
     }
@@ -129,50 +147,96 @@ export default function AdminInvitesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Manager Invites</h1>
+          <h1 className="text-2xl font-bold">Staff invites</h1>
           <p className="text-muted-foreground">
-            Share a link or send an email invite with branch assignment
+            Invite managers (branch-scoped) or admins (full access)
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button
+          onClick={() => {
+            resetForm();
+            setDialogOpen(true);
+          }}
+        >
           <Link2 className="mr-2 h-4 w-4" />
           Create invite
         </Button>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) resetForm();
+          }}
+        >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Invite a manager</DialogTitle>
+              <DialogTitle>Invite staff</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Branch</Label>
-                <Select value={branchId} onValueChange={(v) => setBranchId(v ?? "")}>
+                <Label>Role</Label>
+                <Select
+                  value={role}
+                  onValueChange={(v) => {
+                    const next = (v as InviteRole) ?? "manager";
+                    setRole(next);
+                    if (next !== "manager") setBranchId("");
+                  }}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select branch">
-                      {(value) => {
-                        if (!value) return null;
-                        const branch = branches.find((b) => b.id === value);
-                        return branch
-                          ? `${branch.name} (${branch.code})`
-                          : null;
-                      }}
+                    <SelectValue placeholder="Select role">
+                      {(value) =>
+                        value ? formatUserRole(value as InviteRole) : null
+                      }
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {branches.map((branch) => (
-                      <SelectItem key={branch.id} value={branch.id}>
-                        {branch.name} ({branch.code})
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {role === "manager" ? (
+                <div className="space-y-2">
+                  <Label>Branch</Label>
+                  <Select
+                    value={branchId}
+                    onValueChange={(v) => setBranchId(v ?? "")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select branch">
+                        {(value) => {
+                          if (!value) return null;
+                          const branch = branches.find((b) => b.id === value);
+                          return branch
+                            ? `${branch.name} (${branch.code})`
+                            : null;
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>
+                          {branch.name} ({branch.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Admins get full catalog and multi-branch access (except
+                  product JSON import). No branch assignment needed.
+                </p>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email">Email (optional)</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="manager@example.com"
+                  placeholder="staff@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -240,6 +304,7 @@ export default function AdminInvitesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Role</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Created</TableHead>
@@ -251,6 +316,11 @@ export default function AdminInvitesPage() {
               <TableBody>
                 {invites.map((invite) => (
                   <TableRow key={invite.id}>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {formatUserRole(invite.role)}
+                      </Badge>
+                    </TableCell>
                     <TableCell>{invite.branchName || "—"}</TableCell>
                     <TableCell>{invite.email || "—"}</TableCell>
                     <TableCell>{formatDate(invite.createdAt)}</TableCell>

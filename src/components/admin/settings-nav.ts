@@ -11,7 +11,10 @@ export type SettingsNavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-  masterOnly: boolean;
+  /** Visible to master-admin and admin. */
+  elevatedOnly: boolean;
+  /** Visible only to master-admin (e.g. product JSON import). */
+  masterAdminOnly?: boolean;
   underUsers?: boolean;
   description: string;
 };
@@ -21,36 +24,37 @@ export const settingsNavItems: SettingsNavItem[] = [
     href: "/admin/settings/general",
     label: "General",
     icon: Settings2,
-    masterOnly: true,
+    elevatedOnly: true,
     description: "App-wide display and catalog preferences",
   },
   {
     href: "/admin/settings/assortment",
     label: "Branch assortment",
     icon: ListChecks,
-    masterOnly: false,
+    elevatedOnly: false,
     description: "Choose which variants each branch sells",
   },
   {
     href: "/admin/settings/import",
     label: "Product JSON import",
     icon: FileJson,
-    masterOnly: true,
+    elevatedOnly: true,
+    masterAdminOnly: true,
     description: "Import products from EMV JSON catalogs",
   },
   {
     href: "/admin/settings/users",
     label: "Users",
     icon: Users,
-    masterOnly: true,
+    elevatedOnly: true,
     description: "Manage staff roles and branch assignment",
   },
   {
     href: "/admin/settings/users/invites",
     label: "Invites",
     icon: UserPlus,
-    masterOnly: true,
+    elevatedOnly: true,
     underUsers: true,
-    description: "Create manager invite links",
+    description: "Create manager and admin invite links",
   },
 ];

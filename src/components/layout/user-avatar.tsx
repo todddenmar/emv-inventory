@@ -29,6 +29,8 @@ export function formatUserRole(
   switch (role) {
     case "master-admin":
       return "Master admin";
+    case "admin":
+      return "Admin";
     case "manager":
       return "Manager";
     case "customer":

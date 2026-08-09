@@ -61,7 +61,7 @@ type StockDraft = Record<string, { stock: number; lowStockThreshold: number }>;
 type StockFilter = "all" | "low" | "in_stock" | "out_of_stock";
 
 export default function AdminInventoryPage() {
-  const { isMasterAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
   const { catalogImageSource } = useAppSettings();
   const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -79,14 +79,14 @@ export default function AdminInventoryPage() {
     useState<AdjustmentHistoryTarget | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const activeBranchId = isMasterAdmin ? selectedBranchId : assignedBranchId ?? "";
+  const activeBranchId = isElevatedAdmin ? selectedBranchId : assignedBranchId ?? "";
 
   const loadBranches = async () => {
     const all = await getBranches(true);
     setBranches(all);
     if (!selectedBranchId && all.length > 0) {
       setSelectedBranchId(
-        isMasterAdmin
+        isElevatedAdmin
           ? all[0].id
           : assignedBranchId ?? all[0].id
       );
@@ -97,7 +97,7 @@ export default function AdminInventoryPage() {
     if (!branchId) return;
     const [p, inv, cats] = await Promise.all([
       getProducts(),
-      isMasterAdmin && branchId === "all"
+      isElevatedAdmin && branchId === "all"
         ? getAllBranchInventory()
         : getBranchInventory(branchId),
       getCategories(),
@@ -206,7 +206,7 @@ export default function AdminInventoryPage() {
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
 
   const branchSummaries = useMemo(() => {
-    if (!isMasterAdmin) return [];
+    if (!isElevatedAdmin) return [];
     return branches.map((branch) => {
       const rows = inventory.filter(
         (i) => i.branchId === branch.id && i.isSelling !== false
@@ -217,7 +217,7 @@ export default function AdminInventoryPage() {
       ).length;
       return { branch, stocked, low, totalSkus: rows.length };
     });
-  }, [branches, inventory, isMasterAdmin]);
+  }, [branches, inventory, isElevatedAdmin]);
 
   const updateDraft = (
     variantId: string,
@@ -290,12 +290,12 @@ export default function AdminInventoryPage() {
         <div>
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-muted-foreground">
-            {isMasterAdmin
+            {isElevatedAdmin
               ? "Stock levels across branches"
               : `Stock for ${activeBranch?.name ?? "your branch"}`}
           </p>
         </div>
-        {isMasterAdmin && (
+        {isElevatedAdmin && (
           <Select
             value={selectedBranchId}
             onValueChange={(v) => setSelectedBranchId(v ?? "")}
@@ -317,7 +317,7 @@ export default function AdminInventoryPage() {
         )}
       </div>
 
-      {isMasterAdmin && selectedBranchId === "all" && (
+      {isElevatedAdmin && selectedBranchId === "all" && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {branchSummaries.map(({ branch, stocked, low, totalSkus }) => (
             <Card

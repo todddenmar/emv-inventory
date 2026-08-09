@@ -7,15 +7,17 @@ import { settingsNavItems } from "@/components/admin/settings-nav";
 
 export default function AdminSettingsPage() {
   const router = useRouter();
-  const { isMasterAdmin } = useBranchAccess();
+  const { isMasterAdmin, isElevatedAdmin } = useBranchAccess();
 
   useEffect(() => {
-    const items = settingsNavItems.filter(
-      (item) => isMasterAdmin || !item.masterOnly
-    );
+    const items = settingsNavItems.filter((item) => {
+      if (item.masterAdminOnly && !isMasterAdmin) return false;
+      if (item.elevatedOnly && !isElevatedAdmin) return false;
+      return true;
+    });
     const target = items[0]?.href ?? "/admin/settings/assortment";
     router.replace(target);
-  }, [isMasterAdmin, router]);
+  }, [isMasterAdmin, isElevatedAdmin, router]);
 
   return (
     <p className="text-sm text-muted-foreground">Opening settings…</p>

@@ -1,23 +1,31 @@
-import { useAuthStore, useIsMasterAdmin } from "@/stores/auth-store";
+import {
+  useAuthStore,
+  useIsElevatedAdmin,
+  useIsMasterAdmin,
+} from "@/stores/auth-store";
 
 export function useBranchAccess() {
   const user = useAuthStore((s) => s.user);
   const isMasterAdmin = useIsMasterAdmin();
+  const isElevatedAdmin = useIsElevatedAdmin();
   const assignedBranchId = user?.branchId ?? null;
   const isManager = user?.role === "manager";
+  const isAdmin = user?.role === "admin";
 
   const canAccessBranch = (branchId: string) =>
-    isMasterAdmin || assignedBranchId === branchId;
+    isElevatedAdmin || assignedBranchId === branchId;
 
-  const scopedBranchId = isMasterAdmin ? null : assignedBranchId;
+  const scopedBranchId = isElevatedAdmin ? null : assignedBranchId;
 
   return {
     user,
     isMasterAdmin,
+    isElevatedAdmin,
+    isAdmin,
     isManager,
     assignedBranchId,
     scopedBranchId,
     canAccessBranch,
-    hasBranchAssignment: isMasterAdmin || !!assignedBranchId,
+    hasBranchAssignment: isElevatedAdmin || !!assignedBranchId,
   };
 }

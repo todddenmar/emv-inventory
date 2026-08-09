@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
+import { formatUserRole } from "@/components/layout/user-avatar";
 import { getInviteByToken, isInviteValid } from "@/lib/firestore/invites";
 import type { Invite } from "@/types";
 import { useEffect, useState } from "react";
@@ -54,14 +55,25 @@ function InviteContent({ token }: { token: string }) {
     );
   }
 
+  const roleLabel = formatUserRole(invite.role);
+
   return (
     <div className="container mx-auto max-w-md px-4 py-16">
       <Card>
         <CardHeader>
-          <CardTitle>Manager invite</CardTitle>
+          <CardTitle>{roleLabel} invite</CardTitle>
           <CardDescription>
-            You've been invited by {invite.createdByName} to manage{" "}
-            <strong>{invite.branchName || "a branch"}</strong>.
+            {invite.role === "admin" ? (
+              <>
+                You&apos;ve been invited by {invite.createdByName} to join as an
+                admin with full catalog and multi-branch access.
+              </>
+            ) : (
+              <>
+                You&apos;ve been invited by {invite.createdByName} to manage{" "}
+                <strong>{invite.branchName || "a branch"}</strong>.
+              </>
+            )}
             {invite.email && (
               <>
                 {" "}

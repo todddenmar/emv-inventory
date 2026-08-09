@@ -13,6 +13,8 @@ import { getClientDb } from "@/lib/firebase";
 import { inviteConverter } from "@/lib/firestore/converters";
 import type { Invite } from "@/types";
 
+export type InviteRole = Invite["role"];
+
 function invitesRef(): CollectionReference<Invite> {
   return collection(getClientDb(), "invites").withConverter(inviteConverter);
 }
@@ -21,25 +23,38 @@ function generateToken(): string {
   return crypto.randomUUID().replace(/-/g, "");
 }
 
-export async function createInvite(
-  createdBy: string,
-  createdByName: string,
-  email: string | null,
-  branchId: string | null,
-  branchName: string | null
-): Promise<Invite> {
+function normalizeInviteRole(role: unknown): InviteRole {
+  return role === "admin" ? "admin" : "manager";
+}
+
+export async function createInvite(input: {
+  createdBy: string;
+  createdByName: string;
+  email: string | null;
+  role: InviteRole;
+  branchId: string | null;
+  branchName: string | null;
+}): Promise<Invite> {
+  const role = normalizeInviteRole(input.role);
+  if (role === "manager" && !input.branchId) {
+    throw new Error("Managers must be assigned to a branch");
+  }
+
   const token = generateToken();
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
+  const branchId = role === "manager" ? input.branchId : null;
+  const branchName = role === "manager" ? input.branchName : null;
+
   const docRef = await addDoc(collection(getClientDb(), "invites"), {
     token,
-    email,
-    role: "manager",
+    email: input.email,
+    role,
     branchId,
     branchName,
-    createdBy,
-    createdByName,
+    createdBy: input.createdBy,
+    createdByName: input.createdByName,
     expiresAt,
     usedAt: null,
     usedBy: null,
@@ -49,12 +64,12 @@ export async function createInvite(
   return {
     id: docRef.id,
     token,
-    email,
-    role: "manager",
+    email: input.email,
+    role,
     branchId,
     branchName,
-    createdBy,
-    createdByName,
+    createdBy: input.createdBy,
+    createdByName: input.createdByName,
     expiresAt,
     usedAt: null,
     usedBy: null,
@@ -73,24 +88,32 @@ export async function getInviteByToken(
 
 export async function getInvites(): Promise<Invite[]> {
   const snapshot = await getDocs(
-    query(collection(getClientDb(), "invites"), where("role", "==", "manager"))
+    query(
+      collection(getClientDb(), "invites"),
+      where("role", "in", ["manager", "admin"])
+    )
   );
-  return snapshot.docs.map((d) => ({
-    id: d.id,
-    token: d.data().token,
-    email: d.data().email ?? null,
-    role: d.data().role,
-    branchId: d.data().branchId ?? null,
-    branchName: d.data().branchName ?? null,
-    createdBy: d.data().createdBy,
-    createdByName: d.data().createdByName,
-    expiresAt: d.data().expiresAt?.toDate?.() ?? new Date(d.data().expiresAt),
-    usedAt: d.data().usedAt
-      ? d.data().usedAt?.toDate?.() ?? new Date(d.data().usedAt)
-      : null,
-    usedBy: d.data().usedBy ?? null,
-    createdAt: d.data().createdAt?.toDate?.() ?? new Date(d.data().createdAt),
-  }));
+  return snapshot.docs
+    .map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        token: data.token,
+        email: data.email ?? null,
+        role: normalizeInviteRole(data.role),
+        branchId: data.branchId ?? null,
+        branchName: data.branchName ?? null,
+        createdBy: data.createdBy,
+        createdByName: data.createdByName,
+        expiresAt: data.expiresAt?.toDate?.() ?? new Date(data.expiresAt),
+        usedAt: data.usedAt
+          ? (data.usedAt?.toDate?.() ?? new Date(data.usedAt))
+          : null,
+        usedBy: data.usedBy ?? null,
+        createdAt: data.createdAt?.toDate?.() ?? new Date(data.createdAt),
+      } satisfies Invite;
+    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 export async function acceptInvite(

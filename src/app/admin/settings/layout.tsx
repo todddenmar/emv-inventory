@@ -14,11 +14,13 @@ export function SettingsNav({
   className?: string;
 }) {
   const pathname = usePathname();
-  const { isMasterAdmin } = useBranchAccess();
+  const { isMasterAdmin, isElevatedAdmin } = useBranchAccess();
 
-  const items = settingsNavItems.filter(
-    (item) => isMasterAdmin || !item.masterOnly
-  );
+  const items = settingsNavItems.filter((item) => {
+    if (item.masterAdminOnly && !isMasterAdmin) return false;
+    if (item.elevatedOnly && !isElevatedAdmin) return false;
+    return true;
+  });
 
   return (
     <nav className={cn("space-y-1", className)}>
