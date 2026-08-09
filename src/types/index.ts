@@ -194,6 +194,13 @@ export interface BranchTransfer {
 
 export type PosPaymentMethod = "cash" | "retail";
 
+export interface PosSaleCustomer {
+  name: string | null;
+  mobile: string | null;
+  email: string | null;
+  address: string | null;
+}
+
 export interface PosSaleItem {
   productId: string;
   variantId: string;
@@ -208,6 +215,7 @@ export interface PosSale {
   branchId: string;
   branchName: string;
   paymentMethod: PosPaymentMethod;
+  customer: PosSaleCustomer | null;
   items: PosSaleItem[];
   itemCount: number;
   total: number;

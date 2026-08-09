@@ -4,6 +4,7 @@ import { Loader2, Minus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -12,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/format";
-import type { PosPaymentMethod } from "@/types";
+import type { PosPaymentMethod, PosSaleCustomer } from "@/types";
 
 export interface PosCartLine {
   productId: string;
@@ -29,11 +30,38 @@ export interface PosCartLine {
   maxStock: number;
 }
 
+export type PosCustomerDraft = {
+  name: string;
+  mobile: string;
+  email: string;
+  address: string;
+};
+
+export const emptyPosCustomerDraft = (): PosCustomerDraft => ({
+  name: "",
+  mobile: "",
+  email: "",
+  address: "",
+});
+
+export function normalizePosCustomer(
+  draft: PosCustomerDraft
+): PosSaleCustomer | null {
+  const name = draft.name.trim() || null;
+  const mobile = draft.mobile.trim() || null;
+  const email = draft.email.trim() || null;
+  const address = draft.address.trim() || null;
+  if (!name && !mobile && !email && !address) return null;
+  return { name, mobile, email, address };
+}
+
 interface PosCartPanelProps {
   lines: PosCartLine[];
   paymentMethod: PosPaymentMethod;
+  customer: PosCustomerDraft;
   charging: boolean;
   onPaymentMethodChange: (method: PosPaymentMethod) => void;
+  onCustomerChange: (patch: Partial<PosCustomerDraft>) => void;
   onRetailPriceChange: (variantId: string, retailPrice: number | null) => void;
   onIncrement: (variantId: string) => void;
   onDecrement: (variantId: string) => void;
@@ -46,8 +74,10 @@ interface PosCartPanelProps {
 export function PosCartPanel({
   lines,
   paymentMethod,
+  customer,
   charging,
   onPaymentMethodChange,
+  onCustomerChange,
   onRetailPriceChange,
   onIncrement,
   onDecrement,
@@ -116,6 +146,66 @@ export function PosCartPanel({
             ? "Uses each variant’s cash price."
             : "Uses retail price. Enter it below when missing."}
         </p>
+      </div>
+
+      <div className="space-y-3 border-b px-4 py-3">
+        <div>
+          <Label>Customer details</Label>
+          <p className="text-xs text-muted-foreground">Optional</p>
+        </div>
+        <div className="grid gap-2">
+          <div className="space-y-1">
+            <Label htmlFor="pos-customer-name" className="text-xs">
+              Name
+            </Label>
+            <Input
+              id="pos-customer-name"
+              value={customer.name}
+              disabled={charging}
+              placeholder="Customer name"
+              onChange={(e) => onCustomerChange({ name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="pos-customer-mobile" className="text-xs">
+              Mobile
+            </Label>
+            <Input
+              id="pos-customer-mobile"
+              type="tel"
+              value={customer.mobile}
+              disabled={charging}
+              placeholder="09…"
+              onChange={(e) => onCustomerChange({ mobile: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="pos-customer-email" className="text-xs">
+              Email
+            </Label>
+            <Input
+              id="pos-customer-email"
+              type="email"
+              value={customer.email}
+              disabled={charging}
+              placeholder="Optional"
+              onChange={(e) => onCustomerChange({ email: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="pos-customer-address" className="text-xs">
+              Address
+            </Label>
+            <Textarea
+              id="pos-customer-address"
+              value={customer.address}
+              disabled={charging}
+              placeholder="Optional delivery or contact address"
+              rows={2}
+              onChange={(e) => onCustomerChange({ address: e.target.value })}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

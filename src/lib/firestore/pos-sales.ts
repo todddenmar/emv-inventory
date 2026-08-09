@@ -15,12 +15,13 @@ import { COLLECTIONS } from "@/lib/firestore/collections";
 import { posSaleConverter } from "@/lib/firestore/converters";
 import { inventoryDocId } from "@/lib/firestore/inventory";
 import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
-import type { PosPaymentMethod, PosSale, PosSaleItem } from "@/types";
+import type { PosPaymentMethod, PosSale, PosSaleCustomer, PosSaleItem } from "@/types";
 
 export interface CompletePosSaleInput {
   branchId: string;
   branchName: string;
   paymentMethod: PosPaymentMethod;
+  customer?: PosSaleCustomer | null;
   items: PosSaleItem[];
   createdBy: string;
   createdByName?: string | null;
@@ -169,6 +170,7 @@ export async function completePosSale(
       branchId: input.branchId,
       branchName: input.branchName,
       paymentMethod: input.paymentMethod,
+      customer: input.customer ?? null,
       items: input.items,
       itemCount,
       total,

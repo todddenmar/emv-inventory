@@ -31,7 +31,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   PosCartPanel,
+  emptyPosCustomerDraft,
+  normalizePosCustomer,
   type PosCartLine,
+  type PosCustomerDraft,
 } from "@/components/admin/pos-cart";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
@@ -91,6 +94,7 @@ export default function AdminPosPage() {
   const [cart, setCart] = useState<PosCartLine[]>([]);
   const [paymentMethod, setPaymentMethod] =
     useState<PosPaymentMethod>("cash");
+  const [customer, setCustomer] = useState<PosCustomerDraft>(emptyPosCustomerDraft);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [charging, setCharging] = useState(false);
@@ -147,6 +151,7 @@ export default function AdminPosPage() {
     setCategoryCache({});
     setCart([]);
     setPaymentMethod("cash");
+    setCustomer(emptyPosCustomerDraft());
   }, [activeBranchId]);
 
   const loadCategory = useCallback(
@@ -323,7 +328,10 @@ export default function AdminPosPage() {
     setCart((prev) => prev.filter((line) => line.variantId !== variantId));
   };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    setCart([]);
+    setCustomer(emptyPosCustomerDraft());
+  };
 
   const missingRetailLines =
     paymentMethod === "retail"
@@ -361,6 +369,7 @@ export default function AdminPosPage() {
         branchId: activeBranch.id,
         branchName: activeBranch.name,
         paymentMethod,
+        customer: normalizePosCustomer(customer),
         items: cart.map((line) => ({
           productId: line.productId,
           variantId: line.variantId,
@@ -379,6 +388,7 @@ export default function AdminPosPage() {
       toast.success("Sale completed");
       setCart([]);
       setPaymentMethod("cash");
+      setCustomer(emptyPosCustomerDraft());
       setConfirmOpen(false);
       setMobileCartOpen(false);
 
@@ -423,8 +433,12 @@ export default function AdminPosPage() {
     <PosCartPanel
       lines={cart}
       paymentMethod={paymentMethod}
+      customer={customer}
       charging={charging}
       onPaymentMethodChange={applyPaymentMethod}
+      onCustomerChange={(patch) =>
+        setCustomer((prev) => ({ ...prev, ...patch }))
+      }
       onRetailPriceChange={setLineRetailPrice}
       onIncrement={incrementLine}
       onDecrement={decrementLine}

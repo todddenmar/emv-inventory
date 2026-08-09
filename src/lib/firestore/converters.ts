@@ -468,6 +468,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       branchId: sale.branchId,
       branchName: sale.branchName,
       paymentMethod: sale.paymentMethod,
+      customer: sale.customer,
       items: sale.items,
       itemCount: sale.itemCount,
       total: sale.total,
@@ -482,11 +483,20 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
   ): PosSale {
     const data = snapshot.data(options);
     const rawItems = (data.items ?? []) as PosSale["items"];
+    const rawCustomer = data.customer as PosSale["customer"] | undefined;
     return {
       id: snapshot.id,
       branchId: data.branchId,
       branchName: data.branchName ?? "",
       paymentMethod: data.paymentMethod === "retail" ? "retail" : "cash",
+      customer: rawCustomer
+        ? {
+            name: rawCustomer.name?.trim() || null,
+            mobile: rawCustomer.mobile?.trim() || null,
+            email: rawCustomer.email?.trim() || null,
+            address: rawCustomer.address?.trim() || null,
+          }
+        : null,
       items: rawItems.map((item) => ({
         productId: item.productId,
         variantId: item.variantId,
