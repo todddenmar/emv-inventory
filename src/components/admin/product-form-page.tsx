@@ -8,7 +8,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { LinkButton } from "@/components/ui/link-button";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ProductDescriptionEditor } from "@/components/admin/product-description-editor";
 import { CategoryMultiSelect } from "@/components/admin/category-multi-select";
 import { ProductOptionsEditor } from "@/components/admin/product-options-editor";
 import { ProductVariantsEditor } from "@/components/admin/product-variants-editor";
@@ -63,7 +62,6 @@ import type {
 
 const publishSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  description: z.string(),
 });
 
 type ProductFormValues = z.infer<typeof publishSchema>;
@@ -112,10 +110,10 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     useSlugField(resolveSlug);
 
   const form = useForm<ProductFormValues>({
-    defaultValues: { name: "", description: "" },
+    defaultValues: { name: "" },
   });
 
-  const { register, getValues, control } = form;
+  const { register, getValues } = form;
 
   const handleOptionsChange = (next: ProductOption[]) => {
     setOptions(next);
@@ -135,7 +133,6 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         setVendors(vendorList);
         form.reset({
           name: loaded.name,
-          description: loaded.description,
         });
         setCategoryIds(loaded.categoryIds);
         setProductType(loaded.productType ?? "");
@@ -206,7 +203,6 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     const draftProduct: Product = {
       ...(product as Product),
       name: values.name.trim(),
-      description: values.description,
       productType: productType.trim(),
       tags,
       vendorId,
@@ -253,7 +249,6 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         {
           name,
           slug: preferredSlug,
-          description: values.description,
           productType: productType.trim(),
           tags,
           vendorId,
@@ -294,7 +289,6 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
               ...prev,
               name,
               slug: preferredSlug,
-              description: values.description,
               productType: productType.trim(),
               tags,
               vendorId,
@@ -438,24 +432,9 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Used in /products/{slug || "your-slug"}. Example: Apple Ball →
+              Stable product key for imports and search. Example: Apple Ball →
               apple-ball (adds -2, -3… if already taken).
             </p>
-          </div>
-
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="description">Description (optional)</Label>
-            <Controller
-              name="description"
-              control={control}
-              render={({ field }) => (
-                <ProductDescriptionEditor
-                  value={field.value}
-                  onChange={field.onChange}
-                  disabled={saving || publishing}
-                />
-              )}
-            />
           </div>
 
           <div className="space-y-2">

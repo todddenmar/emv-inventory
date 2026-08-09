@@ -59,8 +59,10 @@ export interface ProductOption {
 export interface ProductVariant {
   id: string;
   sku: string;
+  /** Cash / walk-in selling price. */
   price: number;
-  compareAtPrice: number | null;
+  /** Retail / list price. Optional until set on product or at POS. */
+  retailPrice: number | null;
   optionValues: Record<string, string>;
   imageId: string | null;
   position: number;
@@ -84,14 +86,11 @@ export interface Product {
   id: string;
   name: string;
   slug: string;
-  description: string;
   productType: string;
   tags: string[];
   vendorId: string | null;
   /** @deprecated Derived from default variant. Kept for legacy reads. */
   price: number;
-  /** @deprecated Derived from default variant. Kept for legacy reads. */
-  compareAtPrice: number | null;
   categoryIds: string[];
   options: ProductOption[];
   variants: ProductVariant[];
@@ -193,6 +192,8 @@ export interface BranchTransfer {
   createdAt: Date;
 }
 
+export type PosPaymentMethod = "cash" | "retail";
+
 export interface PosSaleItem {
   productId: string;
   variantId: string;
@@ -206,6 +207,7 @@ export interface PosSale {
   id: string;
   branchId: string;
   branchName: string;
+  paymentMethod: PosPaymentMethod;
   items: PosSaleItem[];
   itemCount: number;
   total: number;

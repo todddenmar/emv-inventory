@@ -164,12 +164,10 @@ export const productConverter: FirestoreDataConverter<Product> = {
     return {
       name: product.name,
       slug: product.slug,
-      description: product.description,
       productType: product.productType,
       tags: product.tags,
       vendorId: product.vendorId,
       price: defaultVariant.price,
-      compareAtPrice: defaultVariant.compareAtPrice,
       categoryIds: product.categoryIds,
       options: product.options,
       variants: product.variants,
@@ -194,7 +192,6 @@ export const productConverter: FirestoreDataConverter<Product> = {
     const legacySpecs = (data.specs as ProductSpec[]) ?? [];
     const { options: productOptions, variants } = migrateLegacyProductVariants(snapshot.id, {
       price: data.price,
-      compareAtPrice: data.compareAtPrice,
       variants: data.variants as ProductVariant[] | undefined,
       options: data.options as ProductOption[] | undefined,
     });
@@ -208,14 +205,12 @@ export const productConverter: FirestoreDataConverter<Product> = {
       id: snapshot.id,
       name: data.name,
       slug: resolveSlug(data.slug, data.name, snapshot.id),
-      description: data.description,
       productType: typeof data.productType === "string" ? data.productType : "",
       tags: Array.isArray(data.tags)
         ? data.tags.filter((t: unknown): t is string => typeof t === "string")
         : [],
       vendorId: data.vendorId ?? null,
       price: defaultVariant?.price ?? Number(data.price ?? 0),
-      compareAtPrice: defaultVariant?.compareAtPrice ?? null,
       categoryIds: data.categoryIds ?? [],
       options: productOptions,
       variants,
@@ -472,6 +467,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
     return {
       branchId: sale.branchId,
       branchName: sale.branchName,
+      paymentMethod: sale.paymentMethod,
       items: sale.items,
       itemCount: sale.itemCount,
       total: sale.total,
@@ -490,6 +486,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       id: snapshot.id,
       branchId: data.branchId,
       branchName: data.branchName ?? "",
+      paymentMethod: data.paymentMethod === "retail" ? "retail" : "cash",
       items: rawItems.map((item) => ({
         productId: item.productId,
         variantId: item.variantId,

@@ -52,7 +52,6 @@ import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
 import { mergeSellingVariantsWithInventory, getLowStockVariants } from "@/lib/inventory";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatCurrency } from "@/lib/format";
-import { isProductOnSale } from "@/lib/product-pricing";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Branch, BranchInventory, Category, Product } from "@/types";
@@ -436,8 +435,8 @@ export default function AdminInventoryPage() {
                     <TableRow>
                       <TableHead>Product / variant</TableHead>
                       <TableHead className="w-28">SKU</TableHead>
-                      <TableHead className="w-32">Price</TableHead>
-                      <TableHead className="w-32">Compare at</TableHead>
+                      <TableHead className="w-28">Cash</TableHead>
+                      <TableHead className="w-28">Retail</TableHead>
                       <TableHead className="w-28">Stock</TableHead>
                       <TableHead className="w-28">Low at</TableHead>
                       <TableHead className="w-14 text-right">Actions</TableHead>
@@ -476,10 +475,6 @@ export default function AdminInventoryPage() {
                           : null;
                       const values = getStockValues(row.id, row);
                       const isLow = isLowStockRow(row);
-                      const onSale = isProductOnSale({
-                        price: row.price,
-                        compareAtPrice: row.compareAtPrice,
-                      });
                       const variantLabel = formatVariantLabel(
                         row,
                         product?.options ?? []
@@ -546,14 +541,12 @@ export default function AdminInventoryPage() {
                           <TableCell className="text-sm text-muted-foreground">
                             {row.sku || "—"}
                           </TableCell>
-                          <TableCell>
-                            <span className={onSale ? "font-semibold text-green-700 dark:text-green-400" : undefined}>
-                              {formatCurrency(row.price)}
-                            </span>
+                          <TableCell className="tabular-nums">
+                            {formatCurrency(row.price)}
                           </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {onSale
-                              ? formatCurrency(row.compareAtPrice!)
+                          <TableCell className="tabular-nums text-muted-foreground">
+                            {row.retailPrice != null
+                              ? formatCurrency(row.retailPrice)
                               : "—"}
                           </TableCell>
                           <TableCell>

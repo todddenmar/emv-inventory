@@ -440,10 +440,10 @@ export default function EditCategoryPage({
                                 <TableHead>Variant</TableHead>
                                 <TableHead>SKU</TableHead>
                                 <TableHead className="text-right">
-                                  Price
+                                  Cash
                                 </TableHead>
                                 <TableHead className="text-right">
-                                  Compare at
+                                  Retail
                                 </TableHead>
                               </TableRow>
                             </TableHeader>
@@ -465,8 +465,8 @@ export default function EditCategoryPage({
                                       {formatCurrency(variant.price)}
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums text-muted-foreground">
-                                      {variant.compareAtPrice != null
-                                        ? formatCurrency(variant.compareAtPrice)
+                                      {variant.retailPrice != null
+                                        ? formatCurrency(variant.retailPrice)
                                         : "—"}
                                     </TableCell>
                                   </TableRow>

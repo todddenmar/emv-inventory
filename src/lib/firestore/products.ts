@@ -168,12 +168,10 @@ export async function createDraftProduct(): Promise<string> {
   return createProduct({
     name: "",
     slug,
-    description: "",
     productType: "",
     tags: [],
     vendorId: null,
     price: 0,
-    compareAtPrice: null,
     categoryIds: [],
     options: [],
     variants: [
@@ -181,7 +179,7 @@ export async function createDraftProduct(): Promise<string> {
         id: crypto.randomUUID(),
         sku: "",
         price: 0,
-        compareAtPrice: null,
+        retailPrice: null,
         optionValues: {},
         imageId: null,
         position: 0,
@@ -262,6 +260,44 @@ export async function updateProduct(
       actor
     ).catch(console.error);
   }
+}
+
+/** Persist retail prices entered at POS onto product variants. */
+export async function setVariantRetailPrices(
+  updates: Array<{
+    productId: string;
+    variantId: string;
+    retailPrice: number;
+  }>
+): Promise<void> {
+  const byProduct = new Map<string, Array<{ variantId: string; retailPrice: number }>>();
+  for (const update of updates) {
+    const list = byProduct.get(update.productId) ?? [];
+    list.push({
+      variantId: update.variantId,
+      retailPrice: update.retailPrice,
+    });
+    byProduct.set(update.productId, list);
+  }
+
+  await Promise.all(
+    [...byProduct.entries()].map(async ([productId, variantUpdates]) => {
+      const product = await getProduct(productId);
+      if (!product) return;
+
+      let changed = false;
+      const variants = product.variants.map((variant) => {
+        const match = variantUpdates.find((u) => u.variantId === variant.id);
+        if (!match) return variant;
+        if (variant.retailPrice === match.retailPrice) return variant;
+        changed = true;
+        return { ...variant, retailPrice: match.retailPrice };
+      });
+
+      if (!changed) return;
+      await updateProduct(productId, { variants });
+    })
+  );
 }
 
 export async function archiveProduct(id: string): Promise<void> {

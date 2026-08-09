@@ -31,15 +31,15 @@ export function canPublishProduct(product: Product): {
 
   for (const variant of product.variants) {
     if (!Number.isFinite(variant.price) || variant.price < 0) {
-      return { ok: false, reason: "Every variant needs a valid price" };
+      return { ok: false, reason: "Every variant needs a valid cash price" };
     }
     if (
-      variant.compareAtPrice != null &&
-      variant.compareAtPrice <= variant.price
+      variant.retailPrice != null &&
+      (!Number.isFinite(variant.retailPrice) || variant.retailPrice <= 0)
     ) {
       return {
         ok: false,
-        reason: "Compare at price must be higher than the sale price on each variant",
+        reason: "Retail price must be greater than zero when set",
       };
     }
   }

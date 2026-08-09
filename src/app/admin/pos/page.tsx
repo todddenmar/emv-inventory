@@ -38,16 +38,38 @@ import { useAuthStore } from "@/stores/auth-store";
 import { getBranches } from "@/lib/firestore/branches";
 import { getCategories } from "@/lib/firestore/categories";
 import { getBranchInventory } from "@/lib/firestore/inventory";
-import { getProductsByCategoryId } from "@/lib/firestore/products";
+import {
+  getProductsByCategoryId,
+  setVariantRetailPrices,
+} from "@/lib/firestore/products";
 import { completePosSale } from "@/lib/firestore/pos-sales";
 import { mergeSellingVariantsWithInventory } from "@/lib/inventory";
 import { isProductPublished } from "@/lib/products-catalog";
 import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
 import { formatVariantLabel } from "@/lib/product-variants";
+import {
+  normalizeRetailPrice,
+  unitPriceForPaymentMethod,
+} from "@/lib/product-pricing";
 import { formatCurrency } from "@/lib/format";
 import { useAppSettings } from "@/hooks/use-app-settings";
-import type { Branch, BranchInventory, Category, Product } from "@/types";
+import type {
+  Branch,
+  BranchInventory,
+  Category,
+  PosPaymentMethod,
+  Product,
+} from "@/types";
 import type { VariantWithStock } from "@/lib/inventory";
+
+function resolveUnitPrice(
+  cashPrice: number,
+  retailPrice: number | null,
+  method: PosPaymentMethod
+): number {
+  if (method === "cash") return cashPrice;
+  return normalizeRetailPrice(retailPrice) ?? 0;
+}
 
 export default function AdminPosPage() {
   const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
@@ -67,6 +89,8 @@ export default function AdminPosPage() {
   const [categorySearch, setCategorySearch] = useState("");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<PosCartLine[]>([]);
+  const [paymentMethod, setPaymentMethod] =
+    useState<PosPaymentMethod>("cash");
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [charging, setCharging] = useState(false);
@@ -122,6 +146,7 @@ export default function AdminPosPage() {
 
     setCategoryCache({});
     setCart([]);
+    setPaymentMethod("cash");
   }, [activeBranchId]);
 
   const loadCategory = useCallback(
@@ -200,6 +225,7 @@ export default function AdminPosPage() {
 
     const product = categoryProducts.find((p) => p.id === row.productId);
     const variantLabel = formatVariantLabel(row, product?.options ?? []);
+    const retailPrice = normalizeRetailPrice(row.retailPrice);
 
     setCart((prev) => {
       const existing = prev.find((line) => line.variantId === row.id);
@@ -226,12 +252,47 @@ export default function AdminPosPage() {
           variantId: row.id,
           productName: row.productName,
           variantLabel,
-          unitPrice: row.price,
+          cashPrice: row.price,
+          retailPrice,
+          retailFromCatalog: retailPrice != null,
+          unitPrice: resolveUnitPrice(row.price, retailPrice, paymentMethod),
           quantity: 1,
           maxStock: stock,
         },
       ];
     });
+  };
+
+  const applyPaymentMethod = (method: PosPaymentMethod) => {
+    setPaymentMethod(method);
+    setCart((prev) =>
+      prev.map((line) => ({
+        ...line,
+        unitPrice: resolveUnitPrice(line.cashPrice, line.retailPrice, method),
+      }))
+    );
+  };
+
+  const setLineRetailPrice = (
+    variantId: string,
+    retailPrice: number | null
+  ) => {
+    const normalized = normalizeRetailPrice(retailPrice);
+    setCart((prev) =>
+      prev.map((line) =>
+        line.variantId === variantId
+          ? {
+              ...line,
+              retailPrice: normalized,
+              unitPrice: resolveUnitPrice(
+                line.cashPrice,
+                normalized,
+                paymentMethod
+              ),
+            }
+          : line
+      )
+    );
   };
 
   const incrementLine = (variantId: string) => {
@@ -264,14 +325,42 @@ export default function AdminPosPage() {
 
   const clearCart = () => setCart([]);
 
+  const missingRetailLines =
+    paymentMethod === "retail"
+      ? cart.filter((line) => line.retailPrice == null || line.retailPrice <= 0)
+      : [];
+
   const handleCharge = async () => {
     if (!user || !activeBranch || cart.length === 0) return;
+    if (missingRetailLines.length > 0) {
+      toast.error("Enter retail price for every item");
+      return;
+    }
 
     setCharging(true);
     try {
+      const retailToPersist = cart
+        .filter(
+          (line) =>
+            !line.retailFromCatalog &&
+            line.retailPrice != null &&
+            line.retailPrice > 0
+        )
+        .map((line) => ({
+          productId: line.productId,
+          variantId: line.variantId,
+          retailPrice: line.retailPrice as number,
+        }));
+
+      if (retailToPersist.length > 0) {
+        await setVariantRetailPrices(retailToPersist);
+        setCategoryCache({});
+      }
+
       await completePosSale({
         branchId: activeBranch.id,
         branchName: activeBranch.name,
+        paymentMethod,
         items: cart.map((line) => ({
           productId: line.productId,
           variantId: line.variantId,
@@ -289,6 +378,7 @@ export default function AdminPosPage() {
 
       toast.success("Sale completed");
       setCart([]);
+      setPaymentMethod("cash");
       setConfirmOpen(false);
       setMobileCartOpen(false);
 
@@ -332,12 +422,21 @@ export default function AdminPosPage() {
   const cartPanel = (
     <PosCartPanel
       lines={cart}
+      paymentMethod={paymentMethod}
       charging={charging}
+      onPaymentMethodChange={applyPaymentMethod}
+      onRetailPriceChange={setLineRetailPrice}
       onIncrement={incrementLine}
       onDecrement={decrementLine}
       onRemove={removeLine}
       onClear={clearCart}
-      onCharge={() => setConfirmOpen(true)}
+      onCharge={() => {
+        if (missingRetailLines.length > 0) {
+          toast.error("Enter retail price for every item");
+          return;
+        }
+        setConfirmOpen(true);
+      }}
       className="h-full"
     />
   );
@@ -500,7 +599,18 @@ export default function AdminPosPage() {
                         ) : null}
                         <div className="mt-auto flex items-end justify-between gap-2 pt-2">
                           <span className="text-sm font-semibold tabular-nums">
-                            {formatCurrency(row.price)}
+                            {(() => {
+                              const display = unitPriceForPaymentMethod(
+                                row,
+                                paymentMethod
+                              );
+                              if (display != null) {
+                                return formatCurrency(display);
+                              }
+                              return paymentMethod === "retail"
+                                ? "Set retail"
+                                : formatCurrency(row.price);
+                            })()}
                           </span>
                           <Badge
                             variant={outOfStock ? "outline" : "secondary"}
@@ -562,8 +672,9 @@ export default function AdminPosPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Complete sale?</AlertDialogTitle>
             <AlertDialogDescription>
-              Charge {formatCurrency(cartTotal)} and deduct stock at{" "}
-              {activeBranch?.name}.
+              Charge {formatCurrency(cartTotal)} via{" "}
+              {paymentMethod === "retail" ? "retail" : "cash"} and deduct stock
+              at {activeBranch?.name}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

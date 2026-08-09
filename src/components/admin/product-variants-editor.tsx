@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatVariantLabel } from "@/lib/product-variants";
-import { normalizeCompareAtPrice } from "@/lib/product-pricing";
+import { normalizeRetailPrice } from "@/lib/product-pricing";
 import type { ProductImage, ProductOption, ProductVariant } from "@/types";
 
 interface ProductVariantsEditorProps {
@@ -49,7 +49,7 @@ export function ProductVariantsEditor({
       <div>
         <Label>Variants</Label>
         <p className="text-xs text-muted-foreground">
-          Set SKU, pricing, and optional image per variant combination.
+          Set SKU, cash and retail pricing, and optional image per variant.
         </p>
       </div>
 
@@ -59,8 +59,8 @@ export function ProductVariantsEditor({
             <TableRow>
               <TableHead>Variant</TableHead>
               <TableHead className="w-36">SKU</TableHead>
-              <TableHead className="w-32">Sale price</TableHead>
-              <TableHead className="w-32">Compare at</TableHead>
+              <TableHead className="w-28">Cash</TableHead>
+              <TableHead className="w-28">Retail</TableHead>
               <TableHead className="w-40">Image</TableHead>
             </TableRow>
           </TableHeader>
@@ -100,11 +100,11 @@ export function ProductVariantsEditor({
                     step="0.01"
                     min={0}
                     placeholder="Optional"
-                    value={variant.compareAtPrice ?? ""}
+                    value={variant.retailPrice ?? ""}
                     disabled={disabled}
                     onChange={(e) =>
                       updateVariant(variant.id, {
-                        compareAtPrice: normalizeCompareAtPrice(
+                        retailPrice: normalizeRetailPrice(
                           e.target.value === "" ? null : Number(e.target.value)
                         ),
                       })
@@ -119,24 +119,24 @@ export function ProductVariantsEditor({
                         imageId: value === "none" ? null : value,
                       })
                     }
-                    disabled={disabled}
+                    disabled={disabled || images.length === 0}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Default">
+                      <SelectValue placeholder="Image">
                         {(value) => {
-                          if (!value || value === "none") return "Default gallery";
+                          if (!value || value === "none") return "None";
                           const image = images.find((img) => img.id === value);
                           return image
-                            ? `Image ${image.order + 1}`
-                            : null;
+                            ? `Image ${images.findIndex((img) => img.id === value) + 1}`
+                            : "None";
                         }}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Default gallery</SelectItem>
-                      {images.map((image) => (
+                      <SelectItem value="none">None</SelectItem>
+                      {images.map((image, index) => (
                         <SelectItem key={image.id} value={image.id}>
-                          Image {image.order + 1}
+                          Image {index + 1}
                         </SelectItem>
                       ))}
                     </SelectContent>

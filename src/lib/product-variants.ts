@@ -1,4 +1,4 @@
-import { normalizeCompareAtPrice } from "@/lib/product-pricing";
+import { normalizeRetailPrice } from "@/lib/product-pricing";
 import type { Product, ProductOption, ProductVariant } from "@/types";
 
 export function defaultVariantId(productId: string): string {
@@ -47,7 +47,7 @@ export function generateVariantsFromOptions(
             id: crypto.randomUUID(),
             sku: "",
             price: 0,
-            compareAtPrice: null,
+            retailPrice: null,
             optionValues: {},
             imageId: null,
             position: 0,
@@ -69,7 +69,7 @@ export function generateVariantsFromOptions(
       id: prev?.id ?? crypto.randomUUID(),
       sku: prev?.sku ?? "",
       price: prev?.price ?? 0,
-      compareAtPrice: prev?.compareAtPrice ?? null,
+      retailPrice: prev?.retailPrice ?? null,
       optionValues,
       imageId: prev?.imageId ?? null,
       position: index,
@@ -109,7 +109,7 @@ export function getDefaultVariant(product: Pick<Product, "variants">): ProductVa
     id: "missing",
     sku: "",
     price: 0,
-    compareAtPrice: null,
+    retailPrice: null,
     optionValues: {},
     imageId: null,
     position: 0,
@@ -147,8 +147,7 @@ export function migrateLegacyProductVariants(
   productId: string,
   data: {
     price?: number;
-    compareAtPrice?: number | null;
-    variants?: ProductVariant[];
+    variants?: Array<Partial<ProductVariant>>;
     options?: ProductOption[];
   }
 ): { options: ProductOption[]; variants: ProductVariant[] } {
@@ -159,7 +158,7 @@ export function migrateLegacyProductVariants(
         id: variant.id || defaultVariantId(productId),
         sku: variant.sku ?? "",
         price: Number(variant.price ?? 0),
-        compareAtPrice: normalizeCompareAtPrice(variant.compareAtPrice),
+        retailPrice: normalizeRetailPrice(variant.retailPrice),
         optionValues: variant.optionValues ?? {},
         imageId: variant.imageId ?? null,
         position: variant.position ?? index,
@@ -174,7 +173,7 @@ export function migrateLegacyProductVariants(
         id: defaultVariantId(productId),
         sku: "",
         price: Number(data.price ?? 0),
-        compareAtPrice: normalizeCompareAtPrice(data.compareAtPrice ?? null),
+        retailPrice: null,
         optionValues: {},
         imageId: null,
         position: 0,
@@ -185,10 +184,4 @@ export function migrateLegacyProductVariants(
 
 export function getLegacyProductPrice(product: Product): number {
   return getDefaultVariant(product).price;
-}
-
-export function getLegacyProductCompareAtPrice(
-  product: Product
-): number | null {
-  return getDefaultVariant(product).compareAtPrice;
 }
