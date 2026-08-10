@@ -16,6 +16,8 @@ import {
   PackagePlus,
   Settings,
   BarChart3,
+  UsersRound,
+  Ticket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -55,6 +57,18 @@ export const adminNavItems = [
   { href: "/admin/products", label: "Products", icon: Package, masterOnly: true },
   { href: "/admin/categories", label: "Categories", icon: Tags, masterOnly: true },
   { href: "/admin/vendors", label: "Vendors", icon: Building2, masterOnly: true },
+  {
+    href: "/admin/resellers",
+    label: "Resellers",
+    icon: UsersRound,
+    masterOnly: false,
+  },
+  {
+    href: "/admin/vouchers",
+    label: "Vouchers",
+    icon: Ticket,
+    masterOnly: false,
+  },
   { href: "/admin/settings", label: "Settings", icon: Settings, masterOnly: false },
 ];
 

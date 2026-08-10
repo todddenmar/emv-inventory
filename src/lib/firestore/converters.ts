@@ -20,8 +20,10 @@ import type {
   ProductPriceLog,
   ProductSpec,
   ProductVariant,
+  Reseller,
   SupplierStockIn,
   Vendor,
+  Voucher,
 } from "@/types";
 import { migrateLegacyProductVariants, getDefaultVariant, defaultVariantId } from "@/lib/product-variants";
 import { specsToText } from "@/lib/specs";
@@ -469,9 +471,15 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       branchName: sale.branchName,
       paymentMethod: sale.paymentMethod,
       customer: sale.customer,
+      resellerId: sale.resellerId,
+      resellerName: sale.resellerName,
+      voucherId: sale.voucherId,
+      voucherCode: sale.voucherCode,
+      voucherAmountApplied: sale.voucherAmountApplied,
+      total: sale.total,
+      amountDue: sale.amountDue,
       items: sale.items,
       itemCount: sale.itemCount,
-      total: sale.total,
       createdBy: sale.createdBy,
       createdByName: sale.createdByName,
       createdAt: sale.createdAt,
@@ -484,6 +492,8 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
     const data = snapshot.data(options);
     const rawItems = (data.items ?? []) as PosSale["items"];
     const rawCustomer = data.customer as PosSale["customer"] | undefined;
+    const total = Number(data.total ?? 0);
+    const voucherAmountApplied = Number(data.voucherAmountApplied ?? 0);
     return {
       id: snapshot.id,
       branchId: data.branchId,
@@ -497,6 +507,16 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
             address: rawCustomer.address?.trim() || null,
           }
         : null,
+      resellerId: data.resellerId ?? null,
+      resellerName: data.resellerName ?? null,
+      voucherId: data.voucherId ?? null,
+      voucherCode: data.voucherCode ?? null,
+      voucherAmountApplied,
+      total,
+      amountDue:
+        data.amountDue != null
+          ? Number(data.amountDue)
+          : Math.max(0, total - voucherAmountApplied),
       items: rawItems.map((item) => ({
         productId: item.productId,
         variantId: item.variantId,
@@ -506,10 +526,83 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
         lineTotal: item.lineTotal,
       })),
       itemCount: data.itemCount ?? 0,
-      total: data.total ?? 0,
       createdBy: data.createdBy,
       createdByName: data.createdByName ?? null,
       createdAt: toDate(data.createdAt),
+    };
+  },
+};
+
+export const resellerConverter: FirestoreDataConverter<Reseller> = {
+  toFirestore(reseller: Reseller): DocumentData {
+    return {
+      name: reseller.name,
+      mobile: reseller.mobile,
+      email: reseller.email,
+      address: reseller.address,
+      notes: reseller.notes,
+      isActive: reseller.isActive,
+      createdAt: reseller.createdAt,
+      updatedAt: reseller.updatedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): Reseller {
+    const data = snapshot.data(options);
+    return {
+      id: snapshot.id,
+      name: data.name ?? "",
+      mobile: data.mobile ?? null,
+      email: data.email ?? null,
+      address: data.address ?? null,
+      notes: data.notes ?? null,
+      isActive: data.isActive !== false,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
+    };
+  },
+};
+
+export const voucherConverter: FirestoreDataConverter<Voucher> = {
+  toFirestore(voucher: Voucher): DocumentData {
+    return {
+      code: voucher.code,
+      resellerId: voucher.resellerId,
+      resellerName: voucher.resellerName,
+      initialAmount: voucher.initialAmount,
+      remainingAmount: voucher.remainingAmount,
+      status: voucher.status,
+      expiresAt: voucher.expiresAt,
+      createdBy: voucher.createdBy,
+      createdByName: voucher.createdByName,
+      createdAt: voucher.createdAt,
+      updatedAt: voucher.updatedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): Voucher {
+    const data = snapshot.data(options);
+    const status =
+      data.status === "void" || data.status === "depleted"
+        ? data.status
+        : "active";
+    return {
+      id: snapshot.id,
+      code: String(data.code ?? "").toUpperCase(),
+      resellerId: data.resellerId ?? null,
+      resellerName: data.resellerName ?? null,
+      initialAmount: Number(data.initialAmount ?? 0),
+      remainingAmount: Number(data.remainingAmount ?? 0),
+      status,
+      expiresAt: data.expiresAt ? toDate(data.expiresAt) : null,
+      createdBy: data.createdBy,
+      createdByName: data.createdByName ?? null,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
     };
   },
 };

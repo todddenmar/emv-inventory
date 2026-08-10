@@ -216,12 +216,50 @@ export interface PosSale {
   branchName: string;
   paymentMethod: PosPaymentMethod;
   customer: PosSaleCustomer | null;
+  resellerId: string | null;
+  resellerName: string | null;
+  voucherId: string | null;
+  voucherCode: string | null;
+  voucherAmountApplied: number;
+  /** Cart merchandise total (before voucher). */
+  total: number;
+  /** Amount still owed after voucher (cash/retail collect). */
+  amountDue: number;
   items: PosSaleItem[];
   itemCount: number;
-  total: number;
   createdBy: string;
   createdByName: string | null;
   createdAt: Date;
+}
+
+export interface Reseller {
+  id: string;
+  name: string;
+  mobile: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type VoucherStatus = "active" | "depleted" | "void";
+
+export interface Voucher {
+  id: string;
+  code: string;
+  /** Null = walk-in / unassigned prepaid credit. */
+  resellerId: string | null;
+  resellerName: string | null;
+  initialAmount: number;
+  remainingAmount: number;
+  status: VoucherStatus;
+  expiresAt: Date | null;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface SupplierStockInItem {

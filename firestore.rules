@@ -234,5 +234,17 @@ service cloud.firestore {
         canAccessBranch(request.resource.data.branchId);
       allow update, delete: if false;
     }
+
+    match /physicalResellers/{resellerId} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isElevatedAdmin();
+    }
+
+    match /physicalVouchers/{voucherId} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if false;
+    }
   }
 }

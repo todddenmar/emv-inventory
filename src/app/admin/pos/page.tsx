@@ -20,20 +20,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   PosCartPanel,
+  PosCheckoutDialog,
   emptyPosCustomerDraft,
   normalizePosCustomer,
   type PosCartLine,
+  type PosCheckoutStep,
   type PosCustomerDraft,
 } from "@/components/admin/pos-cart";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -46,6 +38,12 @@ import {
   setVariantRetailPrices,
 } from "@/lib/firestore/products";
 import { completePosSale } from "@/lib/firestore/pos-sales";
+import { getResellers } from "@/lib/firestore/resellers";
+import {
+  getActiveVouchersForReseller,
+  getVoucherByCode,
+  isVoucherRedeemable,
+} from "@/lib/firestore/vouchers";
 import { mergeSellingVariantsWithInventory } from "@/lib/inventory";
 import { isProductPublished } from "@/lib/products-catalog";
 import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
@@ -62,6 +60,8 @@ import type {
   Category,
   PosPaymentMethod,
   Product,
+  Reseller,
+  Voucher,
 } from "@/types";
 import type { VariantWithStock } from "@/lib/inventory";
 
@@ -95,8 +95,17 @@ export default function AdminPosPage() {
   const [paymentMethod, setPaymentMethod] =
     useState<PosPaymentMethod>("cash");
   const [customer, setCustomer] = useState<PosCustomerDraft>(emptyPosCustomerDraft);
+  const [resellers, setResellers] = useState<Reseller[]>([]);
+  const [selectedResellerId, setSelectedResellerId] = useState<string | null>(
+    null
+  );
+  const [resellerVouchers, setResellerVouchers] = useState<Voucher[]>([]);
+  const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
+  const [voucherCodeInput, setVoucherCodeInput] = useState("");
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] =
+    useState<PosCheckoutStep>("details");
   const [charging, setCharging] = useState(false);
 
   const activeBranchId = isElevatedAdmin
@@ -108,11 +117,13 @@ export default function AdminPosPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [branchList, cats] = await Promise.all([
+        const [branchList, cats, resellerList] = await Promise.all([
           getBranches(true),
           getCategories(),
+          getResellers(true),
         ]);
         setBranches(branchList);
+        setResellers(resellerList);
         const activeCats = cats.filter((c) => !c.isArchived);
         setCategories(activeCats);
 
@@ -152,7 +163,20 @@ export default function AdminPosPage() {
     setCart([]);
     setPaymentMethod("cash");
     setCustomer(emptyPosCustomerDraft());
+    setSelectedResellerId(null);
+    setResellerVouchers([]);
+    setAppliedVoucher(null);
+    setVoucherCodeInput("");
   }, [activeBranchId]);
+
+  const resetSaleExtras = () => {
+    setCustomer(emptyPosCustomerDraft());
+    setSelectedResellerId(null);
+    setResellerVouchers([]);
+    setAppliedVoucher(null);
+    setVoucherCodeInput("");
+    setPaymentMethod("cash");
+  };
 
   const loadCategory = useCallback(
     async (categoryId: string) => {
@@ -210,11 +234,104 @@ export default function AdminPosPage() {
     });
   }, [sellingVariants, search, categoryProducts]);
 
-  const cartTotal = cart.reduce(
-    (sum, line) => sum + line.unitPrice * line.quantity,
-    0
-  );
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
+
+  const selectedReseller =
+    resellers.find((r) => r.id === selectedResellerId) ?? null;
+
+  const handleResellerChange = async (resellerId: string | null) => {
+    setSelectedResellerId(resellerId);
+    setAppliedVoucher(null);
+    setVoucherCodeInput("");
+    setResellerVouchers([]);
+
+    if (!resellerId) return;
+
+    const reseller = resellers.find((r) => r.id === resellerId);
+    if (reseller) {
+      setCustomer({
+        name: reseller.name,
+        mobile: reseller.mobile ?? "",
+        email: reseller.email ?? "",
+        address: reseller.address ?? "",
+      });
+    }
+
+    try {
+      const vouchers = await getActiveVouchersForReseller(resellerId);
+      setResellerVouchers(vouchers);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load reseller vouchers");
+    }
+  };
+
+  const handleApplyVoucherId = (voucherId: string | null) => {
+    if (!voucherId) {
+      setAppliedVoucher(null);
+      return;
+    }
+    const voucher =
+      resellerVouchers.find((v) => v.id === voucherId) ??
+      (appliedVoucher?.id === voucherId ? appliedVoucher : null);
+    if (!voucher || !isVoucherRedeemable(voucher)) {
+      toast.error("Voucher is not redeemable");
+      return;
+    }
+    setAppliedVoucher(voucher);
+  };
+
+  const handleApplyVoucherCode = async () => {
+    const code = voucherCodeInput.trim();
+    if (!code) return;
+    try {
+      const voucher = await getVoucherByCode(code);
+      if (!voucher || !isVoucherRedeemable(voucher)) {
+        toast.error("Invalid or unusable voucher");
+        return;
+      }
+
+      // Reseller-linked voucher cannot be used for a different selected reseller.
+      if (
+        selectedResellerId &&
+        voucher.resellerId &&
+        voucher.resellerId !== selectedResellerId
+      ) {
+        toast.error("Voucher belongs to a different reseller");
+        return;
+      }
+
+      // Auto-select reseller only when the voucher is linked and none is selected.
+      if (!selectedResellerId && voucher.resellerId) {
+        const reseller = resellers.find((r) => r.id === voucher.resellerId);
+        if (reseller) {
+          setSelectedResellerId(reseller.id);
+          setCustomer({
+            name: reseller.name,
+            mobile: reseller.mobile ?? "",
+            email: reseller.email ?? "",
+            address: reseller.address ?? "",
+          });
+          const vouchers = await getActiveVouchersForReseller(reseller.id);
+          setResellerVouchers(vouchers);
+        } else {
+          setSelectedResellerId(voucher.resellerId);
+          setCustomer((prev) => ({
+            ...prev,
+            name: voucher.resellerName || prev.name,
+          }));
+          setResellerVouchers([voucher]);
+        }
+      }
+
+      setAppliedVoucher(voucher);
+      setVoucherCodeInput("");
+      toast.success(`Applied ${voucher.code}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to look up voucher");
+    }
+  };
 
   const stockForVariant = (variantId: string) =>
     inventory.find((row) => row.variantId === variantId)?.stock ??
@@ -330,7 +447,7 @@ export default function AdminPosPage() {
 
   const clearCart = () => {
     setCart([]);
-    setCustomer(emptyPosCustomerDraft());
+    resetSaleExtras();
   };
 
   const missingRetailLines =
@@ -370,6 +487,12 @@ export default function AdminPosPage() {
         branchName: activeBranch.name,
         paymentMethod,
         customer: normalizePosCustomer(customer),
+        resellerId: selectedResellerId,
+        resellerName:
+          selectedReseller?.name ??
+          (appliedVoucher?.resellerId ? appliedVoucher.resellerName : null) ??
+          null,
+        voucherId: appliedVoucher?.id ?? null,
         items: cart.map((line) => ({
           productId: line.productId,
           variantId: line.variantId,
@@ -387,9 +510,9 @@ export default function AdminPosPage() {
 
       toast.success("Sale completed");
       setCart([]);
-      setPaymentMethod("cash");
-      setCustomer(emptyPosCustomerDraft());
-      setConfirmOpen(false);
+      resetSaleExtras();
+      setCheckoutOpen(false);
+      setCheckoutStep("details");
       setMobileCartOpen(false);
 
       const inv = await getBranchInventory(activeBranch.id);
@@ -429,28 +552,22 @@ export default function AdminPosPage() {
     );
   }
 
+  const openCheckout = () => {
+    if (cart.length === 0) return;
+    setCheckoutStep("details");
+    setCheckoutOpen(true);
+    setMobileCartOpen(false);
+  };
+
   const cartPanel = (
     <PosCartPanel
       lines={cart}
-      paymentMethod={paymentMethod}
-      customer={customer}
       charging={charging}
-      onPaymentMethodChange={applyPaymentMethod}
-      onCustomerChange={(patch) =>
-        setCustomer((prev) => ({ ...prev, ...patch }))
-      }
-      onRetailPriceChange={setLineRetailPrice}
       onIncrement={incrementLine}
       onDecrement={decrementLine}
       onRemove={removeLine}
       onClear={clearCart}
-      onCharge={() => {
-        if (missingRetailLines.length > 0) {
-          toast.error("Enter retail price for every item");
-          return;
-        }
-        setConfirmOpen(true);
-      }}
+      onContinue={openCheckout}
       className="h-full"
     />
   );
@@ -663,7 +780,10 @@ export default function AdminPosPage() {
             className="h-12 w-full text-base"
             onClick={() => setMobileCartOpen(true)}
           >
-            Cart · {cartCount} · {formatCurrency(cartTotal)}
+            Cart · {cartCount} ·{" "}
+            {formatCurrency(
+              cart.reduce((sum, line) => sum + line.cashPrice * line.quantity, 0)
+            )}
           </Button>
         </div>
       )}
@@ -681,33 +801,46 @@ export default function AdminPosPage() {
         </SheetContent>
       </Sheet>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Complete sale?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Charge {formatCurrency(cartTotal)} via{" "}
-              {paymentMethod === "retail" ? "retail" : "cash"} and deduct stock
-              at {activeBranch?.name}.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={charging}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={charging}
-              onClick={(e) => {
-                e.preventDefault();
-                handleCharge().catch(console.error);
-              }}
-            >
-              {charging ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : null}
-              Confirm charge
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <PosCheckoutDialog
+        open={checkoutOpen}
+        onOpenChange={(open) => {
+          setCheckoutOpen(open);
+          if (!open) setCheckoutStep("details");
+        }}
+        step={checkoutStep}
+        onStepChange={setCheckoutStep}
+        lines={cart}
+        branchName={activeBranch?.name ?? ""}
+        paymentMethod={paymentMethod}
+        customer={customer}
+        resellers={resellers}
+        selectedResellerId={selectedResellerId}
+        resellerVouchers={resellerVouchers}
+        appliedVoucher={appliedVoucher}
+        voucherCodeInput={voucherCodeInput}
+        charging={charging}
+        onPaymentMethodChange={applyPaymentMethod}
+        onResellerChange={(id) => {
+          handleResellerChange(id).catch(console.error);
+        }}
+        onApplyVoucherId={handleApplyVoucherId}
+        onVoucherCodeInputChange={setVoucherCodeInput}
+        onApplyVoucherCode={() => {
+          handleApplyVoucherCode().catch(console.error);
+        }}
+        onCustomerChange={(patch) =>
+          setCustomer((prev) => ({ ...prev, ...patch }))
+        }
+        onRetailPriceChange={setLineRetailPrice}
+        onConfirmCharge={() => {
+          if (missingRetailLines.length > 0) {
+            toast.error("Enter retail price for every item");
+            setCheckoutStep("details");
+            return;
+          }
+          handleCharge().catch(console.error);
+        }}
+      />
     </div>
   );
 }

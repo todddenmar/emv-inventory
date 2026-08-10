@@ -15,13 +15,23 @@ import { COLLECTIONS } from "@/lib/firestore/collections";
 import { posSaleConverter } from "@/lib/firestore/converters";
 import { inventoryDocId } from "@/lib/firestore/inventory";
 import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
-import type { PosPaymentMethod, PosSale, PosSaleCustomer, PosSaleItem } from "@/types";
+import { isVoucherRedeemable } from "@/lib/firestore/vouchers";
+import type {
+  PosPaymentMethod,
+  PosSale,
+  PosSaleCustomer,
+  PosSaleItem,
+  Voucher,
+} from "@/types";
 
 export interface CompletePosSaleInput {
   branchId: string;
   branchName: string;
   paymentMethod: PosPaymentMethod;
   customer?: PosSaleCustomer | null;
+  resellerId?: string | null;
+  resellerName?: string | null;
+  voucherId?: string | null;
   items: PosSaleItem[];
   createdBy: string;
   createdByName?: string | null;
@@ -142,6 +152,75 @@ export async function completePosSale(
       });
     }
 
+    let voucherAmountApplied = 0;
+    let voucherId: string | null = null;
+    let voucherCode: string | null = null;
+    let voucherRef: ReturnType<typeof doc> | null = null;
+    let nextRemaining = 0;
+    let nextStatus: Voucher["status"] = "active";
+
+    if (input.voucherId) {
+      voucherRef = doc(db, COLLECTIONS.vouchers, input.voucherId);
+      const voucherSnap = await tx.get(voucherRef);
+      if (!voucherSnap.exists()) {
+        throw new Error("Voucher not found");
+      }
+      const voucherData = voucherSnap.data() as {
+        code?: string;
+        resellerId?: string | null;
+        remainingAmount?: number;
+        status?: string;
+        expiresAt?: { toDate?: () => Date } | Date | null;
+      };
+
+      const expiresAt = voucherData.expiresAt
+        ? typeof (voucherData.expiresAt as { toDate?: () => Date }).toDate ===
+          "function"
+          ? (voucherData.expiresAt as { toDate: () => Date }).toDate()
+          : new Date(voucherData.expiresAt as Date)
+        : null;
+
+      const voucherLike: Voucher = {
+        id: voucherSnap.id,
+        code: String(voucherData.code ?? "").toUpperCase(),
+        resellerId: voucherData.resellerId ?? null,
+        resellerName: null,
+        initialAmount: 0,
+        remainingAmount: Number(voucherData.remainingAmount ?? 0),
+        status:
+          voucherData.status === "void" || voucherData.status === "depleted"
+            ? voucherData.status
+            : "active",
+        expiresAt,
+        createdBy: "",
+        createdByName: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      if (!isVoucherRedeemable(voucherLike)) {
+        throw new Error("Voucher is not redeemable");
+      }
+      if (
+        input.resellerId &&
+        voucherLike.resellerId &&
+        voucherLike.resellerId !== input.resellerId
+      ) {
+        throw new Error("Voucher does not belong to the selected reseller");
+      }
+
+      voucherAmountApplied = Math.min(voucherLike.remainingAmount, total);
+      voucherId = voucherSnap.id;
+      voucherCode = voucherLike.code;
+      nextRemaining = Math.max(
+        0,
+        voucherLike.remainingAmount - voucherAmountApplied
+      );
+      nextStatus = nextRemaining <= 0 ? "depleted" : "active";
+    }
+
+    const amountDue = Math.max(0, total - voucherAmountApplied);
+
     for (const row of rows) {
       tx.update(row.invRef, {
         stock: row.newStock,
@@ -166,14 +245,28 @@ export async function completePosSale(
       });
     }
 
+    if (voucherRef && voucherAmountApplied > 0) {
+      tx.update(voucherRef, {
+        remainingAmount: nextRemaining,
+        status: nextStatus,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
     tx.set(saleRef, {
       branchId: input.branchId,
       branchName: input.branchName,
       paymentMethod: input.paymentMethod,
       customer: input.customer ?? null,
+      resellerId: input.resellerId ?? null,
+      resellerName: input.resellerName ?? null,
+      voucherId,
+      voucherCode,
+      voucherAmountApplied,
+      total,
+      amountDue,
       items: input.items,
       itemCount,
-      total,
       createdBy: input.createdBy,
       createdByName: input.createdByName ?? null,
       createdAt: serverTimestamp(),

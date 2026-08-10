@@ -10,6 +10,8 @@ export const COLLECTIONS = {
   branchTransfers: "physicalBranchTransfers",
   posSales: "physicalPosSales",
   supplierStockIns: "physicalSupplierStockIns",
+  resellers: "physicalResellers",
+  vouchers: "physicalVouchers",
   /** Auth — shared, not physical-prefixed */
   users: "users",
   invites: "invites",
