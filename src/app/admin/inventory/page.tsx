@@ -39,6 +39,7 @@ import {
   InventoryAdjustmentHistorySheet,
   type AdjustmentHistoryTarget,
 } from "@/components/admin/inventory-adjustment-history-sheet";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getBranches } from "@/lib/firestore/branches";
 import {
@@ -52,6 +53,7 @@ import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
 import { mergeSellingVariantsWithInventory, getLowStockVariants } from "@/lib/inventory";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatCurrency } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Branch, BranchInventory, Category, Product } from "@/types";
@@ -77,6 +79,7 @@ export default function AdminInventoryPage() {
   const [historyTarget, setHistoryTarget] =
     useState<AdjustmentHistoryTarget | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const activeBranchId = isElevatedAdmin ? selectedBranchId : assignedBranchId ?? "";
 
@@ -154,25 +157,54 @@ export default function AdminInventoryPage() {
     return values.stock > 0 && values.stock <= values.lowStockThreshold;
   };
 
-  const filteredVariants = variantsWithStock.filter((row) => {
-    const product = products.find((p) => p.id === row.productId);
-    const matchesSearch =
-      row.productName.toLowerCase().includes(search.toLowerCase()) ||
-      row.sku.toLowerCase().includes(search.toLowerCase()) ||
-      formatVariantLabel(row, product?.options ?? [])
-        .toLowerCase()
-        .includes(search.toLowerCase());
-    const matchesCategory =
-      categoryFilter === "all" || row.categoryIds.includes(categoryFilter);
-    const values = getStockValues(row.id, row);
-    const matchesStock =
-      stockFilter === "all" ||
-      (stockFilter === "low" && isLowStockRow(row)) ||
-      (stockFilter === "in_stock" && values.stock > 0) ||
-      (stockFilter === "out_of_stock" && values.stock <= 0);
+  const filteredVariants = useMemo(
+    () =>
+      variantsWithStock.filter((row) => {
+        const product = products.find((p) => p.id === row.productId);
+        const matchesSearch =
+          row.productName.toLowerCase().includes(search.toLowerCase()) ||
+          row.sku.toLowerCase().includes(search.toLowerCase()) ||
+          formatVariantLabel(row, product?.options ?? [])
+            .toLowerCase()
+            .includes(search.toLowerCase());
+        const matchesCategory =
+          categoryFilter === "all" || row.categoryIds.includes(categoryFilter);
+        const values = getStockValues(row.id, row);
+        const matchesStock =
+          stockFilter === "all" ||
+          (stockFilter === "low" && isLowStockRow(row)) ||
+          (stockFilter === "in_stock" && values.stock > 0) ||
+          (stockFilter === "out_of_stock" && values.stock <= 0);
 
-    return matchesSearch && matchesCategory && matchesStock;
-  });
+        return matchesSearch && matchesCategory && matchesStock;
+      }),
+    [
+      variantsWithStock,
+      products,
+      search,
+      categoryFilter,
+      stockFilter,
+      draft,
+    ]
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, categoryFilter, stockFilter, activeBranchId]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(
+    () => paginateItems(filteredVariants, page),
+    [filteredVariants, page]
+  );
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const lowStock = getLowStockVariants(variantsWithStock);
   const activeBranch = branches.find((b) => b.id === activeBranchId);
@@ -466,7 +498,7 @@ export default function AdminInventoryPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                    filteredVariants.map((row) => {
+                    pagedItems.map((row) => {
                       const product = products.find((p) => p.id === row.productId);
                       const showImages = showCatalogImages(catalogImageSource);
                       const thumb =
@@ -633,6 +665,13 @@ export default function AdminInventoryPage() {
                   </TableBody>
                 </Table>
               </div>
+              <TablePagination
+                page={safePage}
+                totalPages={totalPages}
+                total={total}
+                onPageChange={setPage}
+                className="mt-4"
+              />
             </CardContent>
           </Card>
         </>

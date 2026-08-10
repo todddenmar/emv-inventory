@@ -19,13 +19,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { LinkButton } from "@/components/ui/link-button";
+import { TablePagination } from "@/components/admin/table-pagination";
 import {
   getInventoryLogs,
   inventoryLogReasonLabel,
 } from "@/lib/firestore/inventory-logs";
 import { formatDate } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import type { InventoryLog } from "@/types";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface InventoryActivityFeedProps {
   branchId?: string | null;
@@ -44,6 +46,7 @@ export function InventoryActivityFeed({
 }: InventoryActivityFeedProps) {
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     getInventoryLogs({ branchId, max })
@@ -51,6 +54,21 @@ export function InventoryActivityFeed({
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [branchId, max]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [branchId, max]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(logs, page), [logs, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   return (
     <Card>
@@ -76,54 +94,62 @@ export function InventoryActivityFeed({
             No inventory movements recorded yet.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>When</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Change</TableHead>
-                  <TableHead className="text-right">Stock</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {formatDate(log.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {log.branchName ?? log.branchId}
-                    </TableCell>
-                    <TableCell className="max-w-[160px] truncate text-sm">
-                      {log.productName ?? log.productId}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize text-xs">
-                        {inventoryLogReasonLabel(log.reason)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell
-                      className={`text-right font-medium ${
-                        log.delta > 0
-                          ? "text-green-600"
-                          : log.delta < 0
-                            ? "text-red-600"
-                            : ""
-                      }`}
-                    >
-                      {log.delta > 0 ? "+" : ""}
-                      {log.delta}
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">
-                      {log.previousStock} → {log.newStock}
-                    </TableCell>
+          <div className="space-y-4">
+            <div className="overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>When</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Change</TableHead>
+                    <TableHead className="text-right">Stock</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {pagedItems.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {formatDate(log.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {log.branchName ?? log.branchId}
+                      </TableCell>
+                      <TableCell className="max-w-[160px] truncate text-sm">
+                        {log.productName ?? log.productId}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize text-xs">
+                          {inventoryLogReasonLabel(log.reason)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell
+                        className={`text-right font-medium ${
+                          log.delta > 0
+                            ? "text-green-600"
+                            : log.delta < 0
+                              ? "text-red-600"
+                              : ""
+                        }`}
+                      >
+                        {log.delta > 0 ? "+" : ""}
+                        {log.delta}
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground">
+                        {log.previousStock} → {log.newStock}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <TablePagination
+              page={safePage}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={setPage}
+            />
           </div>
         )}
         {showViewAll && logs.length > 0 && (

@@ -29,12 +29,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { TablePagination } from "@/components/admin/table-pagination";
 import {
   createReseller,
   getResellers,
   setResellerActive,
   updateReseller,
 } from "@/lib/firestore/resellers";
+import { paginateItems } from "@/lib/pagination";
 import type { Reseller } from "@/types";
 
 type ResellerForm = {
@@ -61,6 +63,7 @@ export default function AdminResellersPage() {
   const [editing, setEditing] = useState<Reseller | null>(null);
   const [form, setForm] = useState<ResellerForm>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     getResellers()
@@ -86,6 +89,21 @@ export default function AdminResellersPage() {
         (r.email?.toLowerCase().includes(q) ?? false)
     );
   }, [resellers, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(filtered, page), [filtered, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const openCreate = () => {
     setEditing(null);
@@ -183,58 +201,66 @@ export default function AdminResellersPage() {
           ) : filtered.length === 0 ? (
             <p className="text-muted-foreground">No resellers found.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Mobile</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((reseller) => (
-                  <TableRow key={reseller.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{reseller.name}</p>
-                        {reseller.address ? (
-                          <p className="text-xs text-muted-foreground line-clamp-1">
-                            {reseller.address}
-                          </p>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>{reseller.mobile || "—"}</TableCell>
-                    <TableCell>{reseller.email || "—"}</TableCell>
-                    <TableCell>
-                      {reseller.isActive ? (
-                        <Badge>Active</Badge>
-                      ) : (
-                        <Badge variant="secondary">Inactive</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEdit(reseller)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toggleActive(reseller)}
-                      >
-                        {reseller.isActive ? "Deactivate" : "Activate"}
-                      </Button>
-                    </TableCell>
+            <div className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Mobile</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {pagedItems.map((reseller) => (
+                    <TableRow key={reseller.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{reseller.name}</p>
+                          {reseller.address ? (
+                            <p className="text-xs text-muted-foreground line-clamp-1">
+                              {reseller.address}
+                            </p>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell>{reseller.mobile || "—"}</TableCell>
+                      <TableCell>{reseller.email || "—"}</TableCell>
+                      <TableCell>
+                        {reseller.isActive ? (
+                          <Badge>Active</Badge>
+                        ) : (
+                          <Badge variant="secondary">Inactive</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEdit(reseller)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleActive(reseller)}
+                        >
+                          {reseller.isActive ? "Deactivate" : "Activate"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <TablePagination
+                page={safePage}
+                totalPages={totalPages}
+                total={total}
+                onPageChange={setPage}
+              />
+            </div>
           )}
         </CardContent>
       </Card>

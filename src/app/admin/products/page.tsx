@@ -14,8 +14,6 @@ import {
   Loader2,
   Tags,
   Search,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -63,6 +61,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { CategoryMultiSelect } from "@/components/admin/category-multi-select";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   archiveProduct,
@@ -81,9 +80,8 @@ import {
 } from "@/lib/products-catalog";
 import { getProductPriceRange, getDefaultVariant } from "@/lib/product-variants";
 import { formatCurrency } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import type { Category, Product } from "@/types";
-
-const PAGE_SIZE = 10;
 
 function matchesQuery(value: string, query: string): boolean {
   if (!query.trim()) return true;
@@ -129,16 +127,17 @@ export default function AdminProductsPage() {
     });
   }, [products, showArchived, search, categoryMap]);
 
-  const totalPages = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE));
-
-  const pagedProducts = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return visibleProducts.slice(start, start + PAGE_SIZE);
-  }, [visibleProducts, page]);
-
-  const rangeStart =
-    visibleProducts.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(page * PAGE_SIZE, visibleProducts.length);
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems: pagedProducts,
+    rangeStart,
+    rangeEnd,
+    total,
+  } = useMemo(
+    () => paginateItems(visibleProducts, page),
+    [visibleProducts, page]
+  );
 
   const loadData = () => {
     Promise.all([getProducts(false, true), getCategories()])
@@ -159,8 +158,8 @@ export default function AdminProductsPage() {
   }, [showArchived, search]);
 
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const openCategoryEditor = (product: Product) => {
     setCategoryEditProduct(product);
@@ -515,35 +514,12 @@ export default function AdminProductsPage() {
               </TableBody>
             </Table>
 
-              {visibleProducts.length > PAGE_SIZE && (
-                <div className="flex items-center justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    <ChevronLeft className="mr-1 h-4 w-4" />
-                    Previous
-                  </Button>
-                  <span className="text-sm tabular-nums text-muted-foreground">
-                    Page {page} of {totalPages}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() =>
-                      setPage((p) => Math.min(totalPages, p + 1))
-                    }
-                  >
-                    Next
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+              <TablePagination
+                page={safePage}
+                totalPages={totalPages}
+                total={total}
+                onPageChange={setPage}
+              />
             </>
           )}
         </CardContent>

@@ -45,6 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { getResellers } from "@/lib/firestore/resellers";
 import {
   getVouchers,
@@ -53,6 +54,7 @@ import {
   voucherOwnerLabel,
 } from "@/lib/firestore/vouchers";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Reseller, Voucher, VoucherStatus } from "@/types";
 
@@ -71,6 +73,7 @@ export default function AdminVouchersPage() {
   const [amount, setAmount] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const load = () => {
     Promise.all([getVouchers(), getResellers(true)])
@@ -102,6 +105,21 @@ export default function AdminVouchersPage() {
       );
     });
   }, [vouchers, search, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(filtered, page), [filtered, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const openIssue = () => {
     setResellerId("none");
@@ -235,63 +253,71 @@ export default function AdminVouchersPage() {
           ) : filtered.length === 0 ? (
             <p className="text-muted-foreground">No vouchers found.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Owner</TableHead>
-                  <TableHead>Initial</TableHead>
-                  <TableHead>Remaining</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Issued</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((voucher) => (
-                  <TableRow key={voucher.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <span className="font-mono text-sm">{voucher.code}</span>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => copyCode(voucher.code)}
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell>{voucherOwnerLabel(voucher)}</TableCell>
-                    <TableCell className="tabular-nums">
-                      {formatCurrency(voucher.initialAmount)}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      {formatCurrency(voucher.remainingAmount)}
-                    </TableCell>
-                    <TableCell>{statusBadge(voucher.status)}</TableCell>
-                    <TableCell>
-                      {voucher.expiresAt ? formatDate(voucher.expiresAt) : "—"}
-                    </TableCell>
-                    <TableCell>{formatDate(voucher.createdAt)}</TableCell>
-                    <TableCell className="text-right">
-                      {voucher.status === "active" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setVoidId(voucher.id)}
-                        >
-                          Void
-                        </Button>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
+            <div className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Owner</TableHead>
+                    <TableHead>Initial</TableHead>
+                    <TableHead>Remaining</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead>Issued</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {pagedItems.map((voucher) => (
+                    <TableRow key={voucher.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-sm">{voucher.code}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => copyCode(voucher.code)}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                      <TableCell>{voucherOwnerLabel(voucher)}</TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatCurrency(voucher.initialAmount)}
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        {formatCurrency(voucher.remainingAmount)}
+                      </TableCell>
+                      <TableCell>{statusBadge(voucher.status)}</TableCell>
+                      <TableCell>
+                        {voucher.expiresAt ? formatDate(voucher.expiresAt) : "—"}
+                      </TableCell>
+                      <TableCell>{formatDate(voucher.createdAt)}</TableCell>
+                      <TableCell className="text-right">
+                        {voucher.status === "active" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setVoidId(voucher.id)}
+                          >
+                            Void
+                          </Button>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <TablePagination
+                page={safePage}
+                totalPages={totalPages}
+                total={total}
+                onPageChange={setPage}
+              />
+            </div>
           )}
         </CardContent>
       </Card>

@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getBranches } from "@/lib/firestore/branches";
 import {
@@ -35,6 +36,7 @@ import {
   toDateInputValue,
 } from "@/lib/firestore/inventory-logs";
 import { formatDate } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import type { Branch, InventoryLog, InventoryLogReason } from "@/types";
 
 type ReasonFilter = "all" | InventoryLogReason;
@@ -57,6 +59,7 @@ export default function AdminAdjustmentHistoryPage() {
   const [reasonFilter, setReasonFilter] = useState<ReasonFilter>("all");
   const [search, setSearch] = useState("");
   const [date, setDate] = useState(() => toDateInputValue());
+  const [page, setPage] = useState(1);
 
   const scopeBranchId = isElevatedAdmin
     ? selectedBranchId === "all"
@@ -107,6 +110,21 @@ export default function AdminAdjustmentHistoryPage() {
       return matchesReason && matchesSearch;
     });
   }, [logs, reasonFilter, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, reasonFilter, selectedBranchId, date]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(filtered, page), [filtered, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const branchSelectLabel = (value: string | null) => {
     if (!value || value === "all") return "All branches";
@@ -241,7 +259,7 @@ export default function AdminAdjustmentHistoryPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filtered.map((log) => (
+                    pagedItems.map((log) => (
                       <TableRow key={log.id}>
                         <TableCell className="whitespace-nowrap text-sm">
                           {formatDate(log.createdAt)}
@@ -288,6 +306,14 @@ export default function AdminAdjustmentHistoryPage() {
                 </TableBody>
               </Table>
             </div>
+          )}
+          {!loading && filtered.length > 0 && (
+            <TablePagination
+              page={safePage}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={setPage}
+            />
           )}
         </CardContent>
       </Card>

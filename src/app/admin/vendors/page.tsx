@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   createVendor,
@@ -44,6 +45,7 @@ import {
   getVendors,
   updateVendor,
 } from "@/lib/firestore/vendors";
+import { paginateItems } from "@/lib/pagination";
 import type { Vendor } from "@/types";
 
 export default function AdminVendorsPage() {
@@ -55,6 +57,7 @@ export default function AdminVendorsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const loadVendors = () => {
     getVendors()
@@ -66,6 +69,17 @@ export default function AdminVendorsPage() {
   useEffect(() => {
     loadVendors();
   }, []);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(vendors, page), [vendors, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   if (!isElevatedAdmin) {
     return (
@@ -211,7 +225,7 @@ export default function AdminVendorsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {vendors.map((vendor) => (
+                {pagedItems.map((vendor) => (
                   <TableRow key={vendor.id}>
                     <TableCell className="font-medium">{vendor.name}</TableCell>
                     <TableCell className="text-right">
@@ -238,6 +252,13 @@ export default function AdminVendorsPage() {
                 ))}
               </TableBody>
             </Table>
+            <TablePagination
+              page={safePage}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={setPage}
+              className="mt-4"
+            />
           </CardContent>
         </Card>
       )}

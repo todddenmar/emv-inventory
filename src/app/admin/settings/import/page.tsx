@@ -93,12 +93,12 @@ import {
   type ParsedImportProduct,
 } from "@/lib/product-json-import";
 import { slugify } from "@/lib/slug";
+import { TABLE_PAGE_SIZE } from "@/lib/pagination";
 import { cn } from "@/lib/utils";
 import type { Category, Product, Vendor } from "@/types";
 
 const SAMPLE_FILE_NAME = "emv-products.json";
 const CATEGORIES_SAMPLE_FILE_NAME = "emv-categories.json";
-const PRODUCTS_PAGE_SIZE = 10;
 
 type BulkActionKind = "category" | "productType";
 
@@ -361,20 +361,20 @@ export default function ProductJsonImportPage() {
 
   const totalProductPages = Math.max(
     1,
-    Math.ceil(filteredProductRows.length / PRODUCTS_PAGE_SIZE)
+    Math.ceil(filteredProductRows.length / TABLE_PAGE_SIZE)
   );
 
   const pagedProductRows = useMemo(() => {
-    const start = (productPage - 1) * PRODUCTS_PAGE_SIZE;
-    return filteredProductRows.slice(start, start + PRODUCTS_PAGE_SIZE);
+    const start = (productPage - 1) * TABLE_PAGE_SIZE;
+    return filteredProductRows.slice(start, start + TABLE_PAGE_SIZE);
   }, [filteredProductRows, productPage]);
 
   const productRangeStart =
     filteredProductRows.length === 0
       ? 0
-      : (productPage - 1) * PRODUCTS_PAGE_SIZE + 1;
+      : (productPage - 1) * TABLE_PAGE_SIZE + 1;
   const productRangeEnd = Math.min(
-    productPage * PRODUCTS_PAGE_SIZE,
+    productPage * TABLE_PAGE_SIZE,
     filteredProductRows.length
   );
 
@@ -1737,7 +1737,7 @@ export default function ProductJsonImportPage() {
                           " (filtered)"}
                         .
                       </p>
-                      {filteredProductRows.length > PRODUCTS_PAGE_SIZE && (
+                      {filteredProductRows.length > TABLE_PAGE_SIZE && (
                         <div className="flex items-center gap-2">
                           <Button
                             type="button"
@@ -2004,7 +2004,7 @@ export default function ProductJsonImportPage() {
                       </div>
                     )}
 
-                    {filteredProductRows.length > PRODUCTS_PAGE_SIZE && (
+                    {filteredProductRows.length > TABLE_PAGE_SIZE && (
                       <div className="flex items-center justify-end gap-2">
                         <Button
                           type="button"

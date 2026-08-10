@@ -25,10 +25,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useIsStaff } from "@/stores/auth-store";
 import { getProductPriceLogs } from "@/lib/firestore/price-logs";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import type { PriceChangeDirection, ProductPriceLog } from "@/types";
 
 type DirectionFilter = "all" | PriceChangeDirection;
@@ -40,6 +42,7 @@ export default function AdminPriceChangesPage() {
   const [loading, setLoading] = useState(true);
   const [directionFilter, setDirectionFilter] =
     useState<DirectionFilter>("all");
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     getProductPriceLogs({ max: 200 })
@@ -52,6 +55,21 @@ export default function AdminPriceChangesPage() {
     if (directionFilter === "all") return logs;
     return logs.filter((log) => log.direction === directionFilter);
   }, [logs, directionFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [directionFilter]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(filtered, page), [filtered, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const counts = useMemo(() => {
     return {
@@ -162,7 +180,7 @@ export default function AdminPriceChangesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((log) => (
+                  {pagedItems.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                         {formatDate(log.createdAt)}
@@ -203,6 +221,15 @@ export default function AdminPriceChangesPage() {
                 </TableBody>
               </Table>
             </div>
+          )}
+          {!loading && filtered.length > 0 && (
+            <TablePagination
+              page={safePage}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={setPage}
+              className="mt-4"
+            />
           )}
         </CardContent>
       </Card>

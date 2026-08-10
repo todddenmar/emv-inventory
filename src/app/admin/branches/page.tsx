@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   assignBranchManager,
@@ -47,6 +48,7 @@ import {
 } from "@/lib/firestore/branches";
 import { assignUserBranch, getManagers } from "@/lib/firestore/users";
 import { parseCoordinate } from "@/lib/location";
+import { paginateItems } from "@/lib/pagination";
 import type { AppUser, Branch } from "@/types";
 
 export default function AdminBranchesPage() {
@@ -57,6 +59,7 @@ export default function AdminBranchesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Branch | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -80,6 +83,17 @@ export default function AdminBranchesPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(branches, page), [branches, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   if (!isElevatedAdmin) {
     return (
@@ -326,44 +340,52 @@ export default function AdminBranchesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {branches.map((branch) => (
-            <Card key={branch.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-base">{branch.name}</CardTitle>
-                    <CardDescription>{branch.code}</CardDescription>
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {pagedItems.map((branch) => (
+              <Card key={branch.id}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-base">{branch.name}</CardTitle>
+                      <CardDescription>{branch.code}</CardDescription>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge
+                        variant={branch.isActive ? "default" : "secondary"}
+                        className="text-xs"
+                      >
+                        {branch.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    <Badge
-                      variant={branch.isActive ? "default" : "secondary"}
-                      className="text-xs"
-                    >
-                      {branch.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <p className="text-muted-foreground">{branch.address}</p>
-                {branch.phone && <p>{branch.phone}</p>}
-                <p>
-                  <span className="text-muted-foreground">Manager: </span>
-                  {branch.managerName || "Unassigned"}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => openEdit(branch)}
-                >
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Edit branch
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <p className="text-muted-foreground">{branch.address}</p>
+                  {branch.phone && <p>{branch.phone}</p>}
+                  <p>
+                    <span className="text-muted-foreground">Manager: </span>
+                    {branch.managerName || "Unassigned"}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => openEdit(branch)}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit branch
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <TablePagination
+            page={safePage}
+            totalPages={totalPages}
+            total={total}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

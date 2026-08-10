@@ -32,7 +32,7 @@ export const settingsNavItems: SettingsNavItem[] = [
     label: "Branch assortment",
     icon: ListChecks,
     elevatedOnly: false,
-    description: "Choose which variants each branch sells",
+    description: "Assign products to branches that sell them",
   },
   {
     href: "/admin/settings/import",

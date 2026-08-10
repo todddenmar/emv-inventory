@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Copy, Mail, Link2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { TablePagination } from "@/components/admin/table-pagination";
 import {
   createInvite,
   getInvites,
@@ -38,6 +39,7 @@ import { getBranches } from "@/lib/firestore/branches";
 import { useAuthStore, useIsElevatedAdmin } from "@/stores/auth-store";
 import { formatUserRole } from "@/components/layout/user-avatar";
 import { formatDate } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import type { Branch, Invite } from "@/types";
 import {
   Select,
@@ -59,6 +61,7 @@ export default function AdminInvitesPage() {
   const [branchId, setBranchId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [lastLink, setLastLink] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const loadInvites = () => {
     Promise.all([getInvites(), getBranches(true)])
@@ -73,6 +76,17 @@ export default function AdminInvitesPage() {
   useEffect(() => {
     loadInvites();
   }, []);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(invites, page), [invites, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   if (!isElevatedAdmin) {
     return (
@@ -301,54 +315,62 @@ export default function AdminInvitesPage() {
           ) : invites.length === 0 ? (
             <p className="text-muted-foreground">No invites yet.</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Branch</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Link</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invites.map((invite) => (
-                  <TableRow key={invite.id}>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {formatUserRole(invite.role)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{invite.branchName || "—"}</TableCell>
-                    <TableCell>{invite.email || "—"}</TableCell>
-                    <TableCell>{formatDate(invite.createdAt)}</TableCell>
-                    <TableCell>{formatDate(invite.expiresAt)}</TableCell>
-                    <TableCell>
-                      {invite.usedAt ? (
-                        <Badge variant="outline">Used</Badge>
-                      ) : isInviteValid(invite) ? (
-                        <Badge>Active</Badge>
-                      ) : (
-                        <Badge variant="secondary">Expired</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {!invite.usedAt && isInviteValid(invite) && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => copyLink(invite.token)}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </TableCell>
+            <div className="space-y-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Branch</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Link</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {pagedItems.map((invite) => (
+                    <TableRow key={invite.id}>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {formatUserRole(invite.role)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{invite.branchName || "—"}</TableCell>
+                      <TableCell>{invite.email || "—"}</TableCell>
+                      <TableCell>{formatDate(invite.createdAt)}</TableCell>
+                      <TableCell>{formatDate(invite.expiresAt)}</TableCell>
+                      <TableCell>
+                        {invite.usedAt ? (
+                          <Badge variant="outline">Used</Badge>
+                        ) : isInviteValid(invite) ? (
+                          <Badge>Active</Badge>
+                        ) : (
+                          <Badge variant="secondary">Expired</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {!invite.usedAt && isInviteValid(invite) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => copyLink(invite.token)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <TablePagination
+                page={safePage}
+                totalPages={totalPages}
+                total={total}
+                onPageChange={setPage}
+              />
+            </div>
           )}
         </CardContent>
       </Card>

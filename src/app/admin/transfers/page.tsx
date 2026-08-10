@@ -34,6 +34,7 @@ import {
   VariantSearchDialog,
 } from "@/components/admin/variant-search-dialog";
 import { InventoryActivityFeed } from "@/components/admin/inventory-activity-feed";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
 import { getBranches } from "@/lib/firestore/branches";
@@ -49,6 +50,7 @@ import {
 } from "@/lib/inventory";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { formatDate } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import type { Branch, BranchTransfer, Product } from "@/types";
 
 interface TransferLine {
@@ -83,6 +85,7 @@ export default function AdminTransfersPage() {
   const [transfers, setTransfers] = useState<BranchTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const defaultFromBranch = isElevatedAdmin ? "" : assignedBranchId ?? "";
 
@@ -135,6 +138,17 @@ export default function AdminTransfersPage() {
       ),
     [sellingVariants, lines]
   );
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(transfers, page), [transfers, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const selectedVariantLabel = useMemo(() => {
     if (!selectedVariant) return null;
@@ -404,7 +418,7 @@ export default function AdminTransfersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transfers.map((transfer) => (
+                  {pagedItems.map((transfer) => (
                     <TableRow key={transfer.id}>
                       <TableCell className="whitespace-nowrap text-sm">
                         {formatDate(transfer.createdAt)}
@@ -424,6 +438,15 @@ export default function AdminTransfersPage() {
                 </TableBody>
               </Table>
             </div>
+          )}
+          {transfers.length > 0 && (
+            <TablePagination
+              page={safePage}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={setPage}
+              className="mt-4"
+            />
           )}
         </CardContent>
       </Card>

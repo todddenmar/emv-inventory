@@ -33,6 +33,7 @@ import {
   VariantPickerButton,
   VariantSearchDialog,
 } from "@/components/admin/variant-search-dialog";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
 import { getBranches } from "@/lib/firestore/branches";
@@ -50,6 +51,7 @@ import {
 import { isProductPublished } from "@/lib/products-catalog";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { formatDate } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import type {
   Branch,
   Product,
@@ -84,6 +86,7 @@ export default function AdminStockInPage() {
   const [history, setHistory] = useState<SupplierStockIn[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const defaultBranch = isElevatedAdmin ? "" : assignedBranchId ?? "";
 
@@ -130,6 +133,21 @@ export default function AdminStockInPage() {
       variantRows.filter((v) => !lines.some((l) => l.variantId === v.id)),
     [variantRows, lines]
   );
+
+  useEffect(() => {
+    setPage(1);
+  }, [branchId]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(history, page), [history, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const branchSelectLabel = (value: string | null) => {
     if (!value) return null;
@@ -423,7 +441,7 @@ export default function AdminStockInPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {history.map((entry) => (
+                  {pagedItems.map((entry) => (
                     <TableRow key={entry.id}>
                       <TableCell className="whitespace-nowrap text-sm">
                         {formatDate(entry.createdAt)}
@@ -442,6 +460,15 @@ export default function AdminStockInPage() {
                 </TableBody>
               </Table>
             </div>
+          )}
+          {history.length > 0 && (
+            <TablePagination
+              page={safePage}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={setPage}
+              className="mt-4"
+            />
           )}
         </CardContent>
       </Card>

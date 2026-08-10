@@ -9,8 +9,6 @@ import {
   ArchiveRestore,
   Loader2,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -50,6 +48,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { TagsInput } from "@/components/admin/product-specs-editor";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   archiveCategory,
@@ -61,9 +60,8 @@ import {
 } from "@/lib/firestore/categories";
 import { slugify } from "@/lib/slug";
 import { useSlugField } from "@/hooks/use-slug-field";
+import { paginateItems } from "@/lib/pagination";
 import type { Category } from "@/types";
-
-const PAGE_SIZE = 10;
 
 export default function AdminCategoriesPage() {
   const { isElevatedAdmin } = useBranchAccess();
@@ -91,16 +89,17 @@ export default function AdminCategoriesPage() {
     [categories, showArchived]
   );
 
-  const totalPages = Math.max(1, Math.ceil(visibleCategories.length / PAGE_SIZE));
-
-  const pagedCategories = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return visibleCategories.slice(start, start + PAGE_SIZE);
-  }, [visibleCategories, page]);
-
-  const rangeStart =
-    visibleCategories.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(page * PAGE_SIZE, visibleCategories.length);
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems: pagedCategories,
+    rangeStart,
+    rangeEnd,
+    total,
+  } = useMemo(
+    () => paginateItems(visibleCategories, page),
+    [visibleCategories, page]
+  );
 
   const loadCategories = () => {
     getCategories(true)
@@ -118,8 +117,8 @@ export default function AdminCategoriesPage() {
   }, [showArchived]);
 
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   if (!isElevatedAdmin) {
     return (
@@ -367,35 +366,12 @@ export default function AdminCategoriesPage() {
                 </TableBody>
               </Table>
 
-              {visibleCategories.length > PAGE_SIZE && (
-                <div className="flex items-center justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    <ChevronLeft className="mr-1 h-4 w-4" />
-                    Previous
-                  </Button>
-                  <span className="text-sm tabular-nums text-muted-foreground">
-                    Page {page} of {totalPages}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() =>
-                      setPage((p) => Math.min(totalPages, p + 1))
-                    }
-                  >
-                    Next
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+              <TablePagination
+                page={safePage}
+                totalPages={totalPages}
+                total={total}
+                onPageChange={setPage}
+              />
             </>
           )}
         </CardContent>

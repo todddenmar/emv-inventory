@@ -50,7 +50,9 @@ import {
   inventoryLogReasonLabel,
 } from "@/lib/firestore/inventory-logs";
 import { getPosSales } from "@/lib/firestore/pos-sales";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { paginateItems, TABLE_PAGE_SIZE } from "@/lib/pagination";
 import {
   percentChange,
   salesByDay,
@@ -193,6 +195,10 @@ export default function AdminReportsPage() {
   const [sales, setSales] = useState<PosSale[]>([]);
   const [prevSales, setPrevSales] = useState<PosSale[]>([]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);
+  const [productPage, setProductPage] = useState(1);
+  const [staffPage, setStaffPage] = useState(1);
+  const [movementPage, setMovementPage] = useState(1);
+  const [receiptPage, setReceiptPage] = useState(1);
 
   const scopeBranchId = isElevatedAdmin
     ? selectedBranchId === "all"
@@ -281,9 +287,66 @@ export default function AdminReportsPage() {
     [sales, effectiveFrom, effectiveTo]
   );
   const hourRows = useMemo(() => salesByHour(sales), [sales]);
-  const productRows = useMemo(() => topProducts(sales, 20), [sales]);
+  const productRows = useMemo(
+    () => topProducts(sales, Number.MAX_SAFE_INTEGER),
+    [sales]
+  );
   const staffRows = useMemo(() => salesByStaff(sales), [sales]);
   const movementRows = useMemo(() => summarizeStockMovements(logs), [logs]);
+
+  useEffect(() => {
+    setProductPage(1);
+    setStaffPage(1);
+    setMovementPage(1);
+    setReceiptPage(1);
+  }, [effectiveFrom, effectiveTo, scopeBranchId]);
+
+  const {
+    page: safeProductPage,
+    totalPages: productTotalPages,
+    pagedItems: pagedProducts,
+    total: productTotal,
+  } = useMemo(
+    () => paginateItems(productRows, productPage),
+    [productRows, productPage]
+  );
+  const {
+    page: safeStaffPage,
+    totalPages: staffTotalPages,
+    pagedItems: pagedStaff,
+    total: staffTotal,
+  } = useMemo(
+    () => paginateItems(staffRows, staffPage),
+    [staffRows, staffPage]
+  );
+  const {
+    page: safeMovementPage,
+    totalPages: movementTotalPages,
+    pagedItems: pagedMovements,
+    total: movementTotal,
+  } = useMemo(
+    () => paginateItems(movementRows, movementPage),
+    [movementRows, movementPage]
+  );
+  const {
+    page: safeReceiptPage,
+    totalPages: receiptTotalPages,
+    pagedItems: pagedReceipts,
+    total: receiptTotal,
+  } = useMemo(() => paginateItems(sales, receiptPage), [sales, receiptPage]);
+
+  useEffect(() => {
+    if (productPage !== safeProductPage) setProductPage(safeProductPage);
+  }, [productPage, safeProductPage]);
+  useEffect(() => {
+    if (staffPage !== safeStaffPage) setStaffPage(safeStaffPage);
+  }, [staffPage, safeStaffPage]);
+  useEffect(() => {
+    if (movementPage !== safeMovementPage) setMovementPage(safeMovementPage);
+  }, [movementPage, safeMovementPage]);
+  useEffect(() => {
+    if (receiptPage !== safeReceiptPage) setReceiptPage(safeReceiptPage);
+  }, [receiptPage, safeReceiptPage]);
 
   const maxDayRevenue = Math.max(...dayRows.map((r) => r.revenue), 0);
   const maxHourRevenue = Math.max(...hourRows.map((r) => r.revenue), 0);
@@ -588,12 +651,12 @@ export default function AdminReportsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {productRows.map((row, index) => (
+                        {pagedProducts.map((row, index) => (
                           <TableRow key={row.key}>
                             <TableCell>
                               <div className="flex items-start gap-2">
                                 <span className="w-5 shrink-0 text-xs text-muted-foreground">
-                                  {index + 1}
+                                  {(safeProductPage - 1) * TABLE_PAGE_SIZE + index + 1}
                                 </span>
                                 <span className="font-medium">{row.name}</span>
                               </div>
@@ -610,6 +673,13 @@ export default function AdminReportsPage() {
                     </Table>
                   </div>
                 )}
+                <TablePagination
+                  page={safeProductPage}
+                  totalPages={productTotalPages}
+                  total={productTotal}
+                  onPageChange={setProductPage}
+                  className="mt-3"
+                />
               </CardContent>
             </Card>
 
@@ -640,7 +710,7 @@ export default function AdminReportsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {staffRows.map((row) => (
+                        {pagedStaff.map((row) => (
                           <TableRow key={row.key}>
                             <TableCell className="font-medium">
                               {row.name}
@@ -660,6 +730,13 @@ export default function AdminReportsPage() {
                     </Table>
                   </div>
                 )}
+                <TablePagination
+                  page={safeStaffPage}
+                  totalPages={staffTotalPages}
+                  total={staffTotal}
+                  onPageChange={setStaffPage}
+                  className="mt-3"
+                />
               </CardContent>
             </Card>
           </div>
@@ -689,7 +766,7 @@ export default function AdminReportsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {movementRows.map((row) => (
+                      {pagedMovements.map((row) => (
                         <TableRow key={row.reason}>
                           <TableCell>
                             <Badge variant="outline">
@@ -724,6 +801,13 @@ export default function AdminReportsPage() {
                   </Table>
                 </div>
               )}
+              <TablePagination
+                page={safeMovementPage}
+                totalPages={movementTotalPages}
+                total={movementTotal}
+                onPageChange={setMovementPage}
+                className="mt-3"
+              />
             </CardContent>
           </Card>
 
@@ -731,7 +815,7 @@ export default function AdminReportsPage() {
             <CardHeader>
               <CardTitle className="text-base">Recent receipts</CardTitle>
               <CardDescription>
-                Latest tickets in {periodLabel} (up to 25)
+                Latest tickets in {periodLabel}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -752,7 +836,7 @@ export default function AdminReportsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sales.slice(0, 25).map((sale) => (
+                      {pagedReceipts.map((sale) => (
                         <TableRow key={sale.id}>
                           <TableCell className="whitespace-nowrap text-sm">
                             {formatDate(sale.createdAt)}
@@ -784,6 +868,13 @@ export default function AdminReportsPage() {
                   </Table>
                 </div>
               )}
+              <TablePagination
+                page={safeReceiptPage}
+                totalPages={receiptTotalPages}
+                total={receiptTotal}
+                onPageChange={setReceiptPage}
+                className="mt-3"
+              />
         </CardContent>
       </Card>
         </>

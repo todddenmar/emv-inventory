@@ -40,10 +40,12 @@ import {
   UserAvatar,
   formatUserRole,
 } from "@/components/layout/user-avatar";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getBranches } from "@/lib/firestore/branches";
 import { getAllUsers, updateUserAccess } from "@/lib/firestore/users";
 import { syncAuthClaims } from "@/lib/auth-claims";
+import { paginateItems } from "@/lib/pagination";
 import { isMasterAdminRole, roleAssignableBy } from "@/lib/roles";
 import type { AppUser, Branch, UserRole } from "@/types";
 
@@ -76,6 +78,7 @@ export default function AdminUsersPage() {
   const [role, setRole] = useState<UserRole>("customer");
   const [branchId, setBranchId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const branchMap = Object.fromEntries(branches.map((b) => [b.id, b]));
 
@@ -121,6 +124,24 @@ export default function AdminUsersPage() {
       return haystack.includes(q);
     });
   }, [visibleUsers, search, branchMap]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(
+    () => paginateItems(filteredUsers, page),
+    [filteredUsers, page]
+  );
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const openEdit = (user: AppUser) => {
     setEditingUser(user);
@@ -223,7 +244,7 @@ export default function AdminUsersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
+                  {pagedItems.map((user) => (
                     <TableRow key={user.uid}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -273,6 +294,14 @@ export default function AdminUsersPage() {
                 </TableBody>
               </Table>
             </div>
+          )}
+          {!loading && filteredUsers.length > 0 && (
+            <TablePagination
+              page={safePage}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={setPage}
+            />
           )}
         </CardContent>
       </Card>

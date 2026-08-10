@@ -12,7 +12,7 @@ import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { branchInventoryConverter } from "@/lib/firestore/converters";
 import { defaultVariantId } from "@/lib/product-variants";
-import type { BranchInventory, InventoryLogReason } from "@/types";
+import type { BranchInventory, InventoryLogReason, Product } from "@/types";
 
 export function inventoryDocId(branchId: string, variantId: string): string {
   return `${branchId}_${variantId}`;
@@ -354,6 +354,60 @@ export async function setVariantsSellingBulk(
         )
       )
     );
+  }
+}
+
+/** Branches where any variant of the product is currently selling. */
+export function sellingBranchIdsForProduct(
+  productId: string,
+  inventory: BranchInventory[]
+): string[] {
+  const ids = new Set<string>();
+  for (const row of inventory) {
+    if (row.productId !== productId) continue;
+    if (row.isSelling === false) continue;
+    ids.add(row.branchId);
+  }
+  return [...ids];
+}
+
+/**
+ * Assign all variants of a product to the selected branches.
+ * Unselected branches that already have inventory rows are marked not selling
+ * (stock is preserved). Does not create inventory docs for unselected branches.
+ */
+export async function setProductSellingForBranches(
+  product: Pick<Product, "id" | "variants">,
+  selectedBranchIds: string[],
+  existingInventory: BranchInventory[]
+): Promise<void> {
+  const selected = new Set(selectedBranchIds);
+  const variantIds = product.variants.map((v) => v.id);
+  if (variantIds.length === 0) return;
+
+  const ops: Array<Promise<void>> = [];
+
+  for (const branchId of selected) {
+    for (const variantId of variantIds) {
+      ops.push(setVariantSelling(branchId, product.id, variantId, true));
+    }
+  }
+
+  const productRows = existingInventory.filter(
+    (row) => row.productId === product.id
+  );
+  for (const row of productRows) {
+    if (selected.has(row.branchId)) continue;
+    if (row.isSelling === false) continue;
+    if (!variantIds.includes(row.variantId)) continue;
+    ops.push(
+      setVariantSelling(row.branchId, product.id, row.variantId, false)
+    );
+  }
+
+  const chunkSize = 40;
+  for (let i = 0; i < ops.length; i += chunkSize) {
+    await Promise.all(ops.slice(i, i + chunkSize));
   }
 }
 

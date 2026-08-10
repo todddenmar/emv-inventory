@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -21,12 +21,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination } from "@/components/admin/table-pagination";
 import {
   getVariantInventoryLogs,
   inventoryLogReasonLabel,
   toDateInputValue,
 } from "@/lib/firestore/inventory-logs";
 import { formatDate } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
 import type { InventoryLog } from "@/types";
 
 export interface AdjustmentHistoryTarget {
@@ -51,12 +53,18 @@ export function InventoryAdjustmentHistorySheet({
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [date, setDate] = useState(() => toDateInputValue());
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (open) {
       setDate(toDateInputValue());
+      setPage(1);
     }
   }, [open, target?.variantId, target?.branchId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [date]);
 
   useEffect(() => {
     if (!open || !target) {
@@ -84,6 +92,17 @@ export function InventoryAdjustmentHistorySheet({
       cancelled = true;
     };
   }, [open, target, date]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(() => paginateItems(logs, page), [logs, page]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const subtitleParts = [
     target?.productName,
@@ -142,7 +161,7 @@ export function InventoryAdjustmentHistorySheet({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logs.map((log) => (
+                  {pagedItems.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="whitespace-nowrap text-sm">
                         {formatDate(log.createdAt)}
@@ -185,6 +204,15 @@ export function InventoryAdjustmentHistorySheet({
               </Table>
             </div>
           )}
+          {!loading && logs.length > 0 ? (
+            <TablePagination
+              page={safePage}
+              totalPages={totalPages}
+              total={total}
+              onPageChange={setPage}
+              className="mt-3"
+            />
+          ) : null}
           <p className="mt-4 text-xs text-muted-foreground">
             <Link
               href="/admin/adjustment-history"
