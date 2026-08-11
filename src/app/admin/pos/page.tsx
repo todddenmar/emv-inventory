@@ -34,6 +34,7 @@ import { getBranches } from "@/lib/firestore/branches";
 import { getCategories } from "@/lib/firestore/categories";
 import { getBranchInventory } from "@/lib/firestore/inventory";
 import {
+  getProducts,
   getProductsByCategoryId,
   setVariantRetailPrices,
 } from "@/lib/firestore/products";
@@ -53,6 +54,8 @@ import {
   unitPriceForPaymentMethod,
 } from "@/lib/product-pricing";
 import { formatCurrency } from "@/lib/format";
+import { paginateItems } from "@/lib/pagination";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import type {
   Branch,
@@ -64,6 +67,9 @@ import type {
   Voucher,
 } from "@/types";
 import type { VariantWithStock } from "@/lib/inventory";
+
+const ALL_CATEGORIES_ID = "all";
+const POS_PAGE_SIZE = 20;
 
 function resolveUnitPrice(
   cashPrice: number,
@@ -83,7 +89,8 @@ export default function AdminPosPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [inventory, setInventory] = useState<BranchInventory[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] =
+    useState(ALL_CATEGORIES_ID);
   const [categoryCache, setCategoryCache] = useState<Record<string, Product[]>>(
     {}
   );
@@ -91,6 +98,7 @@ export default function AdminPosPage() {
   const [loadingCategory, setLoadingCategory] = useState(false);
   const [categorySearch, setCategorySearch] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [cart, setCart] = useState<PosCartLine[]>([]);
   const [paymentMethod, setPaymentMethod] =
     useState<PosPaymentMethod>("cash");
@@ -131,10 +139,7 @@ export default function AdminPosPage() {
           ? branchList[0]?.id ?? ""
           : assignedBranchId ?? branchList[0]?.id ?? "";
         setSelectedBranchId(initialBranch);
-
-        if (activeCats.length > 0) {
-          setSelectedCategoryId(activeCats[0].id);
-        }
+        setSelectedCategoryId(ALL_CATEGORIES_ID);
       } catch (err) {
         console.error(err);
         toast.error("Failed to load POS");
@@ -183,10 +188,15 @@ export default function AdminPosPage() {
       if (!categoryId || categoryCache[categoryId]) return;
       setLoadingCategory(true);
       try {
-        const products = await getProductsByCategoryId(categoryId, false);
+        const products =
+          categoryId === ALL_CATEGORIES_ID
+            ? await getProducts(true)
+            : (await getProductsByCategoryId(categoryId, false)).filter((p) =>
+                isProductPublished(p)
+              );
         setCategoryCache((prev) => ({
           ...prev,
-          [categoryId]: products.filter((p) => isProductPublished(p)),
+          [categoryId]: products,
         }));
       } catch (err) {
         console.error(err);
@@ -233,6 +243,24 @@ export default function AdminPosPage() {
       );
     });
   }, [sellingVariants, search, categoryProducts]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedCategoryId, search, activeBranchId]);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems: pagedVariants,
+    total,
+  } = useMemo(
+    () => paginateItems(filteredVariants, page, POS_PAGE_SIZE),
+    [filteredVariants, page]
+  );
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
 
@@ -544,14 +572,6 @@ export default function AdminPosPage() {
     );
   }
 
-  if (categories.length === 0) {
-    return (
-      <p className="text-muted-foreground">
-        Add categories and assign products before using POS.
-      </p>
-    );
-  }
-
   const openCheckout = () => {
     if (cart.length === 0) return;
     setCheckoutStep("details");
@@ -630,10 +650,28 @@ export default function AdminPosPage() {
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={
+                  selectedCategoryId === ALL_CATEGORIES_ID
+                    ? "default"
+                    : "outline"
+                }
+                className="shrink-0"
+                onClick={() => {
+                  setSelectedCategoryId(ALL_CATEGORIES_ID);
+                  setSearch("");
+                }}
+              >
+                All categories
+              </Button>
               {filteredCategories.length === 0 ? (
-                <p className="py-1 text-sm text-muted-foreground">
-                  No categories match “{categorySearch.trim()}”.
-                </p>
+                categorySearch.trim() ? (
+                  <p className="py-1 text-sm text-muted-foreground">
+                    No categories match “{categorySearch.trim()}”.
+                  </p>
+                ) : null
               ) : (
                 filteredCategories.map((category) => {
                   const active = category.id === selectedCategoryId;
@@ -658,7 +696,11 @@ export default function AdminPosPage() {
             <div className="relative max-w-md">
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search in this category..."
+                placeholder={
+                  selectedCategoryId === ALL_CATEGORIES_ID
+                    ? "Search products..."
+                    : "Search in this category..."
+                }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
@@ -674,91 +716,103 @@ export default function AdminPosPage() {
               </div>
             ) : filteredVariants.length === 0 ? (
               <p className="py-16 text-center text-muted-foreground">
-                No selling variants in this category for the selected branch.
+                {selectedCategoryId === ALL_CATEGORIES_ID
+                  ? "No selling variants for the selected branch."
+                  : "No selling variants in this category for the selected branch."}
               </p>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                {filteredVariants.map((row) => {
-                  const product = categoryProducts.find(
-                    (p) => p.id === row.productId
-                  );
-                  const thumb =
-                    product && showCatalogImages(catalogImageSource)
-                      ? getCatalogImageUrl(product, row, catalogImageSource)
-                      : null;
-                  const variantLabel = formatVariantLabel(
-                    row,
-                    product?.options ?? []
-                  );
-                  const outOfStock = row.stock <= 0;
-                  const inCart =
-                    cart.find((line) => line.variantId === row.id)?.quantity ??
-                    0;
+              <>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                  {pagedVariants.map((row) => {
+                    const product = categoryProducts.find(
+                      (p) => p.id === row.productId
+                    );
+                    const thumb =
+                      product && showCatalogImages(catalogImageSource)
+                        ? getCatalogImageUrl(product, row, catalogImageSource)
+                        : null;
+                    const variantLabel = formatVariantLabel(
+                      row,
+                      product?.options ?? []
+                    );
+                    const outOfStock = row.stock <= 0;
+                    const inCart =
+                      cart.find((line) => line.variantId === row.id)
+                        ?.quantity ?? 0;
 
-                  return (
-                    <button
-                      key={row.id}
-                      type="button"
-                      disabled={outOfStock}
-                      onClick={() => addVariant(row)}
-                      className="flex min-h-[140px] flex-col overflow-hidden rounded-xl border bg-card text-left transition hover:border-primary/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {showCatalogImages(catalogImageSource) ? (
-                        <div className="aspect-[4/3] w-full bg-muted">
-                          {thumb ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={thumb}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                              No image
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
-                      <div className="flex flex-1 flex-col gap-1 p-3">
-                        <p className="line-clamp-2 text-sm font-medium leading-snug">
-                          {row.productName}
-                        </p>
-                        {variantLabel !== "Default" ? (
-                          <p className="line-clamp-1 text-xs text-muted-foreground">
-                            {variantLabel}
-                          </p>
+                    return (
+                      <button
+                        key={row.id}
+                        type="button"
+                        disabled={outOfStock}
+                        onClick={() => addVariant(row)}
+                        className="flex min-h-[140px] flex-col overflow-hidden rounded-xl border bg-card text-left transition hover:border-primary/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {showCatalogImages(catalogImageSource) ? (
+                          <div className="aspect-[4/3] w-full bg-muted">
+                            {thumb ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={thumb}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                                No image
+                              </div>
+                            )}
+                          </div>
                         ) : null}
-                        <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-                          <span className="text-sm font-semibold tabular-nums">
-                            {(() => {
-                              const display = unitPriceForPaymentMethod(
-                                row,
-                                paymentMethod
-                              );
-                              if (display != null) {
-                                return formatCurrency(display);
-                              }
-                              return paymentMethod === "retail"
-                                ? "Set retail"
-                                : formatCurrency(row.price);
-                            })()}
-                          </span>
-                          <Badge
-                            variant={outOfStock ? "outline" : "secondary"}
-                            className="text-xs"
-                          >
-                            {outOfStock
-                              ? "Out"
-                              : inCart > 0
-                                ? `${row.stock} · ${inCart}`
-                                : `${row.stock}`}
-                          </Badge>
+                        <div className="flex flex-1 flex-col gap-1 p-3">
+                          <p className="line-clamp-2 text-sm font-medium leading-snug">
+                            {row.productName}
+                          </p>
+                          {variantLabel !== "Default" ? (
+                            <p className="line-clamp-1 text-xs text-muted-foreground">
+                              {variantLabel}
+                            </p>
+                          ) : null}
+                          <div className="mt-auto flex items-end justify-between gap-2 pt-2">
+                            <span className="text-sm font-semibold tabular-nums">
+                              {(() => {
+                                const display = unitPriceForPaymentMethod(
+                                  row,
+                                  paymentMethod
+                                );
+                                if (display != null) {
+                                  return formatCurrency(display);
+                                }
+                                return paymentMethod === "retail"
+                                  ? "Set retail"
+                                  : formatCurrency(row.price);
+                              })()}
+                            </span>
+                            <Badge
+                              variant={outOfStock ? "outline" : "secondary"}
+                              className="text-xs"
+                            >
+                              {outOfStock
+                                ? "Out"
+                                : inCart > 0
+                                  ? `${row.stock} · ${inCart}`
+                                  : `${row.stock}`}
+                            </Badge>
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <TablePagination
+                  page={safePage}
+                  totalPages={totalPages}
+                  total={total}
+                  pageSize={POS_PAGE_SIZE}
+                  onPageChange={setPage}
+                  className="mt-4"
+                />
+              </>
             )}
           </div>
         </div>

@@ -1,9 +1,13 @@
 import {
+  Building2,
   FileJson,
+  FolderKanban,
   ListChecks,
   Settings2,
+  Ticket,
   UserPlus,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,6 +37,34 @@ export const settingsNavItems: SettingsNavItem[] = [
     icon: ListChecks,
     elevatedOnly: false,
     description: "Assign products to branches that sell them",
+  },
+  {
+    href: "/admin/settings/category-groups",
+    label: "Category groups",
+    icon: FolderKanban,
+    elevatedOnly: true,
+    description: "Bundle categories for report and history filters",
+  },
+  {
+    href: "/admin/settings/vendors",
+    label: "Vendors",
+    icon: Building2,
+    elevatedOnly: true,
+    description: "Brands and suppliers assigned to products",
+  },
+  {
+    href: "/admin/settings/resellers",
+    label: "Resellers",
+    icon: UsersRound,
+    elevatedOnly: false,
+    description: "Reseller accounts for prepaid credit and POS",
+  },
+  {
+    href: "/admin/settings/vouchers",
+    label: "Vouchers",
+    icon: Ticket,
+    elevatedOnly: false,
+    description: "Prepaid store credit codes",
   },
   {
     href: "/admin/settings/import",

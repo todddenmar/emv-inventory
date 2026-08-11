@@ -8,6 +8,7 @@ import {
   Archive,
   ArchiveRestore,
   Loader2,
+  Search,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -63,6 +64,11 @@ import { useSlugField } from "@/hooks/use-slug-field";
 import { paginateItems } from "@/lib/pagination";
 import type { Category } from "@/types";
 
+function matchesQuery(value: string, query: string): boolean {
+  if (!query.trim()) return true;
+  return value.toLowerCase().includes(query.trim().toLowerCase());
+}
+
 export default function AdminCategoriesPage() {
   const { isElevatedAdmin } = useBranchAccess();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -71,6 +77,7 @@ export default function AdminCategoriesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [name, setName] = useState("");
   const resolveSlug = useCallback(
@@ -83,11 +90,18 @@ export default function AdminCategoriesPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  const visibleCategories = useMemo(
-    () =>
-      categories.filter((c) => (showArchived ? c.isArchived : !c.isArchived)),
-    [categories, showArchived]
-  );
+  const visibleCategories = useMemo(() => {
+    const archivedFiltered = categories.filter((c) =>
+      showArchived ? c.isArchived : !c.isArchived
+    );
+    const query = search.trim();
+    if (!query) return archivedFiltered;
+    return archivedFiltered.filter((category) => {
+      if (matchesQuery(category.name, query)) return true;
+      if (matchesQuery(category.slug, query)) return true;
+      return category.tags.some((tag) => matchesQuery(tag, query));
+    });
+  }, [categories, showArchived, search]);
 
   const {
     page: safePage,
@@ -114,7 +128,7 @@ export default function AdminCategoriesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [showArchived]);
+  }, [showArchived, search]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
@@ -258,8 +272,17 @@ export default function AdminCategoriesPage() {
               </p>
             </div>
             <div className="space-y-2">
-              <Label>Tags</Label>
-              <TagsInput tags={tags} onChange={setTags} />
+              <Label htmlFor="cat-tags">Tags</Label>
+              <TagsInput
+                id="cat-tags"
+                tags={tags}
+                onChange={setTags}
+                disabled={submitting}
+              />
+              <p className="text-xs text-muted-foreground">
+                Press Enter to add each tag. Used when searching categories in
+                POS.
+              </p>
             </div>
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -270,22 +293,45 @@ export default function AdminCategoriesPage() {
       </Dialog>
 
       <Card>
-        <CardHeader>
-          <CardTitle>All categories</CardTitle>
-          <CardDescription>
-            {visibleCategories.length === 0
-              ? `0 ${showArchived ? "archived" : "active"} categories`
-              : `Showing ${rangeStart}–${rangeEnd} of ${visibleCategories.length} ${
-                  showArchived ? "archived" : "active"
-                } categor${visibleCategories.length === 1 ? "y" : "ies"}`}
-          </CardDescription>
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>All categories</CardTitle>
+              <CardDescription>
+                {visibleCategories.length === 0
+                  ? search.trim()
+                    ? "No matches"
+                    : `0 ${showArchived ? "archived" : "active"} categories`
+                  : `Showing ${rangeStart}–${rangeEnd} of ${visibleCategories.length}${
+                      search.trim()
+                        ? ` match${visibleCategories.length === 1 ? "" : "es"}`
+                        : ` ${showArchived ? "archived" : "active"} categor${
+                            visibleCategories.length === 1 ? "y" : "ies"
+                          }`
+                    }`}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:max-w-sm">
+              <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name, slug, or tags…"
+                className="pl-9"
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {loading ? (
             <p className="text-muted-foreground">Loading...</p>
           ) : visibleCategories.length === 0 ? (
             <p className="text-muted-foreground">
-              {showArchived ? "No archived categories." : "No categories yet."}
+              {search.trim()
+                ? "No categories match your search."
+                : showArchived
+                  ? "No archived categories."
+                  : "No categories yet."}
             </p>
           ) : (
             <>

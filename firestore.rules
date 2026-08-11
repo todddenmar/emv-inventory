@@ -168,6 +168,11 @@ service cloud.firestore {
       allow write: if isElevatedAdmin();
     }
 
+    match /physicalCategoryGroups/{groupId} {
+      allow read: if isStaff();
+      allow write: if isElevatedAdmin();
+    }
+
     match /physicalVendors/{vendorId} {
       allow read: if isStaff();
       allow write: if isElevatedAdmin();

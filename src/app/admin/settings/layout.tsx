@@ -69,7 +69,7 @@ export default function AdminSettingsLayout({
         <div className="mb-4">
           <h2 className="text-sm font-semibold">Settings</h2>
           <p className="text-xs text-muted-foreground">
-            Assortment, import, and access
+            Assortment, partners, and access
           </p>
         </div>
         <SettingsNav />

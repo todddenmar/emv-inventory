@@ -11,6 +11,7 @@ import type {
   BranchInventory,
   BranchTransfer,
   Category,
+  CategoryGroup,
   InventoryLog,
   Invite,
   PosSale,
@@ -56,7 +57,43 @@ export const categoryConverter: FirestoreDataConverter<Category> = {
       id: snapshot.id,
       name: data.name,
       slug: resolveSlug(data.slug, data.name, snapshot.id),
-      tags: data.tags ?? [],
+      tags: Array.isArray(data.tags)
+        ? data.tags.filter((t: unknown): t is string => typeof t === "string")
+        : [],
+      isArchived: data.isArchived ?? false,
+      archivedAt: data.archivedAt ? toDate(data.archivedAt) : null,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
+    };
+  },
+};
+
+export const categoryGroupConverter: FirestoreDataConverter<CategoryGroup> = {
+  toFirestore(group: CategoryGroup): DocumentData {
+    return {
+      name: group.name,
+      slug: group.slug,
+      categoryIds: group.categoryIds,
+      isArchived: group.isArchived,
+      archivedAt: group.archivedAt,
+      createdAt: group.createdAt,
+      updatedAt: group.updatedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): CategoryGroup {
+    const data = snapshot.data(options);
+    return {
+      id: snapshot.id,
+      name: data.name,
+      slug: resolveSlug(data.slug, data.name, snapshot.id),
+      categoryIds: Array.isArray(data.categoryIds)
+        ? data.categoryIds.filter(
+            (id: unknown): id is string => typeof id === "string"
+          )
+        : [],
       isArchived: data.isArchived ?? false,
       archivedAt: data.archivedAt ? toDate(data.archivedAt) : null,
       createdAt: toDate(data.createdAt),

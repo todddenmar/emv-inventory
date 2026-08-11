@@ -50,6 +50,18 @@ export interface Category {
   updatedAt: Date;
 }
 
+/** Named bundle of categories for report / history filters (e.g. "Paddles"). */
+export interface CategoryGroup {
+  id: string;
+  name: string;
+  slug: string;
+  categoryIds: string[];
+  isArchived: boolean;
+  archivedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface ProductOption {
   name: string;
   values: string[];

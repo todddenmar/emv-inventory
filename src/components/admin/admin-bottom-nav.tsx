@@ -35,9 +35,6 @@ const bottomNavCandidates = [
   { href: "/admin/products", label: "Products" },
   { href: "/admin/categories", label: "Categories" },
   { href: "/admin/branches", label: "Branches" },
-  { href: "/admin/vendors", label: "Vendors" },
-  { href: "/admin/resellers", label: "Resellers" },
-  { href: "/admin/vouchers", label: "Vouchers" },
 ] as const;
 
 const MIN_VISIBLE = 3;

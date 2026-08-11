@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
   orderBy,
@@ -35,6 +36,13 @@ export interface CompletePosSaleInput {
   items: PosSaleItem[];
   createdBy: string;
   createdByName?: string | null;
+}
+
+export async function getPosSale(id: string): Promise<PosSale | null> {
+  const snap = await getDoc(
+    doc(getClientDb(), COLLECTIONS.posSales, id).withConverter(posSaleConverter)
+  );
+  return snap.exists() ? snap.data() : null;
 }
 
 export async function getPosSales(options?: {

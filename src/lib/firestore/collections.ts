@@ -3,6 +3,7 @@ export const COLLECTIONS = {
   branches: "physicalBranches",
   products: "physicalProducts",
   categories: "physicalCategories",
+  categoryGroups: "physicalCategoryGroups",
   vendors: "physicalVendors",
   branchInventory: "physicalBranchInventory",
   inventoryLogs: "physicalInventoryLogs",

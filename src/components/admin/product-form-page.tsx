@@ -10,13 +10,19 @@ import { useRouter } from "next/navigation";
 import { LinkButton } from "@/components/ui/link-button";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -32,7 +38,7 @@ import {
   type GalleryItem,
 } from "@/components/admin/product-image-gallery";
 import { getCategories } from "@/lib/firestore/categories";
-import { getVendors } from "@/lib/firestore/vendors";
+import { createVendor, getVendors } from "@/lib/firestore/vendors";
 import {
   getProduct,
   publishProduct,
@@ -98,6 +104,9 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   const [removedStoragePaths, setRemovedStoragePaths] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
+  const [newVendorName, setNewVendorName] = useState("");
+  const [creatingVendor, setCreatingVendor] = useState(false);
 
   const initializedRef = useRef(false);
 
@@ -118,6 +127,42 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   const handleOptionsChange = (next: ProductOption[]) => {
     setOptions(next);
     setVariants((prev) => mergeVariantsOnOptionChange(prev, next));
+  };
+
+  const openVendorDialog = () => {
+    setNewVendorName("");
+    setVendorDialogOpen(true);
+  };
+
+  const handleCreateVendor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newVendorName.trim();
+    if (!name) {
+      toast.error("Vendor name is required");
+      return;
+    }
+
+    setCreatingVendor(true);
+    try {
+      const id = await createVendor(name);
+      const created: Vendor = {
+        id,
+        name,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      setVendors((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setVendorId(id);
+      setVendorDialogOpen(false);
+      setNewVendorName("");
+      toast.success("Vendor created");
+    } catch {
+      toast.error("Failed to create vendor");
+    } finally {
+      setCreatingVendor(false);
+    }
   };
 
   useEffect(() => {
@@ -449,7 +494,20 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="vendor">Vendor</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="vendor">Vendor</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                disabled={saving || publishing || creatingVendor}
+                onClick={openVendorDialog}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                Add vendor
+              </Button>
+            </div>
             <Select
               value={vendorId ?? "none"}
               onValueChange={(v) =>
@@ -561,6 +619,39 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           </Button>
         </div>
       </form>
+
+      <Dialog
+        open={vendorDialogOpen}
+        onOpenChange={(open) => {
+          setVendorDialogOpen(open);
+          if (!open) setNewVendorName("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add vendor</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => void handleCreateVendor(e)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-vendor-name">Name</Label>
+              <Input
+                id="new-vendor-name"
+                value={newVendorName}
+                onChange={(e) => setNewVendorName(e.target.value)}
+                placeholder="e.g. Acme Co"
+                autoFocus
+                disabled={creatingVendor}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={creatingVendor}>
+              {creatingVendor && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create vendor
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table";
 import { LinkButton } from "@/components/ui/link-button";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import {
   getInventoryLogs,
   inventoryLogReasonLabel,
@@ -105,6 +106,9 @@ export function InventoryActivityFeed({
                     <TableHead>Type</TableHead>
                     <TableHead className="text-right">Change</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
+                    <TableHead className="w-12 text-right">
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -138,6 +142,11 @@ export function InventoryActivityFeed({
                       </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">
                         {log.previousStock} → {log.newStock}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {log.reason === "pos_sale" && log.referenceId ? (
+                          <SaleInvoiceButton saleId={log.referenceId} />
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))}

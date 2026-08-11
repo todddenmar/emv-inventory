@@ -51,8 +51,15 @@ import {
 } from "@/lib/firestore/inventory-logs";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
+import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems, TABLE_PAGE_SIZE } from "@/lib/pagination";
+import {
+  filterInventoryLogsByProducts,
+  filterSalesByProducts,
+  productIdsForCategoryFilter,
+} from "@/lib/category-filters";
 import {
   percentChange,
   salesByDay,
@@ -63,7 +70,17 @@ import {
   topProducts,
 } from "@/lib/reports";
 import { cn } from "@/lib/utils";
-import type { Branch, InventoryLog, PosSale } from "@/types";
+import { getCategories } from "@/lib/firestore/categories";
+import { getCategoryGroups } from "@/lib/firestore/category-groups";
+import { getProducts } from "@/lib/firestore/products";
+import type {
+  Branch,
+  Category,
+  CategoryGroup,
+  InventoryLog,
+  PosSale,
+  Product,
+} from "@/types";
 
 type RangeMode = "day" | "range";
 
@@ -186,6 +203,10 @@ export default function AdminReportsPage() {
   const initial = applyPreset("today");
 
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("all");
   const [mode, setMode] = useState<RangeMode>(initial.mode);
   const [preset, setPreset] = useState<Preset>("today");
@@ -210,9 +231,17 @@ export default function AdminReportsPage() {
   const effectiveTo = mode === "day" ? fromDate : toDate;
 
   useEffect(() => {
-    getBranches(true)
-      .then((list) => {
-        setBranches(list);
+    Promise.all([
+      getBranches(true),
+      getCategories(),
+      getCategoryGroups(),
+      getProducts(true),
+    ])
+      .then(([branchList, categoryList, groupList, productList]) => {
+        setBranches(branchList);
+        setCategories(categoryList);
+        setCategoryGroups(groupList);
+        setProducts(productList);
         if (!isElevatedAdmin && assignedBranchId) {
           setSelectedBranchId(assignedBranchId);
         }
@@ -280,26 +309,53 @@ export default function AdminReportsPage() {
     void load();
   }, [load]);
 
-  const totals = useMemo(() => summarizeSales(sales), [sales]);
-  const prevTotals = useMemo(() => summarizeSales(prevSales), [prevSales]);
+  const allowedProductIds = useMemo(
+    () => productIdsForCategoryFilter(products, selectedCategoryIds),
+    [products, selectedCategoryIds]
+  );
+
+  const filteredSales = useMemo(
+    () => filterSalesByProducts(sales, allowedProductIds),
+    [sales, allowedProductIds]
+  );
+  const filteredPrevSales = useMemo(
+    () => filterSalesByProducts(prevSales, allowedProductIds),
+    [prevSales, allowedProductIds]
+  );
+  const filteredLogs = useMemo(
+    () => filterInventoryLogsByProducts(logs, allowedProductIds),
+    [logs, allowedProductIds]
+  );
+
+  const totals = useMemo(() => summarizeSales(filteredSales), [filteredSales]);
+  const prevTotals = useMemo(
+    () => summarizeSales(filteredPrevSales),
+    [filteredPrevSales]
+  );
   const dayRows = useMemo(
-    () => salesByDay(sales, effectiveFrom, effectiveTo),
-    [sales, effectiveFrom, effectiveTo]
+    () => salesByDay(filteredSales, effectiveFrom, effectiveTo),
+    [filteredSales, effectiveFrom, effectiveTo]
   );
-  const hourRows = useMemo(() => salesByHour(sales), [sales]);
+  const hourRows = useMemo(() => salesByHour(filteredSales), [filteredSales]);
   const productRows = useMemo(
-    () => topProducts(sales, Number.MAX_SAFE_INTEGER),
-    [sales]
+    () => topProducts(filteredSales, Number.MAX_SAFE_INTEGER),
+    [filteredSales]
   );
-  const staffRows = useMemo(() => salesByStaff(sales), [sales]);
-  const movementRows = useMemo(() => summarizeStockMovements(logs), [logs]);
+  const staffRows = useMemo(
+    () => salesByStaff(filteredSales),
+    [filteredSales]
+  );
+  const movementRows = useMemo(
+    () => summarizeStockMovements(filteredLogs),
+    [filteredLogs]
+  );
 
   useEffect(() => {
     setProductPage(1);
     setStaffPage(1);
     setMovementPage(1);
     setReceiptPage(1);
-  }, [effectiveFrom, effectiveTo, scopeBranchId]);
+  }, [effectiveFrom, effectiveTo, scopeBranchId, selectedCategoryIds]);
 
   const {
     page: safeProductPage,
@@ -333,7 +389,10 @@ export default function AdminReportsPage() {
     totalPages: receiptTotalPages,
     pagedItems: pagedReceipts,
     total: receiptTotal,
-  } = useMemo(() => paginateItems(sales, receiptPage), [sales, receiptPage]);
+  } = useMemo(
+    () => paginateItems(filteredSales, receiptPage),
+    [filteredSales, receiptPage]
+  );
 
   useEffect(() => {
     if (productPage !== safeProductPage) setProductPage(safeProductPage);
@@ -505,6 +564,16 @@ export default function AdminReportsPage() {
                 </Select>
               </div>
             ) : null}
+
+            <div className="space-y-2">
+              <Label className="invisible">Category</Label>
+              <CategoryFilterPanel
+                categories={categories}
+                groups={categoryGroups}
+                selectedCategoryIds={selectedCategoryIds}
+                onChange={setSelectedCategoryIds}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -819,7 +888,7 @@ export default function AdminReportsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {sales.length === 0 ? (
+              {filteredSales.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No receipts in this period.
                 </p>
@@ -833,6 +902,9 @@ export default function AdminReportsPage() {
                         <TableHead>Staff</TableHead>
                         <TableHead>Items</TableHead>
                         <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="w-12 text-right">
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -861,6 +933,9 @@ export default function AdminReportsPage() {
                           </TableCell>
                           <TableCell className="text-right font-medium tabular-nums">
                             {formatCurrency(sale.total)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <SaleInvoiceButton sale={sale} />
                           </TableCell>
                         </TableRow>
                       ))}

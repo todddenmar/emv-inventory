@@ -52,19 +52,22 @@ export function InventoryAdjustmentHistorySheet({
 }: InventoryAdjustmentHistorySheetProps) {
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [loading, setLoading] = useState(false);
-  const [date, setDate] = useState(() => toDateInputValue());
+  const [fromDate, setFromDate] = useState(() => toDateInputValue());
+  const [toDate, setToDate] = useState(() => toDateInputValue());
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (open) {
-      setDate(toDateInputValue());
+      const today = toDateInputValue();
+      setFromDate(today);
+      setToDate(today);
       setPage(1);
     }
   }, [open, target?.variantId, target?.branchId]);
 
   useEffect(() => {
     setPage(1);
-  }, [date]);
+  }, [fromDate, toDate]);
 
   useEffect(() => {
     if (!open || !target) {
@@ -72,13 +75,17 @@ export function InventoryAdjustmentHistorySheet({
       return;
     }
 
+    const effectiveFrom = fromDate <= toDate ? fromDate : toDate;
+    const effectiveTo = fromDate <= toDate ? toDate : fromDate;
+
     let cancelled = false;
     setLoading(true);
     getVariantInventoryLogs({
       branchId: target.branchId,
       variantId: target.variantId,
-      max: 50,
-      date,
+      max: 100,
+      fromDate: effectiveFrom,
+      toDate: effectiveTo,
     })
       .then((rows) => {
         if (!cancelled) setLogs(rows);
@@ -91,7 +98,7 @@ export function InventoryAdjustmentHistorySheet({
     return () => {
       cancelled = true;
     };
-  }, [open, target, date]);
+  }, [open, target, fromDate, toDate]);
 
   const {
     page: safePage,
@@ -132,22 +139,36 @@ export function InventoryAdjustmentHistorySheet({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="mb-4 space-y-2">
-            <Label htmlFor="sheet-adjustment-date">Date</Label>
-            <Input
-              id="sheet-adjustment-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value || toDateInputValue())}
-              className="max-w-xs"
-            />
+          <div className="mb-4 grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="sheet-adjustment-from">From</Label>
+              <Input
+                id="sheet-adjustment-from"
+                type="date"
+                value={fromDate}
+                onChange={(e) =>
+                  setFromDate(e.target.value || toDateInputValue())
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sheet-adjustment-to">To</Label>
+              <Input
+                id="sheet-adjustment-to"
+                type="date"
+                value={toDate}
+                onChange={(e) =>
+                  setToDate(e.target.value || toDateInputValue())
+                }
+              />
+            </div>
           </div>
 
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading history...</p>
           ) : logs.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No adjustments for this variant on the selected date.
+              No adjustments for this variant in the selected date range.
             </p>
           ) : (
             <div className="overflow-x-auto rounded-md border">

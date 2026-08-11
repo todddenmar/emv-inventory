@@ -141,28 +141,41 @@ interface TagsInputProps {
   tags: string[];
   onChange: (tags: string[]) => void;
   placeholder?: string;
+  disabled?: boolean;
+  id?: string;
 }
 
 export function TagsInput({
   tags,
   onChange,
   placeholder = "Type a tag and press Enter",
+  disabled = false,
+  id,
 }: TagsInputProps) {
   const [input, setInput] = useState("");
+  const safeTags = Array.isArray(tags) ? tags : [];
 
   const addTag = (raw: string) => {
     const tag = raw.trim();
-    if (!tag || tags.includes(tag)) return;
-    onChange([...tags, tag]);
+    if (!tag || safeTags.includes(tag)) {
+      setInput("");
+      return;
+    }
+    onChange([...safeTags, tag]);
     setInput("");
   };
 
   return (
     <div className="space-y-2">
       <Input
+        id={id}
         value={input}
         placeholder={placeholder}
+        disabled={disabled}
         onChange={(e) => setInput(e.target.value)}
+        onBlur={() => {
+          if (input.trim()) addTag(input);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
@@ -170,15 +183,16 @@ export function TagsInput({
           }
         }}
       />
-      {tags.length > 0 && (
+      {safeTags.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {tags.map((tag) => (
+          {safeTags.map((tag) => (
             <Badge key={tag} variant="secondary" className="gap-1 pr-1">
               {tag}
               <button
                 type="button"
-                className="rounded-full hover:bg-muted"
-                onClick={() => onChange(tags.filter((t) => t !== tag))}
+                className="rounded-full hover:bg-muted disabled:pointer-events-none"
+                disabled={disabled}
+                onClick={() => onChange(safeTags.filter((t) => t !== tag))}
               >
                 <X className="h-3 w-3" />
               </button>
