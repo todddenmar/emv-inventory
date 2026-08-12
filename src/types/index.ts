@@ -44,6 +44,8 @@ export interface Category {
   name: string;
   slug: string;
   tags: string[];
+  /** Alert when variant stock is at or below this (products in this category). */
+  lowStockThreshold: number;
   isArchived: boolean;
   archivedAt: Date | null;
   createdAt: Date;
@@ -181,6 +183,9 @@ export interface ProductPriceLog {
   direction: PriceChangeDirection;
   performedBy: string;
   performedByName: string | null;
+  /** Optional context, e.g. temporary promotion. */
+  note: string | null;
+  promotionId: string | null;
   createdAt: Date;
 }
 
@@ -293,4 +298,35 @@ export interface SupplierStockIn {
   createdBy: string;
   createdByName: string | null;
   createdAt: Date;
+}
+
+export type PricePromotionStatus = "scheduled" | "active" | "ended";
+
+export interface PricePromotionItem {
+  productId: string;
+  variantId: string;
+  productName: string;
+  /** Sale cash / walk-in price. */
+  salePrice: number;
+  /** Sale retail price; null keeps retail unset for this promo. */
+  saleRetailPrice: number | null;
+  /** Catalog cash snapshot at create time (UI / audit). */
+  basePrice: number;
+  baseRetailPrice: number | null;
+}
+
+export interface PricePromotion {
+  id: string;
+  name: string;
+  status: PricePromotionStatus;
+  startsAt: Date;
+  /** Null = runs until manually ended. */
+  endsAt: Date | null;
+  items: PricePromotionItem[];
+  itemCount: number;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  endedAt: Date | null;
 }

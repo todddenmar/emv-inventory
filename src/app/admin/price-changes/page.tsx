@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ArrowDown, ArrowUp, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -154,8 +155,13 @@ export default function AdminPriceChangesPage() {
             Change history
           </CardTitle>
           <CardDescription>
-            Recorded automatically when variant sale prices are updated on a
-            product
+            Catalog price edits and temporary sale start/end events.{" "}
+            <Link
+              href="/admin/price-promotions"
+              className="underline underline-offset-2"
+            >
+              Manage promotions
+            </Link>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -186,7 +192,14 @@ export default function AdminPriceChangesPage() {
                         {formatDate(log.createdAt)}
                       </TableCell>
                       <TableCell className="font-medium">
-                        {log.productName || "—"}
+                        <div>
+                          <p>{log.productName || "—"}</p>
+                          {log.note ? (
+                            <p className="text-xs text-muted-foreground">
+                              {log.note}
+                            </p>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell>{log.variantLabel}</TableCell>
                       <TableCell className="text-right tabular-nums">

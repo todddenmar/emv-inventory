@@ -1430,7 +1430,7 @@ export default function ProductJsonImportPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Vendors</CardDescription>
+                <CardDescription>Suppliers</CardDescription>
                 <CardTitle className="text-3xl">{summary.vendorCount}</CardTitle>
               </CardHeader>
             </Card>
@@ -1813,7 +1813,7 @@ export default function ProductJsonImportPage() {
                                       {product.name}
                                     </Label>
                                     <p className="text-sm text-muted-foreground">
-                                      Category {product.categoryName} · vendor{" "}
+                                      Category {product.categoryName} · supplier{" "}
                                       {product.vendorName || "—"}
                                     </p>
                                     <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -2308,7 +2308,7 @@ export default function ProductJsonImportPage() {
           <DialogHeader>
             <DialogTitle>Edit product</DialogTitle>
             <DialogDescription>
-              Update the product name, vendor, product type, and category
+              Update the product name, supplier, product type, and category
               assignment.
             </DialogDescription>
           </DialogHeader>
@@ -2324,12 +2324,12 @@ export default function ProductJsonImportPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-product-vendor">Vendor</Label>
+              <Label htmlFor="edit-product-vendor">Supplier</Label>
               <Input
                 id="edit-product-vendor"
                 value={editVendorName}
                 onChange={(e) => setEditVendorName(e.target.value)}
-                placeholder="Optional vendor"
+                placeholder="Optional supplier"
               />
             </div>
             <div className="space-y-2">
@@ -2437,12 +2437,12 @@ export default function ProductJsonImportPage() {
               </datalist>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-product-vendor">Vendor</Label>
+              <Label htmlFor="create-product-vendor">Supplier</Label>
               <Input
                 id="create-product-vendor"
                 value={createProductVendor}
                 onChange={(e) => setCreateProductVendor(e.target.value)}
-                placeholder="Optional vendor"
+                placeholder="Optional supplier"
               />
             </div>
             <DialogFooter>

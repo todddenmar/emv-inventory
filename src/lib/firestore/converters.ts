@@ -25,6 +25,8 @@ import type {
   SupplierStockIn,
   Vendor,
   Voucher,
+  PricePromotion,
+  PricePromotionItem,
 } from "@/types";
 import { migrateLegacyProductVariants, getDefaultVariant, defaultVariantId } from "@/lib/product-variants";
 import { specsToText } from "@/lib/specs";
@@ -42,6 +44,7 @@ export const categoryConverter: FirestoreDataConverter<Category> = {
       name: category.name,
       slug: category.slug,
       tags: category.tags,
+      lowStockThreshold: category.lowStockThreshold,
       isArchived: category.isArchived,
       archivedAt: category.archivedAt,
       createdAt: category.createdAt,
@@ -60,6 +63,10 @@ export const categoryConverter: FirestoreDataConverter<Category> = {
       tags: Array.isArray(data.tags)
         ? data.tags.filter((t: unknown): t is string => typeof t === "string")
         : [],
+      lowStockThreshold:
+        typeof data.lowStockThreshold === "number" && data.lowStockThreshold >= 0
+          ? data.lowStockThreshold
+          : 5,
       isArchived: data.isArchived ?? false,
       archivedAt: data.archivedAt ? toDate(data.archivedAt) : null,
       createdAt: toDate(data.createdAt),
@@ -423,6 +430,8 @@ export const productPriceLogConverter: FirestoreDataConverter<ProductPriceLog> =
       direction: log.direction,
       performedBy: log.performedBy,
       performedByName: log.performedByName,
+      note: log.note,
+      promotionId: log.promotionId,
       createdAt: log.createdAt,
     };
   },
@@ -451,6 +460,8 @@ export const productPriceLogConverter: FirestoreDataConverter<ProductPriceLog> =
             : "decrease",
       performedBy: data.performedBy,
       performedByName: data.performedByName ?? null,
+      note: (data.note as string | null | undefined) ?? null,
+      promotionId: (data.promotionId as string | null | undefined) ?? null,
       createdAt: toDate(data.createdAt),
     };
   },
@@ -682,6 +693,71 @@ export const supplierStockInConverter: FirestoreDataConverter<SupplierStockIn> =
       createdBy: data.createdBy,
       createdByName: data.createdByName ?? null,
       createdAt: toDate(data.createdAt),
+    };
+  },
+};
+
+function mapPricePromotionItem(item: PricePromotionItem): PricePromotionItem {
+  return {
+    productId: item.productId,
+    variantId: item.variantId,
+    productName: item.productName,
+    salePrice: Number(item.salePrice ?? 0),
+    saleRetailPrice:
+      item.saleRetailPrice == null ||
+      !Number.isFinite(Number(item.saleRetailPrice))
+        ? null
+        : Number(item.saleRetailPrice),
+    basePrice: Number(item.basePrice ?? 0),
+    baseRetailPrice:
+      item.baseRetailPrice == null ||
+      !Number.isFinite(Number(item.baseRetailPrice))
+        ? null
+        : Number(item.baseRetailPrice),
+  };
+}
+
+export const pricePromotionConverter: FirestoreDataConverter<PricePromotion> = {
+  toFirestore(promo: PricePromotion): DocumentData {
+    return {
+      name: promo.name,
+      status: promo.status,
+      startsAt: promo.startsAt,
+      endsAt: promo.endsAt,
+      items: promo.items,
+      itemCount: promo.itemCount,
+      createdBy: promo.createdBy,
+      createdByName: promo.createdByName,
+      createdAt: promo.createdAt,
+      updatedAt: promo.updatedAt,
+      endedAt: promo.endedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): PricePromotion {
+    const data = snapshot.data(options);
+    const status =
+      data.status === "scheduled" ||
+      data.status === "active" ||
+      data.status === "ended"
+        ? data.status
+        : "ended";
+    const rawItems = (data.items ?? []) as PricePromotionItem[];
+    return {
+      id: snapshot.id,
+      name: data.name ?? "",
+      status,
+      startsAt: toDate(data.startsAt),
+      endsAt: data.endsAt ? toDate(data.endsAt) : null,
+      items: rawItems.map(mapPricePromotionItem),
+      itemCount: data.itemCount ?? rawItems.length,
+      createdBy: data.createdBy ?? "",
+      createdByName: data.createdByName ?? null,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
+      endedAt: data.endedAt ? toDate(data.endedAt) : null,
     };
   },
 };

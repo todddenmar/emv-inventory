@@ -86,7 +86,7 @@ export default function AdminVendorsPage() {
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only admins can manage vendors.
+            Only admins can manage suppliers.
           </p>
         </CardContent>
       </Card>
@@ -108,7 +108,7 @@ export default function AdminVendorsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      toast.error("Vendor name is required");
+      toast.error("Supplier name is required");
       return;
     }
 
@@ -116,15 +116,15 @@ export default function AdminVendorsPage() {
     try {
       if (editing) {
         await updateVendor(editing.id, name.trim());
-        toast.success("Vendor updated");
+        toast.success("Supplier updated");
       } else {
         await createVendor(name.trim());
-        toast.success("Vendor created");
+        toast.success("Supplier created");
       }
       setDialogOpen(false);
       loadVendors();
     } catch {
-      toast.error("Failed to save vendor");
+      toast.error("Failed to save supplier");
     } finally {
       setSubmitting(false);
     }
@@ -134,10 +134,10 @@ export default function AdminVendorsPage() {
     if (!deleteId) return;
     try {
       await deleteVendor(deleteId);
-      toast.success("Vendor deleted");
+      toast.success("Supplier deleted");
       loadVendors();
     } catch {
-      toast.error("Failed to delete vendor");
+      toast.error("Failed to delete supplier");
     } finally {
       setDeleteId(null);
     }
@@ -147,14 +147,14 @@ export default function AdminVendorsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Vendors</h1>
+          <h1 className="text-2xl font-bold">Suppliers</h1>
           <p className="text-muted-foreground">
-            Brands / vendors assigned to products
+            Suppliers assigned to products
           </p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="mr-2 h-4 w-4" />
-          Add vendor
+          Add supplier
         </Button>
       </div>
 
@@ -162,7 +162,7 @@ export default function AdminVendorsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editing ? "Edit vendor" : "Add vendor"}
+              {editing ? "Edit supplier" : "Add supplier"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -178,7 +178,7 @@ export default function AdminVendorsPage() {
             </div>
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editing ? "Update vendor" : "Create vendor"}
+              {editing ? "Update supplier" : "Create supplier"}
             </Button>
           </form>
         </DialogContent>
@@ -190,10 +190,10 @@ export default function AdminVendorsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete vendor?</AlertDialogTitle>
+            <AlertDialogTitle>Delete supplier?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the vendor. Products that reference it
-              will keep the old vendor id until updated.
+              This permanently deletes the supplier. Products that reference it
+              will keep the old assignment until updated.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -204,13 +204,13 @@ export default function AdminVendorsPage() {
       </AlertDialog>
 
       {loading ? (
-        <p className="text-muted-foreground">Loading vendors...</p>
+        <p className="text-muted-foreground">Loading suppliers...</p>
       ) : vendors.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>No vendors yet</CardTitle>
+            <CardTitle>No suppliers yet</CardTitle>
             <CardDescription>
-              Create a vendor to assign brands on product forms.
+              Create a supplier to assign on product forms and stock in.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -221,7 +221,7 @@ export default function AdminVendorsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead className="w-[120px] text-right">Actions</TableHead>
+                  <TableHead className="w-28 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -229,24 +229,22 @@ export default function AdminVendorsPage() {
                   <TableRow key={vendor.id}>
                     <TableCell className="font-medium">{vendor.name}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Edit vendor"
-                          onClick={() => openEdit(vendor)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Delete vendor"
-                          onClick={() => setDeleteId(vendor.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Edit supplier"
+                        onClick={() => openEdit(vendor)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Delete supplier"
+                        onClick={() => setDeleteId(vendor.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

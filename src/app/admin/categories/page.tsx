@@ -88,6 +88,7 @@ export default function AdminCategoriesPage() {
   const { slug, setSlug, syncSlugFromName, resetSlugField } =
     useSlugField(resolveSlug);
   const [tags, setTags] = useState<string[]>([]);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [submitting, setSubmitting] = useState(false);
 
   const visibleCategories = useMemo(() => {
@@ -150,6 +151,7 @@ export default function AdminCategoriesPage() {
     setName("");
     resetSlugField("", false);
     setTags([]);
+    setLowStockThreshold(5);
     setDialogOpen(true);
   };
 
@@ -166,6 +168,7 @@ export default function AdminCategoriesPage() {
         name: name.trim(),
         slug: slug.trim() || slugify(name),
         tags,
+        lowStockThreshold: Math.max(0, lowStockThreshold),
       });
       toast.success("Category created");
       setDialogOpen(false);
@@ -284,6 +287,23 @@ export default function AdminCategoriesPage() {
                 POS.
               </p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="cat-low-at">Low at</Label>
+              <Input
+                id="cat-low-at"
+                type="number"
+                min={0}
+                value={lowStockThreshold}
+                onChange={(e) =>
+                  setLowStockThreshold(Number(e.target.value) || 0)
+                }
+                disabled={submitting}
+              />
+              <p className="text-xs text-muted-foreground">
+                Inventory alerts when stock is at or below this for products in
+                this category.
+              </p>
+            </div>
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create
@@ -340,6 +360,7 @@ export default function AdminCategoriesPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Tags</TableHead>
+                    <TableHead className="w-24">Low at</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -368,6 +389,9 @@ export default function AdminCategoriesPage() {
                             ))
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell className="tabular-nums text-muted-foreground">
+                        {category.lowStockThreshold}
                       </TableCell>
                       <TableCell className="text-right">
                         {!category.isArchived && (

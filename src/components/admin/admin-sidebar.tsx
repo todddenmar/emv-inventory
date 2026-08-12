@@ -15,6 +15,7 @@ import {
   PackagePlus,
   Settings,
   BarChart3,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -49,6 +50,12 @@ export const adminNavItems = [
     label: "Price changes",
     icon: TrendingUp,
     masterOnly: false,
+  },
+  {
+    href: "/admin/price-promotions",
+    label: "Price promotions",
+    icon: Tag,
+    masterOnly: true,
   },
   { href: "/admin/branches", label: "Branches", icon: Store, masterOnly: true },
   { href: "/admin/products", label: "Products", icon: Package, masterOnly: true },

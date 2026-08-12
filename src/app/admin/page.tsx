@@ -26,6 +26,7 @@ import {
 import { getProducts } from "@/lib/firestore/products";
 import { getBranchInventory } from "@/lib/firestore/inventory";
 import { getBranch, getBranches } from "@/lib/firestore/branches";
+import { getCategories } from "@/lib/firestore/categories";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import {
   mergeSellingVariantsWithInventory,
@@ -123,14 +124,16 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     async function load() {
-      const [products, branches] = await Promise.all([
+      const [products, branches, categories] = await Promise.all([
         getProducts(),
         getBranches(true),
+        getCategories(),
       ]);
 
       setProductCount(products.length);
       setBranchCount(branches.length);
 
+      const activeCategories = categories.filter((c) => !c.isArchived);
       const scopeBranchId = isElevatedAdmin ? null : assignedBranchId;
 
       if (scopeBranchId) {
@@ -139,7 +142,11 @@ export default function AdminDashboardPage() {
           getBranch(scopeBranchId),
         ]);
         setBranch(b);
-        const selling = mergeSellingVariantsWithInventory(products, inv);
+        const selling = mergeSellingVariantsWithInventory(
+          products,
+          inv,
+          activeCategories
+        );
         setLowStockCount(getLowStockVariants(selling).length);
       } else if (isElevatedAdmin && branches.length > 0) {
         let totalLow = 0;
@@ -148,7 +155,7 @@ export default function AdminDashboardPage() {
         );
         for (const inv of inventories) {
           totalLow += getLowStockVariants(
-            mergeSellingVariantsWithInventory(products, inv)
+            mergeSellingVariantsWithInventory(products, inv, activeCategories)
           ).length;
         }
         setLowStockCount(totalLow);

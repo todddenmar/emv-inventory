@@ -13,6 +13,7 @@ export const COLLECTIONS = {
   supplierStockIns: "physicalSupplierStockIns",
   resellers: "physicalResellers",
   vouchers: "physicalVouchers",
+  pricePromotions: "physicalPricePromotions",
   /** Auth — shared, not physical-prefixed */
   users: "users",
   invites: "invites",

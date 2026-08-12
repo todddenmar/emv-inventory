@@ -81,13 +81,21 @@ export async function getCategoryBySlug(
 }
 
 export async function createCategory(
-  data: Pick<Category, "name" | "tags"> & { slug?: string; id?: string }
+  data: Pick<Category, "name" | "tags"> & {
+    slug?: string;
+    id?: string;
+    lowStockThreshold?: number;
+  }
 ): Promise<string> {
   const slug = await resolveCategorySlug(data.name, data.slug);
   const payload = {
     name: data.name,
     slug,
     tags: data.tags,
+    lowStockThreshold:
+      typeof data.lowStockThreshold === "number" && data.lowStockThreshold >= 0
+        ? data.lowStockThreshold
+        : 5,
     isArchived: false,
     archivedAt: null,
     createdAt: serverTimestamp(),
@@ -109,7 +117,7 @@ export async function createCategory(
 
 export async function updateCategory(
   id: string,
-  data: Partial<Pick<Category, "name" | "tags" | "slug">>
+  data: Partial<Pick<Category, "name" | "tags" | "slug" | "lowStockThreshold">>
 ): Promise<void> {
   const payload: Record<string, unknown> = {
     ...data,

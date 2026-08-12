@@ -1,7 +1,6 @@
 import { writeFile } from "fs/promises";
 import path from "path";
 import { NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { parseProductJsonImport } from "@/lib/product-json-import";
 
 const SAMPLE_RELATIVE_PATH = path.join(
@@ -27,6 +26,7 @@ export async function POST(request: Request) {
   let adminAuth;
   let adminDb;
   try {
+    const { getAdminAuth, getAdminDb } = await import("@/lib/firebase-admin");
     adminAuth = getAdminAuth();
     adminDb = getAdminDb();
   } catch (error) {

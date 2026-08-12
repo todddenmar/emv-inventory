@@ -47,10 +47,10 @@ export const settingsNavItems: SettingsNavItem[] = [
   },
   {
     href: "/admin/settings/vendors",
-    label: "Vendors",
+    label: "Suppliers",
     icon: Building2,
     elevatedOnly: true,
-    description: "Brands and suppliers assigned to products",
+    description: "Suppliers assigned to products",
   },
   {
     href: "/admin/settings/resellers",

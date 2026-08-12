@@ -105,6 +105,7 @@ export default function EditCategoryPage({
 
   const [name, setName] = useState("");
   const [tags, setTags] = useState<string[]>([]);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const resolveSlug = useCallback(
     (categoryName: string, preferredSlug?: string) =>
       resolveCategorySlug(categoryName, preferredSlug, id),
@@ -132,6 +133,7 @@ export default function EditCategoryPage({
       setName(loadedCategory.name);
       resetSlugField(loadedCategory.slug, true);
       setTags(loadedCategory.tags ?? []);
+      setLowStockThreshold(loadedCategory.lowStockThreshold ?? 5);
       setProducts(categoryProducts);
       setAllProducts(catalog);
     } catch (error) {
@@ -190,6 +192,7 @@ export default function EditCategoryPage({
         name: name.trim(),
         slug: slug.trim() || slugify(name),
         tags,
+        lowStockThreshold: Math.max(0, lowStockThreshold),
       });
       const refreshed = await getCategory(id);
       if (refreshed) {
@@ -197,6 +200,7 @@ export default function EditCategoryPage({
         setName(refreshed.name);
         resetSlugField(refreshed.slug, true);
         setTags(refreshed.tags ?? []);
+        setLowStockThreshold(refreshed.lowStockThreshold ?? 5);
       }
       toast.success("Category updated");
     } catch (error) {
@@ -288,7 +292,7 @@ export default function EditCategoryPage({
             {category.isArchived ? (
               <Badge variant="secondary">Archived</Badge>
             ) : (
-              "Name, URL slug, and tags"
+              "Name, URL slug, tags, and low-stock threshold"
             )}
           </CardDescription>
         </CardHeader>
@@ -330,6 +334,24 @@ export default function EditCategoryPage({
             />
             <p className="text-xs text-muted-foreground">
               Press Enter to add each tag. Used when searching categories in POS.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="category-low-at">Low at</Label>
+            <Input
+              id="category-low-at"
+              type="number"
+              min={0}
+              value={lowStockThreshold}
+              onChange={(e) =>
+                setLowStockThreshold(Number(e.target.value) || 0)
+              }
+              disabled={saving || category.isArchived}
+            />
+            <p className="text-xs text-muted-foreground">
+              Inventory alerts when stock is at or below this for products in
+              this category. Products in multiple categories use the lowest
+              threshold.
             </p>
           </div>
         </CardContent>
@@ -377,97 +399,93 @@ export default function EditCategoryPage({
 
                 return (
                   <AccordionItem key={product.id} value={product.id}>
-                    <AccordionTrigger className="items-center justify-start gap-1 rounded-none px-3 hover:no-underline **:data-[slot=accordion-trigger-icon]:ml-0">
-                      <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
-                          {thumb ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={thumb}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                        <div className="min-w-0 flex-1 text-left">
-                          <p className="truncate font-medium">
-                            {product.name.trim() || "Untitled draft"}
-                          </p>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                            {product.productType ? (
-                              <span className="truncate">
-                                {product.productType}
-                              </span>
+                    <div className="flex items-center gap-1 pr-2">
+                      <AccordionTrigger className="min-w-0 flex-1 items-center justify-start gap-1 rounded-none px-3 hover:no-underline **:data-[slot=accordion-trigger-icon]:ml-0">
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
+                            {thumb ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={thumb}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
                             ) : null}
-                            <span className="tabular-nums">{priceLabel}</span>
-                            <span>
-                              {variantCount} variant
-                              {variantCount === 1 ? "" : "s"}
-                            </span>
                           </div>
+                          <div className="min-w-0 flex-1 text-left">
+                            <p className="truncate font-medium">
+                              {product.name.trim() || "Untitled draft"}
+                            </p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                              {product.productType ? (
+                                <span className="truncate">
+                                  {product.productType}
+                                </span>
+                              ) : null}
+                              <span className="tabular-nums">{priceLabel}</span>
+                              <span>
+                                {variantCount} variant
+                                {variantCount === 1 ? "" : "s"}
+                              </span>
+                            </div>
+                          </div>
+                          <Badge
+                            variant={
+                              isProductPublished(product)
+                                ? "default"
+                                : "secondary"
+                            }
+                            className="shrink-0"
+                          >
+                            {productStatusLabel(product)}
+                          </Badge>
                         </div>
-                        <Badge
-                          variant={
-                            isProductPublished(product)
-                              ? "default"
-                              : "secondary"
+                      </AccordionTrigger>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              disabled={removing}
+                            >
+                              {removing ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <MoreHorizontal className="h-4 w-4" />
+                              )}
+                              <span className="sr-only">Open menu</span>
+                            </Button>
                           }
-                          className="shrink-0"
-                        >
-                          {productStatusLabel(product)}
-                        </Badge>
-                      </div>
-                      <div
-                        className="shrink-0"
-                        onClick={(e) => e.stopPropagation()}
-                        onPointerDown={(e) => e.stopPropagation()}
-                      >
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
+                        />
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
                             render={
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                disabled={removing}
-                              >
-                                {removing ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <MoreHorizontal className="h-4 w-4" />
-                                )}
-                                <span className="sr-only">Open menu</span>
-                              </Button>
+                              <Link href={`/admin/products/${product.id}`}>
+                                <ExternalLink className="h-4 w-4" />
+                                Open product
+                              </Link>
                             }
                           />
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              render={
-                                <Link href={`/admin/products/${product.id}`}>
-                                  <ExternalLink className="h-4 w-4" />
-                                  Open product
-                                </Link>
-                              }
-                            />
-                            {!category.isArchived ? (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  disabled={removing}
-                                  onClick={() =>
-                                    void handleRemoveProduct(product)
-                                  }
-                                >
-                                  <X className="h-4 w-4" />
-                                  Remove from category
-                                </DropdownMenuItem>
-                              </>
-                            ) : null}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </AccordionTrigger>
+                          {!category.isArchived ? (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                variant="destructive"
+                                disabled={removing}
+                                onClick={() =>
+                                  void handleRemoveProduct(product)
+                                }
+                              >
+                                <X className="h-4 w-4" />
+                                Remove from category
+                              </DropdownMenuItem>
+                            </>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                     <AccordionContent className="px-3 pb-3">
                       {variantCount === 0 ? (
                         <p className="text-sm text-muted-foreground">

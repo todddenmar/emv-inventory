@@ -138,7 +138,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     e.preventDefault();
     const name = newVendorName.trim();
     if (!name) {
-      toast.error("Vendor name is required");
+      toast.error("Supplier name is required");
       return;
     }
 
@@ -157,9 +157,9 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       setVendorId(id);
       setVendorDialogOpen(false);
       setNewVendorName("");
-      toast.success("Vendor created");
+      toast.success("Supplier created");
     } catch {
-      toast.error("Failed to create vendor");
+      toast.error("Failed to create supplier");
     } finally {
       setCreatingVendor(false);
     }
@@ -495,7 +495,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="vendor">Vendor</Label>
+              <Label htmlFor="vendor">Supplier</Label>
               <Button
                 type="button"
                 variant="ghost"
@@ -505,7 +505,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                 onClick={openVendorDialog}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" />
-                Add vendor
+                Add supplier
               </Button>
             </div>
             <Select
@@ -515,18 +515,18 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
               }
             >
               <SelectTrigger id="vendor" disabled={saving || publishing}>
-                <SelectValue placeholder="Select vendor">
+                <SelectValue placeholder="Select supplier">
                   {(value) => {
-                    if (!value || value === "none") return "No vendor";
+                    if (!value || value === "none") return "No supplier";
                     return (
                       vendors.find((vendor) => vendor.id === value)?.name ??
-                      "Select vendor"
+                      "Select supplier"
                     );
                   }}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">No vendor</SelectItem>
+                <SelectItem value="none">No supplier</SelectItem>
                 {vendors.map((vendor) => (
                   <SelectItem key={vendor.id} value={vendor.id}>
                     {vendor.name}
@@ -629,7 +629,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add vendor</DialogTitle>
+            <DialogTitle>Add supplier</DialogTitle>
           </DialogHeader>
           <form onSubmit={(e) => void handleCreateVendor(e)} className="space-y-4">
             <div className="space-y-2">
@@ -647,7 +647,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
               {creatingVendor && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Create vendor
+              Create supplier
             </Button>
           </form>
         </DialogContent>

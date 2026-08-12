@@ -58,7 +58,7 @@ import { formatVariantLabel } from "@/lib/product-variants";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Branch, BranchInventory, Category, Product } from "@/types";
 
-type StockDraft = Record<string, { stock: number; lowStockThreshold: number }>;
+type StockDraft = Record<string, number>;
 type StockFilter = "all" | "low" | "in_stock" | "out_of_stock";
 
 export default function AdminInventoryPage() {
@@ -109,13 +109,11 @@ export default function AdminInventoryPage() {
     setCategories(cats.filter((c) => !c.isArchived));
 
     if (branchId !== "all") {
-      const variantRows = mergeSellingVariantsWithInventory(p, inv);
+      const activeCats = cats.filter((c) => !c.isArchived);
+      const variantRows = mergeSellingVariantsWithInventory(p, inv, activeCats);
       const nextDraft: StockDraft = {};
       for (const row of variantRows) {
-        nextDraft[row.id] = {
-          stock: row.stock,
-          lowStockThreshold: row.lowStockThreshold,
-        };
+        nextDraft[row.id] = row.stock;
       }
       setDraft(nextDraft);
     }
@@ -137,24 +135,21 @@ export default function AdminInventoryPage() {
 
   const variantsWithStock = useMemo(() => {
     if (activeBranchId === "all") return [];
-    return mergeSellingVariantsWithInventory(products, branchInventory);
-  }, [products, branchInventory, activeBranchId]);
+    return mergeSellingVariantsWithInventory(
+      products,
+      branchInventory,
+      categories
+    );
+  }, [products, branchInventory, activeBranchId, categories]);
 
-  const getStockValues = (
+  const getDraftStock = (
     variantId: string,
     row: (typeof variantsWithStock)[0]
-  ) => {
-    return (
-      draft[variantId] ?? {
-        stock: row.stock,
-        lowStockThreshold: row.lowStockThreshold,
-      }
-    );
-  };
+  ) => draft[variantId] ?? row.stock;
 
   const isLowStockRow = (row: (typeof variantsWithStock)[0]) => {
-    const values = getStockValues(row.id, row);
-    return values.stock > 0 && values.stock <= values.lowStockThreshold;
+    const stock = getDraftStock(row.id, row);
+    return stock > 0 && stock <= row.lowStockThreshold;
   };
 
   const filteredVariants = useMemo(
@@ -169,12 +164,12 @@ export default function AdminInventoryPage() {
             .includes(search.toLowerCase());
         const matchesCategory =
           categoryFilter === "all" || row.categoryIds.includes(categoryFilter);
-        const values = getStockValues(row.id, row);
+        const stock = getDraftStock(row.id, row);
         const matchesStock =
           stockFilter === "all" ||
           (stockFilter === "low" && isLowStockRow(row)) ||
-          (stockFilter === "in_stock" && values.stock > 0) ||
-          (stockFilter === "out_of_stock" && values.stock <= 0);
+          (stockFilter === "in_stock" && stock > 0) ||
+          (stockFilter === "out_of_stock" && stock <= 0);
 
         return matchesSearch && matchesCategory && matchesStock;
       }),
@@ -239,52 +234,43 @@ export default function AdminInventoryPage() {
   const branchSummaries = useMemo(() => {
     if (!isElevatedAdmin) return [];
     return branches.map((branch) => {
-      const rows = inventory.filter(
-        (i) => i.branchId === branch.id && i.isSelling !== false
+      const branchInv = inventory.filter((i) => i.branchId === branch.id);
+      const rows = mergeSellingVariantsWithInventory(
+        products,
+        branchInv,
+        categories
       );
       const stocked = rows.filter((r) => r.stock > 0).length;
-      const low = rows.filter(
-        (r) => r.stock > 0 && r.stock <= r.lowStockThreshold
-      ).length;
+      const low = getLowStockVariants(rows).length;
       return { branch, stocked, low, totalSkus: rows.length };
     });
-  }, [branches, inventory, isElevatedAdmin]);
+  }, [branches, inventory, products, categories, isElevatedAdmin]);
 
-  const updateDraft = (
-    variantId: string,
-    field: "stock" | "lowStockThreshold",
-    value: number,
-    fallback?: { stock: number; lowStockThreshold: number }
-  ) => {
+  const updateDraftStock = (variantId: string, value: number) => {
     setDraft((prev) => ({
       ...prev,
-      [variantId]: {
-        ...(prev[variantId] ?? fallback ?? { stock: 0, lowStockThreshold: 5 }),
-        [field]: value,
-      },
+      [variantId]: value,
     }));
   };
 
   const saveStock = async (variantId: string, productId: string) => {
     if (!activeBranchId || activeBranchId === "all") return;
-    const values = draft[variantId];
-    if (!values) return;
+    const row = variantsWithStock.find((v) => v.id === variantId);
+    if (!row) return;
+    const stock = getDraftStock(variantId, row);
 
     setSavingId(variantId);
     try {
-      const row = variantsWithStock.find((v) => v.id === variantId);
       const product = products.find((p) => p.id === productId);
-      const label = row
-        ? `${row.productName} — ${formatVariantLabel(row, product?.options ?? [])}`
-        : product?.name;
+      const label = `${row.productName} — ${formatVariantLabel(row, product?.options ?? [])}`;
       await setBranchStockWithLog(
         activeBranchId,
         productId,
         variantId,
-        values.stock,
-        values.lowStockThreshold,
+        stock,
+        row.lowStockThreshold,
         {
-          productName: label ?? null,
+          productName: label,
           branchName: activeBranch?.name ?? null,
           performedBy: user?.uid ?? "unknown",
           performedByName: user?.displayName ?? user?.email ?? null,
@@ -409,7 +395,11 @@ export default function AdminInventoryPage() {
             <CardHeader>
               <CardTitle>{activeBranch?.name} stock</CardTitle>
               <CardDescription>
-                Stock for variants this branch sells.{" "}
+                Stock for variants this branch sells. Low-at thresholds come from{" "}
+                <Link href="/admin/categories" className="underline underline-offset-2">
+                  categories
+                </Link>
+                .{" "}
                 <Link href="/admin/settings/assortment" className="underline underline-offset-2">
                   Manage assortment
                 </Link>
@@ -505,7 +495,7 @@ export default function AdminInventoryPage() {
                         product && showImages
                           ? getCatalogImageUrl(product, row, catalogImageSource)
                           : null;
-                      const values = getStockValues(row.id, row);
+                      const stock = getDraftStock(row.id, row);
                       const isLow = isLowStockRow(row);
                       const variantLabel = formatVariantLabel(
                         row,
@@ -585,31 +575,17 @@ export default function AdminInventoryPage() {
                             <Input
                               type="number"
                               min={0}
-                              value={values.stock}
+                              value={stock}
                               onChange={(e) =>
-                                updateDraft(
+                                updateDraftStock(
                                   row.id,
-                                  "stock",
-                                  Number(e.target.value) || 0,
-                                  values
+                                  Number(e.target.value) || 0
                                 )
                               }
                             />
                           </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={values.lowStockThreshold}
-                              onChange={(e) =>
-                                updateDraft(
-                                  row.id,
-                                  "lowStockThreshold",
-                                  Number(e.target.value) || 0,
-                                  values
-                                )
-                              }
-                            />
+                          <TableCell className="tabular-nums text-muted-foreground">
+                            {row.lowStockThreshold}
                           </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>

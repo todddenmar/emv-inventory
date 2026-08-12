@@ -251,5 +251,11 @@ service cloud.firestore {
       allow create, update: if isStaff();
       allow delete: if false;
     }
+
+    match /physicalPricePromotions/{promotionId} {
+      allow read: if isStaff();
+      allow create, update: if isElevatedAdmin();
+      allow delete: if isElevatedAdmin();
+    }
   }
 }

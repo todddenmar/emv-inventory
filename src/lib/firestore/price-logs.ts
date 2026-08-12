@@ -55,6 +55,8 @@ export function diffVariantPriceChanges(
       direction: delta > 0 ? "increase" : "decrease",
       performedBy: actor.performedBy,
       performedByName: actor.performedByName ?? null,
+      note: null,
+      promotionId: null,
     });
   }
 

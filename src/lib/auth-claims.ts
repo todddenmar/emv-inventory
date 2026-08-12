@@ -18,7 +18,10 @@ export async function syncAuthClaims(targetUid?: string): Promise<void> {
     const data = (await response.json().catch(() => null)) as {
       error?: string;
     } | null;
-    throw new Error(data?.error ?? "Failed to sync auth claims");
+    throw new Error(
+      data?.error ??
+        `Failed to sync auth claims (${response.status} ${response.statusText})`
+    );
   }
 
   if (!targetUid || targetUid === user.uid) {

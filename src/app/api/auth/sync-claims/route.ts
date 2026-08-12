@@ -1,7 +1,4 @@
 import { NextResponse } from "next/server";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
-import { isElevatedAdminRole } from "@/lib/roles";
-import type { UserRole } from "@/types";
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get("Authorization");
@@ -12,6 +9,7 @@ export async function POST(request: Request) {
   let adminAuth;
   let adminDb;
   try {
+    const { getAdminAuth, getAdminDb } = await import("@/lib/firebase-admin");
     adminAuth = getAdminAuth();
     adminDb = getAdminDb();
   } catch (error) {
@@ -38,8 +36,15 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { uid?: string };
 
   if (body.uid && body.uid !== decoded.uid) {
+    const { isElevatedAdminRole } = await import("@/lib/roles");
     const actorDoc = await adminDb.collection("users").doc(decoded.uid).get();
-    if (!isElevatedAdminRole(actorDoc.data()?.role as UserRole | undefined)) {
+    if (
+      !isElevatedAdminRole(
+        actorDoc.data()?.role as
+          | import("@/types").UserRole
+          | undefined
+      )
+    ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     targetUid = body.uid;
@@ -51,9 +56,9 @@ export async function POST(request: Request) {
   }
 
   const data = userDoc.data()!;
-  const role = (data.role as UserRole | undefined) ?? "customer";
-  const branchId =
-    typeof data.branchId === "string" ? data.branchId : null;
+  const role =
+    (data.role as import("@/types").UserRole | undefined) ?? "customer";
+  const branchId = typeof data.branchId === "string" ? data.branchId : null;
 
   await adminAuth.setCustomUserClaims(targetUid, { role, branchId });
 

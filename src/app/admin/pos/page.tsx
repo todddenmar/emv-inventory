@@ -45,13 +45,19 @@ import {
   getVoucherByCode,
   isVoucherRedeemable,
 } from "@/lib/firestore/vouchers";
+import {
+  buildActivePromotionPriceMap,
+  getActivePricePromotions,
+} from "@/lib/firestore/price-promotions";
 import { mergeSellingVariantsWithInventory } from "@/lib/inventory";
 import { isProductPublished } from "@/lib/products-catalog";
 import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
 import { formatVariantLabel } from "@/lib/product-variants";
 import {
   normalizeRetailPrice,
+  resolveEffectivePrices,
   unitPriceForPaymentMethod,
+  type EffectiveSalePrices,
 } from "@/lib/product-pricing";
 import { formatCurrency } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
@@ -115,6 +121,9 @@ export default function AdminPosPage() {
   const [checkoutStep, setCheckoutStep] =
     useState<PosCheckoutStep>("details");
   const [charging, setCharging] = useState(false);
+  const [promoMap, setPromoMap] = useState<Map<string, EffectiveSalePrices>>(
+    () => new Map()
+  );
 
   const activeBranchId = isElevatedAdmin
     ? selectedBranchId
@@ -125,13 +134,15 @@ export default function AdminPosPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [branchList, cats, resellerList] = await Promise.all([
+        const [branchList, cats, resellerList, promotions] = await Promise.all([
           getBranches(true),
           getCategories(),
           getResellers(true),
+          getActivePricePromotions(),
         ]);
         setBranches(branchList);
         setResellers(resellerList);
+        setPromoMap(buildActivePromotionPriceMap(promotions));
         const activeCats = cats.filter((c) => !c.isArchived);
         setCategories(activeCats);
 
@@ -375,7 +386,8 @@ export default function AdminPosPage() {
 
     const product = categoryProducts.find((p) => p.id === row.productId);
     const variantLabel = formatVariantLabel(row, product?.options ?? []);
-    const retailPrice = normalizeRetailPrice(row.retailPrice);
+    const effective = resolveEffectivePrices(row, promoMap, row.id);
+    const retailPrice = effective.retailPrice;
 
     setCart((prev) => {
       const existing = prev.find((line) => line.variantId === row.id);
@@ -402,10 +414,14 @@ export default function AdminPosPage() {
           variantId: row.id,
           productName: row.productName,
           variantLabel,
-          cashPrice: row.price,
+          cashPrice: effective.price,
           retailPrice,
           retailFromCatalog: retailPrice != null,
-          unitPrice: resolveUnitPrice(row.price, retailPrice, paymentMethod),
+          unitPrice: resolveUnitPrice(
+            effective.price,
+            retailPrice,
+            paymentMethod
+          ),
           quantity: 1,
           maxStock: stock,
         },
@@ -735,6 +751,15 @@ export default function AdminPosPage() {
                       row,
                       product?.options ?? []
                     );
+                    const effective = resolveEffectivePrices(
+                      row,
+                      promoMap,
+                      row.id
+                    );
+                    const pricedRow = {
+                      price: effective.price,
+                      retailPrice: effective.retailPrice,
+                    };
                     const outOfStock = row.stock <= 0;
                     const inCart =
                       cart.find((line) => line.variantId === row.id)
@@ -765,9 +790,19 @@ export default function AdminPosPage() {
                           </div>
                         ) : null}
                         <div className="flex flex-1 flex-col gap-1 p-3">
-                          <p className="line-clamp-2 text-sm font-medium leading-snug">
-                            {row.productName}
-                          </p>
+                          <div className="flex items-start justify-between gap-1">
+                            <p className="line-clamp-2 text-sm font-medium leading-snug">
+                              {row.productName}
+                            </p>
+                            {effective.onSale ? (
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 text-[10px] text-amber-700"
+                              >
+                                Sale
+                              </Badge>
+                            ) : null}
+                          </div>
                           {variantLabel !== "Default" ? (
                             <p className="line-clamp-1 text-xs text-muted-foreground">
                               {variantLabel}
@@ -777,7 +812,7 @@ export default function AdminPosPage() {
                             <span className="text-sm font-semibold tabular-nums">
                               {(() => {
                                 const display = unitPriceForPaymentMethod(
-                                  row,
+                                  pricedRow,
                                   paymentMethod
                                 );
                                 if (display != null) {
@@ -785,7 +820,7 @@ export default function AdminPosPage() {
                                 }
                                 return paymentMethod === "retail"
                                   ? "Set retail"
-                                  : formatCurrency(row.price);
+                                  : formatCurrency(pricedRow.price);
                               })()}
                             </span>
                             <Badge
