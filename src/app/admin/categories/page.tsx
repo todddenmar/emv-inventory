@@ -48,7 +48,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { TagsInput } from "@/components/admin/product-specs-editor";
+import { CategoryFreebiesEditor } from "@/components/admin/category-freebies-editor";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
@@ -59,10 +59,11 @@ import {
   resolveCategorySlug,
   restoreCategory,
 } from "@/lib/firestore/categories";
+import { getProducts } from "@/lib/firestore/products";
 import { slugify } from "@/lib/slug";
 import { useSlugField } from "@/hooks/use-slug-field";
 import { paginateItems } from "@/lib/pagination";
-import type { Category } from "@/types";
+import type { Category, CategoryFreebieVariant, Product } from "@/types";
 
 function matchesQuery(value: string, query: string): boolean {
   if (!query.trim()) return true;
@@ -85,10 +86,14 @@ export default function AdminCategoriesPage() {
       resolveCategorySlug(categoryName, preferredSlug),
     []
   );
-  const { slug, setSlug, syncSlugFromName, resetSlugField } =
+  const { slug, syncSlugFromName, resetSlugField } =
     useSlugField(resolveSlug);
   const [tags, setTags] = useState<string[]>([]);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
+  const [freebieVariants, setFreebieVariants] = useState<
+    CategoryFreebieVariant[]
+  >([]);
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const visibleCategories = useMemo(() => {
@@ -125,6 +130,9 @@ export default function AdminCategoriesPage() {
 
   useEffect(() => {
     loadCategories();
+    getProducts(true)
+      .then(setCatalogProducts)
+      .catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -152,6 +160,7 @@ export default function AdminCategoriesPage() {
     resetSlugField("", false);
     setTags([]);
     setLowStockThreshold(5);
+    setFreebieVariants([]);
     setDialogOpen(true);
   };
 
@@ -169,6 +178,7 @@ export default function AdminCategoriesPage() {
         slug: slug.trim() || slugify(name),
         tags,
         lowStockThreshold: Math.max(0, lowStockThreshold),
+        freebieVariants,
       });
       toast.success("Category created");
       setDialogOpen(false);
@@ -224,7 +234,7 @@ export default function AdminCategoriesPage() {
         <div>
           <h1 className="text-2xl font-bold">Categories</h1>
           <p className="text-muted-foreground">
-            Organize products with categories and tags
+            Organize products into categories
           </p>
         </div>
         <div className="flex gap-2">
@@ -244,7 +254,7 @@ export default function AdminCategoriesPage() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add category</DialogTitle>
           </DialogHeader>
@@ -263,31 +273,6 @@ export default function AdminCategoriesPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cat-slug">URL slug</Label>
-              <Input
-                id="cat-slug"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                placeholder="e.g. beverages"
-              />
-              <p className="text-xs text-muted-foreground">
-                Used in /categories/{slug || "your-slug"}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cat-tags">Tags</Label>
-              <TagsInput
-                id="cat-tags"
-                tags={tags}
-                onChange={setTags}
-                disabled={submitting}
-              />
-              <p className="text-xs text-muted-foreground">
-                Press Enter to add each tag. Used when searching categories in
-                POS.
-              </p>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="cat-low-at">Low at</Label>
               <Input
                 id="cat-low-at"
@@ -304,6 +289,12 @@ export default function AdminCategoriesPage() {
                 this category.
               </p>
             </div>
+            <CategoryFreebiesEditor
+              freebies={freebieVariants}
+              onChange={setFreebieVariants}
+              products={catalogProducts}
+              disabled={submitting}
+            />
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create

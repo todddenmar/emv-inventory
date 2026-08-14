@@ -28,6 +28,13 @@ import {
   type PosCheckoutStep,
   type PosCustomerDraft,
 } from "@/components/admin/pos-cart";
+import {
+  FreebieShortfallDialog,
+  type FreebieShortfall,
+} from "@/components/admin/freebie-shortfall-dialog";
+import {
+  VariantSearchDialog,
+} from "@/components/admin/variant-search-dialog";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
 import { getBranches } from "@/lib/firestore/branches";
@@ -39,9 +46,8 @@ import {
   setVariantRetailPrices,
 } from "@/lib/firestore/products";
 import { completePosSale } from "@/lib/firestore/pos-sales";
-import { getResellers } from "@/lib/firestore/resellers";
+import { getPaymentAccounts } from "@/lib/firestore/payment-accounts";
 import {
-  getActiveVouchersForReseller,
   getVoucherByCode,
   isVoucherRedeemable,
 } from "@/lib/firestore/vouchers";
@@ -49,7 +55,10 @@ import {
   buildActivePromotionPriceMap,
   getActivePricePromotions,
 } from "@/lib/firestore/price-promotions";
-import { mergeSellingVariantsWithInventory } from "@/lib/inventory";
+import {
+  mergeSellingVariantsWithInventory,
+  type VariantWithStock,
+} from "@/lib/inventory";
 import { isProductPublished } from "@/lib/products-catalog";
 import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
 import { formatVariantLabel } from "@/lib/product-variants";
@@ -59,6 +68,10 @@ import {
   unitPriceForPaymentMethod,
   type EffectiveSalePrices,
 } from "@/lib/product-pricing";
+import {
+  computeDesiredFreebies,
+  type DesiredFreebie,
+} from "@/lib/pos-freebies";
 import { formatCurrency } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
 import { TablePagination } from "@/components/admin/table-pagination";
@@ -67,12 +80,13 @@ import type {
   Branch,
   BranchInventory,
   Category,
+  PaymentAccount,
+  PosCustomerType,
   PosPaymentMethod,
+  PosTenderMethod,
   Product,
-  Reseller,
   Voucher,
 } from "@/types";
-import type { VariantWithStock } from "@/lib/inventory";
 
 const ALL_CATEGORIES_ID = "all";
 const POS_PAGE_SIZE = 20;
@@ -108,14 +122,28 @@ export default function AdminPosPage() {
   const [cart, setCart] = useState<PosCartLine[]>([]);
   const [paymentMethod, setPaymentMethod] =
     useState<PosPaymentMethod>("cash");
+  const [tenderMethod, setTenderMethod] = useState<PosTenderMethod>("cash");
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
+  const [selectedPaymentAccountId, setSelectedPaymentAccountId] = useState<
+    string | null
+  >(null);
+  const [customerType, setCustomerType] =
+    useState<PosCustomerType>("walk_in");
   const [customer, setCustomer] = useState<PosCustomerDraft>(emptyPosCustomerDraft);
-  const [resellers, setResellers] = useState<Reseller[]>([]);
-  const [selectedResellerId, setSelectedResellerId] = useState<string | null>(
-    null
-  );
-  const [resellerVouchers, setResellerVouchers] = useState<Voucher[]>([]);
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
   const [voucherCodeInput, setVoucherCodeInput] = useState("");
+  const [ignoredFreebieVariantIds, setIgnoredFreebieVariantIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const [resolvedFreebieShortfalls, setResolvedFreebieShortfalls] = useState<
+    Set<string>
+  >(() => new Set());
+  const [alternateFreebies, setAlternateFreebies] = useState<PosCartLine[]>(
+    []
+  );
+  const [freebieShortfall, setFreebieShortfall] =
+    useState<FreebieShortfall | null>(null);
+  const [freebiePickerOpen, setFreebiePickerOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] =
@@ -134,14 +162,14 @@ export default function AdminPosPage() {
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [branchList, cats, resellerList, promotions] = await Promise.all([
+        const [branchList, cats, promotions, accounts] = await Promise.all([
           getBranches(true),
           getCategories(),
-          getResellers(true),
           getActivePricePromotions(),
+          getPaymentAccounts(true),
         ]);
         setBranches(branchList);
-        setResellers(resellerList);
+        setPaymentAccounts(accounts);
         setPromoMap(buildActivePromotionPriceMap(promotions));
         const activeCats = cats.filter((c) => !c.isArchived);
         setCategories(activeCats);
@@ -151,6 +179,15 @@ export default function AdminPosPage() {
           : assignedBranchId ?? branchList[0]?.id ?? "";
         setSelectedBranchId(initialBranch);
         setSelectedCategoryId(ALL_CATEGORIES_ID);
+        // Warm all-products cache for freebie alternate picking.
+        getProducts(true)
+          .then((products) => {
+            setCategoryCache((prev) => ({
+              ...prev,
+              [ALL_CATEGORIES_ID]: products,
+            }));
+          })
+          .catch(console.error);
       } catch (err) {
         console.error(err);
         toast.error("Failed to load POS");
@@ -178,20 +215,30 @@ export default function AdminPosPage() {
     setCategoryCache({});
     setCart([]);
     setPaymentMethod("cash");
+    setTenderMethod("cash");
+    setSelectedPaymentAccountId(null);
+    setCustomerType("walk_in");
     setCustomer(emptyPosCustomerDraft());
-    setSelectedResellerId(null);
-    setResellerVouchers([]);
     setAppliedVoucher(null);
     setVoucherCodeInput("");
+    setIgnoredFreebieVariantIds(new Set());
+    setResolvedFreebieShortfalls(new Set());
+    setAlternateFreebies([]);
+    setFreebieShortfall(null);
   }, [activeBranchId]);
 
   const resetSaleExtras = () => {
     setCustomer(emptyPosCustomerDraft());
-    setSelectedResellerId(null);
-    setResellerVouchers([]);
+    setCustomerType("walk_in");
     setAppliedVoucher(null);
     setVoucherCodeInput("");
     setPaymentMethod("cash");
+    setTenderMethod("cash");
+    setSelectedPaymentAccountId(null);
+    setIgnoredFreebieVariantIds(new Set());
+    setResolvedFreebieShortfalls(new Set());
+    setAlternateFreebies([]);
+    setFreebieShortfall(null);
   };
 
   const loadCategory = useCallback(
@@ -275,49 +322,10 @@ export default function AdminPosPage() {
 
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
 
-  const selectedReseller =
-    resellers.find((r) => r.id === selectedResellerId) ?? null;
-
-  const handleResellerChange = async (resellerId: string | null) => {
-    setSelectedResellerId(resellerId);
-    setAppliedVoucher(null);
-    setVoucherCodeInput("");
-    setResellerVouchers([]);
-
-    if (!resellerId) return;
-
-    const reseller = resellers.find((r) => r.id === resellerId);
-    if (reseller) {
-      setCustomer({
-        name: reseller.name,
-        mobile: reseller.mobile ?? "",
-        email: reseller.email ?? "",
-        address: reseller.address ?? "",
-      });
-    }
-
-    try {
-      const vouchers = await getActiveVouchersForReseller(resellerId);
-      setResellerVouchers(vouchers);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load reseller vouchers");
-    }
-  };
-
   const handleApplyVoucherId = (voucherId: string | null) => {
     if (!voucherId) {
       setAppliedVoucher(null);
-      return;
     }
-    const voucher =
-      resellerVouchers.find((v) => v.id === voucherId) ??
-      (appliedVoucher?.id === voucherId ? appliedVoucher : null);
-    if (!voucher || !isVoucherRedeemable(voucher)) {
-      toast.error("Voucher is not redeemable");
-      return;
-    }
-    setAppliedVoucher(voucher);
   };
 
   const handleApplyVoucherCode = async () => {
@@ -330,52 +338,160 @@ export default function AdminPosPage() {
         return;
       }
 
-      // Reseller-linked voucher cannot be used for a different selected reseller.
-      if (
-        selectedResellerId &&
-        voucher.resellerId &&
-        voucher.resellerId !== selectedResellerId
-      ) {
-        toast.error("Voucher belongs to a different reseller");
-        return;
-      }
-
-      // Auto-select reseller only when the voucher is linked and none is selected.
-      if (!selectedResellerId && voucher.resellerId) {
-        const reseller = resellers.find((r) => r.id === voucher.resellerId);
-        if (reseller) {
-          setSelectedResellerId(reseller.id);
-          setCustomer({
-            name: reseller.name,
-            mobile: reseller.mobile ?? "",
-            email: reseller.email ?? "",
-            address: reseller.address ?? "",
-          });
-          const vouchers = await getActiveVouchersForReseller(reseller.id);
-          setResellerVouchers(vouchers);
-        } else {
-          setSelectedResellerId(voucher.resellerId);
-          setCustomer((prev) => ({
-            ...prev,
-            name: voucher.resellerName || prev.name,
-          }));
-          setResellerVouchers([voucher]);
-        }
-      }
-
       setAppliedVoucher(voucher);
       setVoucherCodeInput("");
-      toast.success(`Applied ${voucher.code}`);
+      toast.success(
+        `Applied ${voucher.name ? `${voucher.name} (${voucher.code})` : voucher.code}`
+      );
     } catch (err) {
       console.error(err);
       toast.error("Failed to look up voucher");
     }
   };
 
+  const catalogProducts = categoryCache[ALL_CATEGORIES_ID] ?? categoryProducts;
+
+  const productCategoryIds = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const product of catalogProducts) {
+      map.set(product.id, product.categoryIds ?? []);
+    }
+    for (const products of Object.values(categoryCache)) {
+      for (const product of products) {
+        if (!map.has(product.id)) {
+          map.set(product.id, product.categoryIds ?? []);
+        }
+      }
+    }
+    for (const row of sellingVariants) {
+      if (!map.has(row.productId)) {
+        map.set(row.productId, row.categoryIds ?? []);
+      }
+    }
+    return map;
+  }, [catalogProducts, categoryCache, sellingVariants]);
+
+  const allBranchVariants = useMemo(
+    () =>
+      mergeSellingVariantsWithInventory(
+        catalogProducts.length > 0 ? catalogProducts : categoryProducts,
+        inventory,
+        categories
+      ),
+    [catalogProducts, categoryProducts, inventory, categories]
+  );
+
   const stockForVariant = (variantId: string) =>
     inventory.find((row) => row.variantId === variantId)?.stock ??
+    allBranchVariants.find((row) => row.id === variantId)?.stock ??
     sellingVariants.find((row) => row.id === variantId)?.stock ??
     0;
+
+  const buildFreebieLine = (
+    desired: DesiredFreebie,
+    quantity: number
+  ): PosCartLine => {
+    const stock = stockForVariant(desired.variantId);
+    return {
+      productId: desired.productId,
+      variantId: desired.variantId,
+      productName: desired.productName,
+      variantLabel: desired.variantLabel,
+      cashPrice: 0,
+      retailPrice: 0,
+      retailFromCatalog: true,
+      unitPrice: 0,
+      quantity,
+      maxStock: stock,
+      isFreebie: true,
+      freebieSourceCategoryIds: desired.sourceCategoryIds,
+    };
+  };
+
+  const mergePaidWithFreebies = (
+    paidLines: PosCartLine[],
+    ignored: Set<string> = ignoredFreebieVariantIds,
+    resolved: Set<string> = resolvedFreebieShortfalls,
+    alternates: PosCartLine[] = alternateFreebies
+  ): { nextCart: PosCartLine[]; shortfalls: FreebieShortfall[] } => {
+    const desired = computeDesiredFreebies(
+      categories,
+      paidLines,
+      productCategoryIds,
+      ignored
+    );
+    const shortfalls: FreebieShortfall[] = [];
+    const freebieLines: PosCartLine[] = [];
+
+    for (const item of desired) {
+      const stock = stockForVariant(item.variantId);
+      const paidSame = paidLines
+        .filter((l) => l.variantId === item.variantId)
+        .reduce((sum, l) => sum + l.quantity, 0);
+      const availableForFreebie = Math.max(0, stock - paidSame);
+      const qty = Math.min(item.quantity, availableForFreebie);
+      if (qty < item.quantity && !resolved.has(item.variantId)) {
+        shortfalls.push({
+          productId: item.productId,
+          variantId: item.variantId,
+          productName: item.productName,
+          variantLabel: item.variantLabel,
+          sourceCategoryIds: item.sourceCategoryIds,
+          needed: item.quantity,
+          available: availableForFreebie,
+        });
+      }
+      if (qty > 0) {
+        freebieLines.push(buildFreebieLine(item, qty));
+      }
+    }
+
+    const alternateLines: PosCartLine[] = [];
+    for (const line of alternates) {
+      const stock = stockForVariant(line.variantId);
+      const paidSame = paidLines
+        .filter((l) => l.variantId === line.variantId)
+        .reduce((sum, l) => sum + l.quantity, 0);
+      const alreadyFree = freebieLines
+        .filter((l) => l.variantId === line.variantId)
+        .reduce((sum, l) => sum + l.quantity, 0);
+      const maxQty = Math.max(0, stock - paidSame - alreadyFree);
+      const quantity = Math.min(line.quantity, maxQty);
+      if (quantity <= 0) continue;
+      alternateLines.push({
+        ...line,
+        quantity,
+        maxStock: stock,
+        cashPrice: 0,
+        retailPrice: 0,
+        unitPrice: 0,
+        isFreebie: true,
+      });
+    }
+
+    return {
+      nextCart: [...paidLines, ...freebieLines, ...alternateLines],
+      shortfalls,
+    };
+  };
+
+  const applyCartWithFreebies = (
+    paidLines: PosCartLine[],
+    ignored: Set<string> = ignoredFreebieVariantIds,
+    resolved: Set<string> = resolvedFreebieShortfalls,
+    alternates: PosCartLine[] = alternateFreebies
+  ) => {
+    const { nextCart, shortfalls } = mergePaidWithFreebies(
+      paidLines,
+      ignored,
+      resolved,
+      alternates
+    );
+    setCart(nextCart);
+    if (shortfalls.length > 0) {
+      setFreebieShortfall((current) => current ?? shortfalls[0]);
+    }
+  };
 
   const addVariant = (row: VariantWithStock) => {
     const stock = stockForVariant(row.id);
@@ -390,13 +506,15 @@ export default function AdminPosPage() {
     const retailPrice = effective.retailPrice;
 
     setCart((prev) => {
-      const existing = prev.find((line) => line.variantId === row.id);
+      const paid = prev.filter((line) => !line.isFreebie);
+      const existing = paid.find((line) => line.variantId === row.id);
+      let nextPaid: PosCartLine[];
       if (existing) {
         if (existing.quantity >= stock) {
           toast.error("Not enough stock");
           return prev;
         }
-        return prev.map((line) =>
+        nextPaid = paid.map((line) =>
           line.variantId === row.id
             ? {
                 ...line,
@@ -405,37 +523,54 @@ export default function AdminPosPage() {
               }
             : line
         );
+      } else {
+        nextPaid = [
+          ...paid,
+          {
+            productId: row.productId,
+            variantId: row.id,
+            productName: row.productName,
+            variantLabel,
+            cashPrice: effective.price,
+            retailPrice,
+            retailFromCatalog: retailPrice != null,
+            unitPrice: resolveUnitPrice(
+              effective.price,
+              retailPrice,
+              paymentMethod
+            ),
+            quantity: 1,
+            maxStock: stock,
+            isFreebie: false,
+          },
+        ];
       }
 
-      return [
-        ...prev,
-        {
-          productId: row.productId,
-          variantId: row.id,
-          productName: row.productName,
-          variantLabel,
-          cashPrice: effective.price,
-          retailPrice,
-          retailFromCatalog: retailPrice != null,
-          unitPrice: resolveUnitPrice(
-            effective.price,
-            retailPrice,
-            paymentMethod
-          ),
-          quantity: 1,
-          maxStock: stock,
-        },
-      ];
+      const { nextCart, shortfalls } = mergePaidWithFreebies(nextPaid);
+      if (shortfalls.length > 0) {
+        queueMicrotask(() => {
+          setFreebieShortfall((current) => current ?? shortfalls[0]);
+        });
+      }
+      return nextCart;
     });
   };
 
   const applyPaymentMethod = (method: PosPaymentMethod) => {
     setPaymentMethod(method);
     setCart((prev) =>
-      prev.map((line) => ({
-        ...line,
-        unitPrice: resolveUnitPrice(line.cashPrice, line.retailPrice, method),
-      }))
+      prev.map((line) =>
+        line.isFreebie
+          ? { ...line, unitPrice: 0 }
+          : {
+              ...line,
+              unitPrice: resolveUnitPrice(
+                line.cashPrice,
+                line.retailPrice,
+                method
+              ),
+            }
+      )
     );
   };
 
@@ -446,7 +581,7 @@ export default function AdminPosPage() {
     const normalized = normalizeRetailPrice(retailPrice);
     setCart((prev) =>
       prev.map((line) =>
-        line.variantId === variantId
+        line.variantId === variantId && !line.isFreebie
           ? {
               ...line,
               retailPrice: normalized,
@@ -462,31 +597,69 @@ export default function AdminPosPage() {
   };
 
   const incrementLine = (variantId: string) => {
-    setCart((prev) =>
-      prev.map((line) => {
-        if (line.variantId !== variantId) return line;
-        const stock = stockForVariant(variantId);
-        if (line.quantity >= stock) {
-          toast.error("Not enough stock");
-          return line;
-        }
-        return { ...line, quantity: line.quantity + 1, maxStock: stock };
-      })
-    );
+    setCart((prev) => {
+      const paid = prev.filter((line) => !line.isFreebie);
+      const target = paid.find((line) => line.variantId === variantId);
+      if (!target) return prev;
+      const stock = stockForVariant(variantId);
+      if (target.quantity >= stock) {
+        toast.error("Not enough stock");
+        return prev;
+      }
+      const nextPaid = paid.map((line) =>
+        line.variantId === variantId
+          ? { ...line, quantity: line.quantity + 1, maxStock: stock }
+          : line
+      );
+      const { nextCart, shortfalls } = mergePaidWithFreebies(nextPaid);
+      if (shortfalls.length > 0) {
+        queueMicrotask(() => {
+          setFreebieShortfall((current) => current ?? shortfalls[0]);
+        });
+      }
+      return nextCart;
+    });
   };
 
   const decrementLine = (variantId: string) => {
-    setCart((prev) =>
-      prev.map((line) =>
+    setCart((prev) => {
+      const paid = prev.filter((line) => !line.isFreebie);
+      const nextPaid = paid.map((line) =>
         line.variantId === variantId
           ? { ...line, quantity: Math.max(1, line.quantity - 1) }
           : line
-      )
-    );
+      );
+      const { nextCart } = mergePaidWithFreebies(nextPaid);
+      return nextCart;
+    });
   };
 
-  const removeLine = (variantId: string) => {
-    setCart((prev) => prev.filter((line) => line.variantId !== variantId));
+  const removeLine = (variantId: string, isFreebie = false) => {
+    if (isFreebie) {
+      const nextIgnored = new Set(ignoredFreebieVariantIds);
+      nextIgnored.add(variantId);
+      const nextAlternates = alternateFreebies.filter(
+        (l) => l.variantId !== variantId
+      );
+      setIgnoredFreebieVariantIds(nextIgnored);
+      setAlternateFreebies(nextAlternates);
+      const paid = cart.filter((l) => !l.isFreebie);
+      applyCartWithFreebies(
+        paid,
+        nextIgnored,
+        resolvedFreebieShortfalls,
+        nextAlternates
+      );
+      return;
+    }
+
+    setCart((prev) => {
+      const paidOnly = prev.filter(
+        (line) => !(line.variantId === variantId && !line.isFreebie)
+      );
+      const { nextCart } = mergePaidWithFreebies(paidOnly);
+      return nextCart;
+    });
   };
 
   const clearCart = () => {
@@ -494,9 +667,86 @@ export default function AdminPosPage() {
     resetSaleExtras();
   };
 
+  const handleContinueWithoutFreebie = () => {
+    if (!freebieShortfall) return;
+    const nextIgnored = new Set(ignoredFreebieVariantIds);
+    nextIgnored.add(freebieShortfall.variantId);
+    const nextResolved = new Set(resolvedFreebieShortfalls);
+    nextResolved.add(freebieShortfall.variantId);
+    setIgnoredFreebieVariantIds(nextIgnored);
+    setResolvedFreebieShortfalls(nextResolved);
+    setFreebieShortfall(null);
+    const paid = cart.filter((line) => !line.isFreebie);
+    applyCartWithFreebies(
+      paid,
+      nextIgnored,
+      nextResolved,
+      alternateFreebies
+    );
+  };
+
+  const handleChooseAlternateFreebie = () => {
+    setFreebiePickerOpen(true);
+  };
+
+  const handleSelectAlternateFreebie = (row: VariantWithStock) => {
+    if (!freebieShortfall) return;
+    const missing = Math.max(
+      0,
+      freebieShortfall.needed - freebieShortfall.available
+    );
+    const stock = stockForVariant(row.id);
+    if (stock <= 0) {
+      toast.error("Selected variant is out of stock");
+      return;
+    }
+    const product = catalogProducts.find((p) => p.id === row.productId);
+    const variantLabel = formatVariantLabel(row, product?.options ?? []);
+    const qty = Math.min(
+      missing > 0 ? missing : freebieShortfall.needed,
+      stock
+    );
+
+    const nextResolved = new Set(resolvedFreebieShortfalls);
+    nextResolved.add(freebieShortfall.variantId);
+    const alternateLine: PosCartLine = {
+      productId: row.productId,
+      variantId: row.id,
+      productName: row.productName,
+      variantLabel,
+      cashPrice: 0,
+      retailPrice: 0,
+      retailFromCatalog: true,
+      unitPrice: 0,
+      quantity: qty,
+      maxStock: stock,
+      isFreebie: true,
+      freebieSourceCategoryIds: freebieShortfall.sourceCategoryIds,
+    };
+    const nextAlternates = [
+      ...alternateFreebies.filter((l) => l.variantId !== row.id),
+      alternateLine,
+    ];
+    setResolvedFreebieShortfalls(nextResolved);
+    setAlternateFreebies(nextAlternates);
+    setFreebieShortfall(null);
+    setFreebiePickerOpen(false);
+    const paid = cart.filter((line) => !line.isFreebie);
+    applyCartWithFreebies(
+      paid,
+      ignoredFreebieVariantIds,
+      nextResolved,
+      nextAlternates
+    );
+  };
+
   const missingRetailLines =
     paymentMethod === "retail"
-      ? cart.filter((line) => line.retailPrice == null || line.retailPrice <= 0)
+      ? cart.filter(
+          (line) =>
+            !line.isFreebie &&
+            (line.retailPrice == null || line.retailPrice <= 0)
+        )
       : [];
 
   const handleCharge = async () => {
@@ -506,11 +756,31 @@ export default function AdminPosPage() {
       return;
     }
 
+    const needsAccount = tenderMethod === "ewallet";
+    const selectedAccount = paymentAccounts.find(
+      (a) => a.id === selectedPaymentAccountId && a.type === "ewallet"
+    );
+    if (needsAccount && !selectedAccount) {
+      toast.error("Select an e-wallet account");
+      setCheckoutStep("details");
+      return;
+    }
+
+    if (
+      (customerType === "reservation" || customerType === "delivery") &&
+      !customer.name.trim()
+    ) {
+      toast.error("Enter customer name");
+      setCheckoutStep("details");
+      return;
+    }
+
     setCharging(true);
     try {
       const retailToPersist = cart
         .filter(
           (line) =>
+            !line.isFreebie &&
             !line.retailFromCatalog &&
             line.retailPrice != null &&
             line.retailPrice > 0
@@ -530,24 +800,70 @@ export default function AdminPosPage() {
         branchId: activeBranch.id,
         branchName: activeBranch.name,
         paymentMethod,
-        customer: normalizePosCustomer(customer),
-        resellerId: selectedResellerId,
-        resellerName:
-          selectedReseller?.name ??
-          (appliedVoucher?.resellerId ? appliedVoucher.resellerName : null) ??
-          null,
+        tenderMethod,
+        paymentAccount: selectedAccount
+          ? {
+              id: selectedAccount.id,
+              type: selectedAccount.type,
+              provider: selectedAccount.provider,
+              accountName: selectedAccount.accountName,
+              accountNumber: selectedAccount.accountNumber,
+            }
+          : null,
+        customerType,
+        customer:
+          customerType === "walk_in" ? null : normalizePosCustomer(customer),
+        resellerId: appliedVoucher?.resellerId ?? null,
+        resellerName: appliedVoucher?.resellerName ?? null,
         voucherId: appliedVoucher?.id ?? null,
-        items: cart.map((line) => ({
-          productId: line.productId,
-          variantId: line.variantId,
-          productName:
-            line.variantLabel && line.variantLabel !== "Default"
-              ? `${line.productName} — ${line.variantLabel}`
-              : line.productName,
-          quantity: line.quantity,
-          unitPrice: line.unitPrice,
-          lineTotal: line.unitPrice * line.quantity,
-        })),
+        items: (() => {
+          const merged = new Map<
+            string,
+            {
+              productId: string;
+              variantId: string;
+              productName: string;
+              quantity: number;
+              unitPrice: number;
+              lineTotal: number;
+            }
+          >();
+          for (const line of cart) {
+            const name =
+              line.isFreebie
+                ? `${
+                    line.variantLabel && line.variantLabel !== "Default"
+                      ? `${line.productName} — ${line.variantLabel}`
+                      : line.productName
+                  } (Freebie)`
+                : line.variantLabel && line.variantLabel !== "Default"
+                  ? `${line.productName} — ${line.variantLabel}`
+                  : line.productName;
+            const unitPrice = line.isFreebie ? 0 : line.unitPrice;
+            const lineTotal = unitPrice * line.quantity;
+            const existing = merged.get(line.variantId);
+            if (!existing) {
+              merged.set(line.variantId, {
+                productId: line.productId,
+                variantId: line.variantId,
+                productName: name,
+                quantity: line.quantity,
+                unitPrice,
+                lineTotal,
+              });
+            } else {
+              const quantity = existing.quantity + line.quantity;
+              const total = existing.lineTotal + lineTotal;
+              existing.quantity = quantity;
+              existing.lineTotal = total;
+              existing.unitPrice = quantity > 0 ? total / quantity : 0;
+              if (line.isFreebie && !existing.productName.includes("(Freebie)")) {
+                existing.productName = `${existing.productName} + freebie`;
+              }
+            }
+          }
+          return [...merged.values()];
+        })(),
         createdBy: user.uid,
         createdByName: user.displayName ?? user.email,
       });
@@ -901,16 +1217,25 @@ export default function AdminPosPage() {
         lines={cart}
         branchName={activeBranch?.name ?? ""}
         paymentMethod={paymentMethod}
+        tenderMethod={tenderMethod}
+        paymentAccounts={paymentAccounts}
+        selectedPaymentAccountId={selectedPaymentAccountId}
+        customerType={customerType}
         customer={customer}
-        resellers={resellers}
-        selectedResellerId={selectedResellerId}
-        resellerVouchers={resellerVouchers}
         appliedVoucher={appliedVoucher}
         voucherCodeInput={voucherCodeInput}
         charging={charging}
         onPaymentMethodChange={applyPaymentMethod}
-        onResellerChange={(id) => {
-          handleResellerChange(id).catch(console.error);
+        onTenderMethodChange={(method) => {
+          setTenderMethod(method);
+          setSelectedPaymentAccountId(null);
+        }}
+        onPaymentAccountChange={setSelectedPaymentAccountId}
+        onCustomerTypeChange={(type) => {
+          setCustomerType(type);
+          if (type === "walk_in") {
+            setCustomer(emptyPosCustomerDraft());
+          }
         }}
         onApplyVoucherId={handleApplyVoucherId}
         onVoucherCodeInputChange={setVoucherCodeInput}
@@ -929,6 +1254,29 @@ export default function AdminPosPage() {
           }
           handleCharge().catch(console.error);
         }}
+      />
+
+      <FreebieShortfallDialog
+        open={Boolean(freebieShortfall) && !freebiePickerOpen}
+        shortfall={freebieShortfall}
+        onContinueWithout={handleContinueWithoutFreebie}
+        onChooseAnother={handleChooseAlternateFreebie}
+      />
+
+      <VariantSearchDialog
+        open={freebiePickerOpen}
+        onOpenChange={(open) => {
+          setFreebiePickerOpen(open);
+          if (!open && freebieShortfall) {
+            // Keep shortfall dialog available if they cancel picker
+          }
+        }}
+        variants={allBranchVariants.filter((row) => stockForVariant(row.id) > 0)}
+        products={catalogProducts}
+        title="Choose freebie variant"
+        description="Pick another in-stock variant to give as the freebie"
+        stockLabel={(stock) => `Stock ${stock}`}
+        onSelect={handleSelectAlternateFreebie}
       />
     </div>
   );

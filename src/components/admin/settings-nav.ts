@@ -8,6 +8,7 @@ import {
   UserPlus,
   Users,
   UsersRound,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -65,6 +66,13 @@ export const settingsNavItems: SettingsNavItem[] = [
     icon: Ticket,
     elevatedOnly: false,
     description: "Prepaid store credit codes",
+  },
+  {
+    href: "/admin/settings/payment-accounts",
+    label: "Payment accounts",
+    icon: Wallet,
+    elevatedOnly: false,
+    description: "E-wallet accounts for POS checkout",
   },
   {
     href: "/admin/settings/import",

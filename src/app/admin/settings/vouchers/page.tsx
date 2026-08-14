@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -69,6 +70,8 @@ export default function AdminVouchersPage() {
   );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [voidId, setVoidId] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [resellerId, setResellerId] = useState("");
   const [amount, setAmount] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
@@ -100,6 +103,8 @@ export default function AdminVouchersPage() {
       const owner = voucherOwnerLabel(v).toLowerCase();
       return (
         v.code.toLowerCase().includes(q) ||
+        v.name.toLowerCase().includes(q) ||
+        v.description.toLowerCase().includes(q) ||
         owner.includes(q) ||
         (v.resellerName?.toLowerCase().includes(q) ?? false)
       );
@@ -122,6 +127,8 @@ export default function AdminVouchersPage() {
   }, [page, safePage]);
 
   const openIssue = () => {
+    setName("");
+    setDescription("");
     setResellerId("none");
     setAmount("");
     setExpiresAt("");
@@ -131,6 +138,10 @@ export default function AdminVouchersPage() {
   const handleIssue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (!name.trim()) {
+      toast.error("Enter a voucher name");
+      return;
+    }
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) {
       toast.error("Enter a valid amount");
@@ -149,6 +160,8 @@ export default function AdminVouchersPage() {
     setSubmitting(true);
     try {
       const voucher = await issueVoucher({
+        name: name.trim(),
+        description: description.trim(),
         resellerId: linked?.id ?? null,
         resellerName: linked?.name ?? null,
         amount: value,
@@ -215,7 +228,7 @@ export default function AdminVouchersPage() {
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Search code or reseller…"
+                placeholder="Search name, code, or reseller…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -257,6 +270,7 @@ export default function AdminVouchersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Name</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Owner</TableHead>
                     <TableHead>Initial</TableHead>
@@ -270,6 +284,18 @@ export default function AdminVouchersPage() {
                 <TableBody>
                   {pagedItems.map((voucher) => (
                     <TableRow key={voucher.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">
+                            {voucher.name || "—"}
+                          </p>
+                          {voucher.description ? (
+                            <p className="max-w-[220px] truncate text-xs text-muted-foreground">
+                              {voucher.description}
+                            </p>
+                          ) : null}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <span className="font-mono text-sm">{voucher.code}</span>
@@ -328,6 +354,26 @@ export default function AdminVouchersPage() {
             <DialogTitle>Issue voucher</DialogTitle>
           </DialogHeader>
           <form className="space-y-4" onSubmit={handleIssue}>
+            <div className="space-y-2">
+              <Label htmlFor="voucher-name">Name</Label>
+              <Input
+                id="voucher-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Christmas gift credit"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="voucher-description">Description (optional)</Label>
+              <Textarea
+                id="voucher-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Notes for staff or the customer"
+                rows={3}
+              />
+            </div>
             <div className="space-y-2">
               <Label>Owner</Label>
               <Select

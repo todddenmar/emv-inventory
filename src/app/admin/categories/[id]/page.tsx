@@ -54,7 +54,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { TagsInput } from "@/components/admin/product-specs-editor";
+import { CategoryFreebiesEditor } from "@/components/admin/category-freebies-editor";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useSlugField } from "@/hooks/use-slug-field";
 import { formatCurrency } from "@/lib/format";
@@ -80,7 +80,7 @@ import {
   productStatusLabel,
 } from "@/lib/products-catalog";
 import { slugify } from "@/lib/slug";
-import type { Category, Product } from "@/types";
+import type { Category, CategoryFreebieVariant, Product } from "@/types";
 
 export default function EditCategoryPage({
   params,
@@ -106,12 +106,15 @@ export default function EditCategoryPage({
   const [name, setName] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
+  const [freebieVariants, setFreebieVariants] = useState<
+    CategoryFreebieVariant[]
+  >([]);
   const resolveSlug = useCallback(
     (categoryName: string, preferredSlug?: string) =>
       resolveCategorySlug(categoryName, preferredSlug, id),
     [id]
   );
-  const { slug, setSlug, syncSlugFromName, resetSlugField } =
+  const { slug, syncSlugFromName, resetSlugField } =
     useSlugField(resolveSlug);
 
   const load = useCallback(async () => {
@@ -134,6 +137,7 @@ export default function EditCategoryPage({
       resetSlugField(loadedCategory.slug, true);
       setTags(loadedCategory.tags ?? []);
       setLowStockThreshold(loadedCategory.lowStockThreshold ?? 5);
+      setFreebieVariants(loadedCategory.freebieVariants ?? []);
       setProducts(categoryProducts);
       setAllProducts(catalog);
     } catch (error) {
@@ -193,6 +197,7 @@ export default function EditCategoryPage({
         slug: slug.trim() || slugify(name),
         tags,
         lowStockThreshold: Math.max(0, lowStockThreshold),
+        freebieVariants,
       });
       const refreshed = await getCategory(id);
       if (refreshed) {
@@ -201,6 +206,7 @@ export default function EditCategoryPage({
         resetSlugField(refreshed.slug, true);
         setTags(refreshed.tags ?? []);
         setLowStockThreshold(refreshed.lowStockThreshold ?? 5);
+        setFreebieVariants(refreshed.freebieVariants ?? []);
       }
       toast.success("Category updated");
     } catch (error) {
@@ -292,7 +298,7 @@ export default function EditCategoryPage({
             {category.isArchived ? (
               <Badge variant="secondary">Archived</Badge>
             ) : (
-              "Name, URL slug, tags, and low-stock threshold"
+              "Name, low-stock threshold, and freebies"
             )}
           </CardDescription>
         </CardHeader>
@@ -312,31 +318,6 @@ export default function EditCategoryPage({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="category-slug">URL slug</Label>
-            <Input
-              id="category-slug"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="e.g. beverages"
-              disabled={saving || category.isArchived}
-            />
-            <p className="text-xs text-muted-foreground">
-              Used in /categories/{slug || "your-slug"}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="category-tags">Tags</Label>
-            <TagsInput
-              id="category-tags"
-              tags={tags}
-              onChange={setTags}
-              disabled={saving || category.isArchived}
-            />
-            <p className="text-xs text-muted-foreground">
-              Press Enter to add each tag. Used when searching categories in POS.
-            </p>
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="category-low-at">Low at</Label>
             <Input
               id="category-low-at"
@@ -354,6 +335,12 @@ export default function EditCategoryPage({
               threshold.
             </p>
           </div>
+          <CategoryFreebiesEditor
+            freebies={freebieVariants}
+            onChange={setFreebieVariants}
+            products={allProducts}
+            disabled={saving || category.isArchived}
+          />
         </CardContent>
       </Card>
 

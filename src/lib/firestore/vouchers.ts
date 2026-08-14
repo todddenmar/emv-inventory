@@ -44,6 +44,8 @@ function parseVoucherDoc(
   return {
     id,
     code: String(data.code ?? "").toUpperCase(),
+    name: String(data.name ?? "").trim(),
+    description: String(data.description ?? "").trim(),
     resellerId: (data.resellerId as string | null | undefined) ?? null,
     resellerName: (data.resellerName as string | null | undefined) ?? null,
     initialAmount: Number(data.initialAmount ?? 0),
@@ -168,6 +170,8 @@ export function voucherOwnerLabel(voucher: Pick<Voucher, "resellerId" | "reselle
 }
 
 export async function issueVoucher(input: {
+  name: string;
+  description?: string | null;
   resellerId?: string | null;
   resellerName?: string | null;
   amount: number;
@@ -175,6 +179,13 @@ export async function issueVoucher(input: {
   createdBy: string;
   createdByName?: string | null;
 }): Promise<Voucher> {
+  const name = input.name.trim();
+  if (!name) {
+    throw new Error("Voucher name is required");
+  }
+
+  const description = input.description?.trim() ?? "";
+
   const amount = Number(input.amount);
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Voucher amount must be greater than zero");
@@ -192,6 +203,8 @@ export async function issueVoucher(input: {
   const code = generateVoucherCode();
   const docRef = await addDoc(collection(getClientDb(), COLLECTIONS.vouchers), {
     code,
+    name,
+    description,
     resellerId,
     resellerName,
     initialAmount: amount,
@@ -207,6 +220,8 @@ export async function issueVoucher(input: {
   return {
     id: docRef.id,
     code,
+    name,
+    description,
     resellerId,
     resellerName,
     initialAmount: amount,

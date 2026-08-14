@@ -597,6 +597,8 @@ export default function ProductJsonImportPage() {
           name: row.name,
           slug: row.slug,
           tags: [],
+          lowStockThreshold: 5,
+          freebieVariants: [],
           isArchived: false,
           archivedAt: null,
           createdAt: new Date(),

@@ -39,6 +39,13 @@ export interface BranchInventory {
   updatedAt: Date;
 }
 
+export interface CategoryFreebieVariant {
+  productId: string;
+  variantId: string;
+  productName: string;
+  variantLabel: string;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -46,6 +53,8 @@ export interface Category {
   tags: string[];
   /** Alert when variant stock is at or below this (products in this category). */
   lowStockThreshold: number;
+  /** Variants auto-added free (₱0) in POS when products in this category are sold. */
+  freebieVariants: CategoryFreebieVariant[];
   isArchived: boolean;
   archivedAt: Date | null;
   createdAt: Date;
@@ -211,6 +220,38 @@ export interface BranchTransfer {
 
 export type PosPaymentMethod = "cash" | "retail";
 
+export type PosTenderMethod =
+  | "cash"
+  | "ewallet"
+  | "home_credit"
+  | "skyro"
+  | "salmon"
+  | "card_swipe";
+
+export type PosCustomerType = "walk_in" | "reservation" | "delivery";
+
+export type PaymentAccountType = "ewallet" | "bank_transfer";
+
+export interface PaymentAccount {
+  id: string;
+  type: PaymentAccountType;
+  provider: string;
+  accountName: string;
+  accountNumber: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** Snapshot of the receiving account used on a sale. */
+export interface PosSalePaymentAccount {
+  id: string;
+  type: PaymentAccountType;
+  provider: string;
+  accountName: string;
+  accountNumber: string;
+}
+
 export interface PosSaleCustomer {
   name: string | null;
   mobile: string | null;
@@ -231,7 +272,13 @@ export interface PosSale {
   id: string;
   branchId: string;
   branchName: string;
+  /** Price list used for line prices (cash vs retail). */
   paymentMethod: PosPaymentMethod;
+  /** How the customer paid (cash, e-wallet, bank transfer). */
+  tenderMethod: PosTenderMethod;
+  /** Receiving account when tender is e-wallet or bank transfer. */
+  paymentAccount: PosSalePaymentAccount | null;
+  customerType: PosCustomerType;
   customer: PosSaleCustomer | null;
   resellerId: string | null;
   resellerName: string | null;
@@ -266,6 +313,8 @@ export type VoucherStatus = "active" | "depleted" | "void";
 export interface Voucher {
   id: string;
   code: string;
+  name: string;
+  description: string;
   /** Null = walk-in / unassigned prepaid credit. */
   resellerId: string | null;
   resellerName: string | null;

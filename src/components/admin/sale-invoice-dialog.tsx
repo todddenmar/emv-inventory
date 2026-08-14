@@ -31,6 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getPosSale } from "@/lib/firestore/pos-sales";
+import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PosSale } from "@/types";
@@ -42,8 +43,31 @@ interface SaleInvoiceDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function paymentMethodLabel(method: PosSale["paymentMethod"]): string {
+function priceListLabel(method: PosSale["paymentMethod"]): string {
   return method === "retail" ? "Retail" : "Cash";
+}
+
+function tenderMethodLabel(method: PosSale["tenderMethod"]): string {
+  switch (method) {
+    case "ewallet":
+      return "E-wallet";
+    case "home_credit":
+      return "Home Credit";
+    case "skyro":
+      return "Skyro";
+    case "salmon":
+      return "Salmon";
+    case "card_swipe":
+      return "Card/Swipe";
+    default:
+      return "Cash";
+  }
+}
+
+function customerTypeLabel(type: PosSale["customerType"]): string {
+  if (type === "reservation") return "Reservation";
+  if (type === "delivery") return "Delivery";
+  return "Walk in";
 }
 
 function MetaChip({
@@ -80,11 +104,15 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
   const hasVoucher = Boolean(
     sale.voucherCode || (sale.voucherAmountApplied ?? 0) > 0
   );
+  const paymentAccount = sale.paymentAccount;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{paymentMethodLabel(sale.paymentMethod)}</Badge>
+        <Badge variant="secondary">
+          {tenderMethodLabel(sale.tenderMethod)}
+        </Badge>
+        <Badge variant="outline">{customerTypeLabel(sale.customerType)}</Badge>
         <Badge variant="outline" className="font-mono text-[10px]">
           {sale.id.slice(0, 8)}…
         </Badge>
@@ -107,7 +135,7 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
         <MetaChip
           icon={Banknote}
           label="Payment method"
-          value={paymentMethodLabel(sale.paymentMethod)}
+          value={tenderMethodLabel(sale.tenderMethod)}
         />
         <MetaChip
           icon={Receipt}
@@ -185,9 +213,44 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
             <h3 className="mb-3 text-sm font-semibold">Payment details</h3>
             <dl className="space-y-2.5 text-sm">
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted-foreground">Method</dt>
+                <dt className="text-muted-foreground">Price list</dt>
                 <dd className="font-medium">
-                  {paymentMethodLabel(sale.paymentMethod)}
+                  {priceListLabel(sale.paymentMethod)}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted-foreground">Payment</dt>
+                <dd className="font-medium">
+                  {tenderMethodLabel(sale.tenderMethod)}
+                </dd>
+              </div>
+              {paymentAccount ? (
+                <>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-muted-foreground">
+                      {paymentAccountTypeLabel(paymentAccount.type)}
+                    </dt>
+                    <dd className="text-right font-medium">
+                      {paymentAccount.provider}
+                    </dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-muted-foreground">Account</dt>
+                    <dd className="max-w-[60%] text-right text-xs">
+                      <span className="block font-medium">
+                        {paymentAccount.accountName}
+                      </span>
+                      <span className="font-mono text-muted-foreground">
+                        {paymentAccount.accountNumber}
+                      </span>
+                    </dd>
+                  </div>
+                </>
+              ) : null}
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted-foreground">Customer type</dt>
+                <dd className="font-medium">
+                  {customerTypeLabel(sale.customerType)}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -232,13 +295,21 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
             </dl>
           </section>
 
-          {hasCustomer ? (
+          {hasCustomer || sale.customerType !== "walk_in" ? (
             <section className="rounded-xl border p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                 <User className="h-4 w-4 text-muted-foreground" />
                 Customer
               </h3>
               <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                    Type
+                  </dt>
+                  <dd className="font-medium">
+                    {customerTypeLabel(sale.customerType)}
+                  </dd>
+                </div>
                 {customer?.name ? (
                   <div>
                     <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">

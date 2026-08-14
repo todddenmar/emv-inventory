@@ -58,8 +58,13 @@ import { formatVariantLabel } from "@/lib/product-variants";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Branch, BranchInventory, Category, Product } from "@/types";
 
-type StockDraft = Record<string, number>;
+type StockDraft = Record<string, number | "">;
 type StockFilter = "all" | "low" | "in_stock" | "out_of_stock";
+
+function toStockNumber(value: number | "" | undefined, fallback: number): number {
+  if (value === "" || value == null) return fallback;
+  return Number.isFinite(value) ? value : fallback;
+}
 
 export default function AdminInventoryPage() {
   const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
@@ -145,7 +150,13 @@ export default function AdminInventoryPage() {
   const getDraftStock = (
     variantId: string,
     row: (typeof variantsWithStock)[0]
-  ) => draft[variantId] ?? row.stock;
+  ): number => toStockNumber(draft[variantId], row.stock);
+
+  const getDraftStockInput = (
+    variantId: string,
+    row: (typeof variantsWithStock)[0]
+  ): number | "" =>
+    draft[variantId] !== undefined ? draft[variantId]! : row.stock;
 
   const isLowStockRow = (row: (typeof variantsWithStock)[0]) => {
     const stock = getDraftStock(row.id, row);
@@ -246,7 +257,7 @@ export default function AdminInventoryPage() {
     });
   }, [branches, inventory, products, categories, isElevatedAdmin]);
 
-  const updateDraftStock = (variantId: string, value: number) => {
+  const updateDraftStock = (variantId: string, value: number | "") => {
     setDraft((prev) => ({
       ...prev,
       [variantId]: value,
@@ -257,7 +268,16 @@ export default function AdminInventoryPage() {
     if (!activeBranchId || activeBranchId === "all") return;
     const row = variantsWithStock.find((v) => v.id === variantId);
     if (!row) return;
+    const raw = draft[variantId];
+    if (raw === "") {
+      toast.error("Enter a stock quantity");
+      return;
+    }
     const stock = getDraftStock(variantId, row);
+    if (!Number.isFinite(stock) || stock < 0) {
+      toast.error("Stock must be zero or greater");
+      return;
+    }
 
     setSavingId(variantId);
     try {
@@ -496,6 +516,7 @@ export default function AdminInventoryPage() {
                           ? getCatalogImageUrl(product, row, catalogImageSource)
                           : null;
                       const stock = getDraftStock(row.id, row);
+                      const stockInput = getDraftStockInput(row.id, row);
                       const isLow = isLowStockRow(row);
                       const variantLabel = formatVariantLabel(
                         row,
@@ -575,13 +596,17 @@ export default function AdminInventoryPage() {
                             <Input
                               type="number"
                               min={0}
-                              value={stock}
-                              onChange={(e) =>
-                                updateDraftStock(
-                                  row.id,
-                                  Number(e.target.value) || 0
-                                )
-                              }
+                              value={stockInput}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === "") {
+                                  updateDraftStock(row.id, "");
+                                  return;
+                                }
+                                const next = Number(raw);
+                                if (!Number.isFinite(next) || next < 0) return;
+                                updateDraftStock(row.id, next);
+                              }}
                             />
                           </TableCell>
                           <TableCell className="tabular-nums text-muted-foreground">

@@ -115,7 +115,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
       resolveProductSlug(name || "draft", preferredSlug, productId),
     [productId]
   );
-  const { slug, setSlug, syncSlugFromName, applySlugFromName, resetSlugField } =
+  const { slug, syncSlugFromName, resetSlugField } =
     useSlugField(resolveSlug);
 
   const form = useForm<ProductFormValues>({
@@ -449,39 +449,6 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
             />
           </div>
 
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="slug">URL slug</Label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                id="slug"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                placeholder="e.g. apple-ball"
-                className="sm:flex-1"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="shrink-0"
-                disabled={saving || publishing}
-                onClick={() => {
-                  const name = getValues("name").trim();
-                  if (!name) {
-                    toast.error("Enter a product name first");
-                    return;
-                  }
-                  void applySlugFromName(name);
-                }}
-              >
-                Use name as slug
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Stable product key for imports and search. Example: Apple Ball →
-              apple-ball (adds -2, -3… if already taken).
-            </p>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="productType">Product type</Label>
             <Input
@@ -534,20 +501,6 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="tags">Tags</Label>
-            <Input
-              id="tags"
-              value={tagsText}
-              onChange={(e) => setTagsText(e.target.value)}
-              placeholder="size:large, color:black"
-              disabled={saving || publishing}
-            />
-            <p className="text-xs text-muted-foreground">
-              Comma-separated tags, e.g. size:large, color:black
-            </p>
           </div>
         </div>
 

@@ -14,6 +14,7 @@ import type {
   CategoryGroup,
   InventoryLog,
   Invite,
+  PaymentAccount,
   PosSale,
   Product,
   ProductImage,
@@ -45,6 +46,7 @@ export const categoryConverter: FirestoreDataConverter<Category> = {
       slug: category.slug,
       tags: category.tags,
       lowStockThreshold: category.lowStockThreshold,
+      freebieVariants: category.freebieVariants,
       isArchived: category.isArchived,
       archivedAt: category.archivedAt,
       createdAt: category.createdAt,
@@ -56,6 +58,9 @@ export const categoryConverter: FirestoreDataConverter<Category> = {
     options: SnapshotOptions
   ): Category {
     const data = snapshot.data(options);
+    const rawFreebies = Array.isArray(data.freebieVariants)
+      ? data.freebieVariants
+      : [];
     return {
       id: snapshot.id,
       name: data.name,
@@ -67,6 +72,26 @@ export const categoryConverter: FirestoreDataConverter<Category> = {
         typeof data.lowStockThreshold === "number" && data.lowStockThreshold >= 0
           ? data.lowStockThreshold
           : 5,
+      freebieVariants: rawFreebies
+        .map((item: Record<string, unknown>) => {
+          const productId =
+            typeof item.productId === "string" ? item.productId : "";
+          const variantId =
+            typeof item.variantId === "string" ? item.variantId : "";
+          if (!productId || !variantId) return null;
+          return {
+            productId,
+            variantId,
+            productName:
+              typeof item.productName === "string" ? item.productName : "",
+            variantLabel:
+              typeof item.variantLabel === "string" ? item.variantLabel : "",
+          };
+        })
+        .filter(
+          (item: Category["freebieVariants"][number] | null): item is Category["freebieVariants"][number] =>
+            item != null
+        ),
       isArchived: data.isArchived ?? false,
       archivedAt: data.archivedAt ? toDate(data.archivedAt) : null,
       createdAt: toDate(data.createdAt),
@@ -518,6 +543,9 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       branchId: sale.branchId,
       branchName: sale.branchName,
       paymentMethod: sale.paymentMethod,
+      tenderMethod: sale.tenderMethod,
+      paymentAccount: sale.paymentAccount,
+      customerType: sale.customerType,
       customer: sale.customer,
       resellerId: sale.resellerId,
       resellerName: sale.resellerName,
@@ -540,13 +568,39 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
     const data = snapshot.data(options);
     const rawItems = (data.items ?? []) as PosSale["items"];
     const rawCustomer = data.customer as PosSale["customer"] | undefined;
+    const rawAccount = data.paymentAccount as PosSale["paymentAccount"] | undefined;
     const total = Number(data.total ?? 0);
     const voucherAmountApplied = Number(data.voucherAmountApplied ?? 0);
+    const tenderRaw = data.tenderMethod;
+    const tenderMethod =
+      tenderRaw === "ewallet" ||
+      tenderRaw === "home_credit" ||
+      tenderRaw === "skyro" ||
+      tenderRaw === "salmon" ||
+      tenderRaw === "card_swipe"
+        ? tenderRaw
+        : "cash";
+    const customerType =
+      data.customerType === "reservation" || data.customerType === "delivery"
+        ? data.customerType
+        : "walk_in";
     return {
       id: snapshot.id,
       branchId: data.branchId,
       branchName: data.branchName ?? "",
       paymentMethod: data.paymentMethod === "retail" ? "retail" : "cash",
+      tenderMethod,
+      paymentAccount: rawAccount
+        ? {
+            id: String(rawAccount.id ?? ""),
+            type:
+              rawAccount.type === "bank_transfer" ? "bank_transfer" : "ewallet",
+            provider: String(rawAccount.provider ?? ""),
+            accountName: String(rawAccount.accountName ?? ""),
+            accountNumber: String(rawAccount.accountNumber ?? ""),
+          }
+        : null,
+      customerType,
       customer: rawCustomer
         ? {
             name: rawCustomer.name?.trim() || null,
@@ -577,6 +631,36 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       createdBy: data.createdBy,
       createdByName: data.createdByName ?? null,
       createdAt: toDate(data.createdAt),
+    };
+  },
+};
+
+export const paymentAccountConverter: FirestoreDataConverter<PaymentAccount> = {
+  toFirestore(account: PaymentAccount): DocumentData {
+    return {
+      type: account.type,
+      provider: account.provider,
+      accountName: account.accountName,
+      accountNumber: account.accountNumber,
+      isActive: account.isActive,
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): PaymentAccount {
+    const data = snapshot.data(options);
+    return {
+      id: snapshot.id,
+      type: data.type === "bank_transfer" ? "bank_transfer" : "ewallet",
+      provider: String(data.provider ?? ""),
+      accountName: String(data.accountName ?? ""),
+      accountNumber: String(data.accountNumber ?? ""),
+      isActive: data.isActive !== false,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
     };
   },
 };
@@ -617,6 +701,8 @@ export const voucherConverter: FirestoreDataConverter<Voucher> = {
   toFirestore(voucher: Voucher): DocumentData {
     return {
       code: voucher.code,
+      name: voucher.name,
+      description: voucher.description,
       resellerId: voucher.resellerId,
       resellerName: voucher.resellerName,
       initialAmount: voucher.initialAmount,
@@ -641,6 +727,8 @@ export const voucherConverter: FirestoreDataConverter<Voucher> = {
     return {
       id: snapshot.id,
       code: String(data.code ?? "").toUpperCase(),
+      name: String(data.name ?? "").trim(),
+      description: String(data.description ?? "").trim(),
       resellerId: data.resellerId ?? null,
       resellerName: data.resellerName ?? null,
       initialAmount: Number(data.initialAmount ?? 0),

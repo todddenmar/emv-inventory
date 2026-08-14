@@ -85,6 +85,7 @@ export async function createCategory(
     slug?: string;
     id?: string;
     lowStockThreshold?: number;
+    freebieVariants?: Category["freebieVariants"];
   }
 ): Promise<string> {
   const slug = await resolveCategorySlug(data.name, data.slug);
@@ -96,6 +97,9 @@ export async function createCategory(
       typeof data.lowStockThreshold === "number" && data.lowStockThreshold >= 0
         ? data.lowStockThreshold
         : 5,
+    freebieVariants: Array.isArray(data.freebieVariants)
+      ? data.freebieVariants
+      : [],
     isArchived: false,
     archivedAt: null,
     createdAt: serverTimestamp(),
@@ -117,7 +121,12 @@ export async function createCategory(
 
 export async function updateCategory(
   id: string,
-  data: Partial<Pick<Category, "name" | "tags" | "slug" | "lowStockThreshold">>
+  data: Partial<
+    Pick<
+      Category,
+      "name" | "tags" | "slug" | "lowStockThreshold" | "freebieVariants"
+    >
+  >
 ): Promise<void> {
   const payload: Record<string, unknown> = {
     ...data,

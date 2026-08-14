@@ -18,10 +18,13 @@ import { inventoryDocId } from "@/lib/firestore/inventory";
 import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
 import { isVoucherRedeemable } from "@/lib/firestore/vouchers";
 import type {
+  PosCustomerType,
   PosPaymentMethod,
   PosSale,
   PosSaleCustomer,
   PosSaleItem,
+  PosSalePaymentAccount,
+  PosTenderMethod,
   Voucher,
 } from "@/types";
 
@@ -29,6 +32,9 @@ export interface CompletePosSaleInput {
   branchId: string;
   branchName: string;
   paymentMethod: PosPaymentMethod;
+  tenderMethod: PosTenderMethod;
+  paymentAccount?: PosSalePaymentAccount | null;
+  customerType: PosCustomerType;
   customer?: PosSaleCustomer | null;
   resellerId?: string | null;
   resellerName?: string | null;
@@ -97,6 +103,28 @@ export async function completePosSale(
   }
   if (input.items.length === 0) {
     throw new Error("Cart is empty");
+  }
+
+  const tenderMethod = input.tenderMethod;
+  const needsAccount = tenderMethod === "ewallet";
+  if (needsAccount) {
+    const account = input.paymentAccount;
+    if (
+      !account?.id ||
+      !account.provider ||
+      !account.accountName ||
+      !account.accountNumber ||
+      account.type !== "ewallet"
+    ) {
+      throw new Error("Select an e-wallet account");
+    }
+  }
+
+  const customerType = input.customerType ?? "walk_in";
+  if (customerType === "reservation" || customerType === "delivery") {
+    if (!input.customer?.name?.trim()) {
+      throw new Error("Customer name is required");
+    }
   }
 
   for (const item of input.items) {
@@ -191,6 +219,8 @@ export async function completePosSale(
       const voucherLike: Voucher = {
         id: voucherSnap.id,
         code: String(voucherData.code ?? "").toUpperCase(),
+        name: "",
+        description: "",
         resellerId: voucherData.resellerId ?? null,
         resellerName: null,
         initialAmount: 0,
@@ -265,7 +295,11 @@ export async function completePosSale(
       branchId: input.branchId,
       branchName: input.branchName,
       paymentMethod: input.paymentMethod,
-      customer: input.customer ?? null,
+      tenderMethod,
+      paymentAccount: needsAccount ? input.paymentAccount ?? null : null,
+      customerType,
+      customer:
+        customerType === "walk_in" ? null : (input.customer ?? null),
       resellerId: input.resellerId ?? null,
       resellerName: input.resellerName ?? null,
       voucherId,
