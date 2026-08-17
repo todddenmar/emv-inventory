@@ -16,6 +16,7 @@ import {
   Settings,
   BarChart3,
   Tag,
+  PackageOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -25,6 +26,12 @@ import { Badge } from "@/components/ui/badge";
 export const adminNavItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, masterOnly: false },
   { href: "/admin/pos", label: "POS", icon: ShoppingCart, masterOnly: false },
+  {
+    href: "/admin/wholesale",
+    label: "Wholesale",
+    icon: PackageOpen,
+    masterOnly: false,
+  },
   { href: "/admin/inventory", label: "Inventory", icon: Warehouse, masterOnly: false },
   {
     href: "/admin/reports",

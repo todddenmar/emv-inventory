@@ -180,6 +180,7 @@ export async function createDraftProduct(): Promise<string> {
         sku: "",
         price: 0,
         retailPrice: null,
+        wholesalePrice: null,
         optionValues: {},
         imageId: null,
         position: 0,

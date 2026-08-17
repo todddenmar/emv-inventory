@@ -79,10 +79,12 @@ import type {
   CategoryGroup,
   InventoryLog,
   PosSale,
+  PosSaleChannel,
   Product,
 } from "@/types";
 
 type RangeMode = "day" | "range";
+type SaleChannelFilter = "all" | PosSaleChannel;
 
 type Preset =
   | "today"
@@ -208,6 +210,8 @@ export default function AdminReportsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("all");
+  const [selectedSaleChannel, setSelectedSaleChannel] =
+    useState<SaleChannelFilter>("all");
   const [mode, setMode] = useState<RangeMode>(initial.mode);
   const [preset, setPreset] = useState<Preset>("today");
   const [fromDate, setFromDate] = useState(initial.fromDate);
@@ -267,17 +271,21 @@ export default function AdminReportsPage() {
     const previous = previousPeriodRange(effectiveFrom, effectiveTo);
 
     try {
+      const channelFilter =
+        selectedSaleChannel === "all" ? null : selectedSaleChannel;
       const [currentSales, priorSales, stockLogs] = await Promise.all([
         getPosSales({
           branchId: scopeBranchId,
           fromDate: effectiveFrom,
           toDate: effectiveTo,
+          saleChannel: channelFilter,
           max: 2000,
         }),
         getPosSales({
           branchId: scopeBranchId,
           fromDate: previous.fromDate,
           toDate: previous.toDate,
+          saleChannel: channelFilter,
           max: 2000,
         }),
         getInventoryLogs({
@@ -303,6 +311,7 @@ export default function AdminReportsPage() {
     isElevatedAdmin,
     mode,
     scopeBranchId,
+    selectedSaleChannel,
   ]);
 
   useEffect(() => {
@@ -564,6 +573,31 @@ export default function AdminReportsPage() {
                 </Select>
               </div>
             ) : null}
+
+            <div className="space-y-2">
+              <Label>Sale channel</Label>
+              <Select
+                value={selectedSaleChannel}
+                onValueChange={(v) =>
+                  setSelectedSaleChannel((v as SaleChannelFilter) ?? "all")
+                }
+              >
+                <SelectTrigger className="w-full lg:w-44">
+                  <SelectValue>
+                    {(value) => {
+                      if (value === "shop") return "Shop";
+                      if (value === "wholesale") return "Wholesale";
+                      return "All channels";
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All channels</SelectItem>
+                  <SelectItem value="shop">Shop</SelectItem>
+                  <SelectItem value="wholesale">Wholesale</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="space-y-2">
               <Label className="invisible">Category</Label>
@@ -899,6 +933,7 @@ export default function AdminReportsPage() {
                       <TableRow>
                         <TableHead>When</TableHead>
                         <TableHead>Branch</TableHead>
+                        <TableHead>Channel</TableHead>
                         <TableHead>Staff</TableHead>
                         <TableHead>Items</TableHead>
                         <TableHead className="text-right">Total</TableHead>
@@ -915,6 +950,17 @@ export default function AdminReportsPage() {
                           </TableCell>
                           <TableCell className="text-sm">
                             {sale.branchName || sale.branchId}
+                          </TableCell>
+                          <TableCell>
+                            {sale.saleChannel === "wholesale" ? (
+                              <Badge variant="outline" className="text-xs">
+                                Wholesale
+                              </Badge>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                Shop
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {sale.createdByName ?? "Staff"}

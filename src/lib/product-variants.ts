@@ -1,4 +1,7 @@
-import { normalizeRetailPrice } from "@/lib/product-pricing";
+import {
+  normalizeRetailPrice,
+  normalizeWholesalePrice,
+} from "@/lib/product-pricing";
 import type { Product, ProductOption, ProductVariant } from "@/types";
 
 export function defaultVariantId(productId: string): string {
@@ -48,6 +51,7 @@ export function generateVariantsFromOptions(
             sku: "",
             price: 0,
             retailPrice: null,
+            wholesalePrice: null,
             optionValues: {},
             imageId: null,
             position: 0,
@@ -70,6 +74,7 @@ export function generateVariantsFromOptions(
       sku: prev?.sku ?? "",
       price: prev?.price ?? 0,
       retailPrice: prev?.retailPrice ?? null,
+      wholesalePrice: prev?.wholesalePrice ?? null,
       optionValues,
       imageId: prev?.imageId ?? null,
       position: index,
@@ -110,6 +115,7 @@ export function getDefaultVariant(product: Pick<Product, "variants">): ProductVa
     sku: "",
     price: 0,
     retailPrice: null,
+    wholesalePrice: null,
     optionValues: {},
     imageId: null,
     position: 0,
@@ -159,6 +165,7 @@ export function migrateLegacyProductVariants(
         sku: variant.sku ?? "",
         price: Number(variant.price ?? 0),
         retailPrice: normalizeRetailPrice(variant.retailPrice),
+        wholesalePrice: normalizeWholesalePrice(variant.wholesalePrice),
         optionValues: variant.optionValues ?? {},
         imageId: variant.imageId ?? null,
         position: variant.position ?? index,
@@ -174,6 +181,7 @@ export function migrateLegacyProductVariants(
         sku: "",
         price: Number(data.price ?? 0),
         retailPrice: null,
+        wholesalePrice: null,
         optionValues: {},
         imageId: null,
         position: 0,

@@ -111,8 +111,12 @@ export default function AdminInvitesPage() {
 
   const handleCreateInvite = async () => {
     if (!user) return;
-    if (role === "manager" && !branchId) {
-      toast.error("Select a branch for this manager");
+    if ((role === "manager" || role === "cashier") && !branchId) {
+      toast.error(
+        role === "cashier"
+          ? "Select a branch for this cashier"
+          : "Select a branch for this manager"
+      );
       return;
     }
     const branch = branches.find((b) => b.id === branchId);
@@ -123,8 +127,12 @@ export default function AdminInvitesPage() {
         createdByName: user.displayName || user.email || "Admin",
         email: email || null,
         role,
-        branchId: role === "manager" ? branchId : null,
-        branchName: role === "manager" ? (branch?.name ?? null) : null,
+        branchId:
+          role === "manager" || role === "cashier" ? branchId : null,
+        branchName:
+          role === "manager" || role === "cashier"
+            ? (branch?.name ?? null)
+            : null,
       });
       const link = `${window.location.origin}/invite/${invite.token}`;
       setLastLink(link);
@@ -163,7 +171,7 @@ export default function AdminInvitesPage() {
         <div>
           <h1 className="text-2xl font-bold">Staff invites</h1>
           <p className="text-muted-foreground">
-            Invite managers (branch-scoped) or admins (full access)
+            Invite managers, cashiers (branch-scoped), or admins (full access)
           </p>
         </div>
         <Button
@@ -194,7 +202,9 @@ export default function AdminInvitesPage() {
                   onValueChange={(v) => {
                     const next = (v as InviteRole) ?? "manager";
                     setRole(next);
-                    if (next !== "manager") setBranchId("");
+                    if (next !== "manager" && next !== "cashier") {
+                      setBranchId("");
+                    }
                   }}
                 >
                   <SelectTrigger>
@@ -205,13 +215,14 @@ export default function AdminInvitesPage() {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="cashier">Cashier</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {role === "manager" ? (
+              {role === "manager" || role === "cashier" ? (
                 <div className="space-y-2">
                   <Label>Branch</Label>
                   <Select

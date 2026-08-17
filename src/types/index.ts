@@ -1,4 +1,9 @@
-export type UserRole = "master-admin" | "admin" | "manager" | "customer";
+export type UserRole =
+  | "master-admin"
+  | "admin"
+  | "manager"
+  | "cashier"
+  | "customer";
 
 export interface AppUser {
   uid: string;
@@ -23,6 +28,8 @@ export interface Branch {
   managerId: string | null;
   managerName: string | null;
   isActive: boolean;
+  /** When true, this branch can run wholesale POS. */
+  supportsWholesale: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -86,6 +93,8 @@ export interface ProductVariant {
   price: number;
   /** Retail / list price. Optional until set on product or at POS. */
   retailPrice: number | null;
+  /** Suggested wholesale price; optional and editable per wholesale sale. */
+  wholesalePrice: number | null;
   optionValues: Record<string, string>;
   imageId: string | null;
   position: number;
@@ -142,7 +151,7 @@ export interface Invite {
   id: string;
   token: string;
   email: string | null;
-  role: "manager" | "admin";
+  role: "manager" | "cashier" | "admin";
   branchId: string | null;
   branchName: string | null;
   createdBy: string;
@@ -220,6 +229,8 @@ export interface BranchTransfer {
 
 export type PosPaymentMethod = "cash" | "retail";
 
+export type PosSaleChannel = "shop" | "wholesale";
+
 export type PosTenderMethod =
   | "cash"
   | "ewallet"
@@ -272,7 +283,9 @@ export interface PosSale {
   id: string;
   branchId: string;
   branchName: string;
-  /** Price list used for line prices (cash vs retail). */
+  /** Shop vs wholesale channel. Legacy sales default to shop. */
+  saleChannel: PosSaleChannel;
+  /** Price list used for line prices (cash vs retail) on shop sales. */
   paymentMethod: PosPaymentMethod;
   /** How the customer paid (cash, e-wallet, bank transfer). */
   tenderMethod: PosTenderMethod;

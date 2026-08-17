@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -68,6 +69,7 @@ export default function AdminBranchesPage() {
     longitude: "",
     phone: "",
     managerId: "",
+    supportsWholesale: false,
   });
 
   const loadData = () => {
@@ -117,6 +119,7 @@ export default function AdminBranchesPage() {
       longitude: "",
       phone: "",
       managerId: "",
+      supportsWholesale: false,
     });
     setDialogOpen(true);
   };
@@ -131,6 +134,7 @@ export default function AdminBranchesPage() {
       longitude: branch.longitude != null ? String(branch.longitude) : "",
       phone: branch.phone ?? "",
       managerId: branch.managerId ?? "",
+      supportsWholesale: branch.supportsWholesale === true,
     });
     setDialogOpen(true);
   };
@@ -176,6 +180,7 @@ export default function AdminBranchesPage() {
         managerId: form.managerId || null,
         managerName: manager?.displayName || manager?.email || null,
         isActive: true,
+        supportsWholesale: form.supportsWholesale,
       };
 
       let branchId = editing?.id;
@@ -320,6 +325,26 @@ export default function AdminBranchesPage() {
                 </SelectContent>
               </Select>
             </div>
+            <label className="flex items-start gap-3 rounded-md border p-3">
+              <Checkbox
+                checked={form.supportsWholesale}
+                onCheckedChange={(checked) =>
+                  setForm({
+                    ...form,
+                    supportsWholesale: checked === true,
+                  })
+                }
+              />
+              <span className="space-y-1">
+                <span className="block text-sm font-medium leading-none">
+                  Supports wholesale
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Enable wholesale POS for this branch. Typically only one
+                  branch should have this on.
+                </span>
+              </span>
+            </label>
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editing ? "Update branch" : "Create branch"}
@@ -357,6 +382,11 @@ export default function AdminBranchesPage() {
                       >
                         {branch.isActive ? "Active" : "Inactive"}
                       </Badge>
+                      {branch.supportsWholesale && (
+                        <Badge variant="outline" className="text-xs">
+                          Wholesale
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </CardHeader>

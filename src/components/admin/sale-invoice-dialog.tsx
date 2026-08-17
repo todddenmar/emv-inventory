@@ -109,6 +109,9 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
+        {sale.saleChannel === "wholesale" ? (
+          <Badge variant="default">Wholesale</Badge>
+        ) : null}
         <Badge variant="secondary">
           {tenderMethodLabel(sale.tenderMethod)}
         </Badge>
@@ -213,11 +216,19 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
             <h3 className="mb-3 text-sm font-semibold">Payment details</h3>
             <dl className="space-y-2.5 text-sm">
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted-foreground">Price list</dt>
+                <dt className="text-muted-foreground">Channel</dt>
                 <dd className="font-medium">
-                  {priceListLabel(sale.paymentMethod)}
+                  {sale.saleChannel === "wholesale" ? "Wholesale" : "Shop"}
                 </dd>
               </div>
+              {sale.saleChannel !== "wholesale" ? (
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">Price list</dt>
+                  <dd className="font-medium">
+                    {priceListLabel(sale.paymentMethod)}
+                  </dd>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted-foreground">Payment</dt>
                 <dd className="font-medium">

@@ -39,7 +39,7 @@ function LoginContent() {
     if (loading) return;
 
     if (user && isStaff) {
-      router.replace(resolvePostLoginRedirect(true, redirect));
+      router.replace(resolvePostLoginRedirect(true, redirect, user.role));
       return;
     }
 
@@ -66,7 +66,7 @@ function LoginContent() {
       }
 
       toast.success(`Welcome, ${appUser.displayName || "user"}!`);
-      router.push(resolvePostLoginRedirect(true, redirect));
+      router.push(resolvePostLoginRedirect(true, redirect, appUser.role));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign in failed");
     } finally {

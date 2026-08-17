@@ -12,7 +12,7 @@ service cloud.firestore {
 
     function isStaff() {
       return isSignedIn() &&
-        userDoc().data.role in ['master-admin', 'admin', 'manager'];
+        userDoc().data.role in ['master-admin', 'admin', 'manager', 'cashier'];
     }
 
     function isMasterAdmin() {

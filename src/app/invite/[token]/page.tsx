@@ -85,7 +85,13 @@ function InviteContent({ token }: { token: string }) {
         <CardContent className="space-y-4">
           <Button
             className="w-full"
-            onClick={() => router.push(`/login?invite=${token}&redirect=/admin`)}
+            onClick={() =>
+              router.push(
+                `/login?invite=${token}&redirect=${
+                  invite.role === "cashier" ? "/admin/cashier" : "/admin"
+                }`
+              )
+            }
           >
             <ExternalLink className="mr-2 h-4 w-4" />
             Accept invite with Google

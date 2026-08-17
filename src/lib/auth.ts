@@ -34,20 +34,22 @@ async function handlePostLogin(user: User, inviteToken?: string) {
       throw new Error("This invite was sent to a different email address");
     }
 
-    if (invite.role === "manager") {
+    if (invite.role === "manager" || invite.role === "cashier") {
       if (!invite.branchId) {
         throw new Error("This invite is missing a branch assignment");
       }
 
       const appUser = await upsertUserOnLogin(user, {
-        role: "manager",
+        role: invite.role,
         branchId: invite.branchId,
       });
-      await assignBranchManager(
-        invite.branchId,
-        user.uid,
-        user.displayName || user.email || "Manager"
-      );
+      if (invite.role === "manager") {
+        await assignBranchManager(
+          invite.branchId,
+          user.uid,
+          user.displayName || user.email || "Manager"
+        );
+      }
       await acceptInvite(invite.id, user.uid);
       return appUser;
     }

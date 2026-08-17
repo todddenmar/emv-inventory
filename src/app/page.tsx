@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 import { useAuthStore, useIsStaff } from "@/stores/auth-store";
 
 export default function RootPage() {
@@ -20,7 +21,7 @@ export default function RootPage() {
     }
 
     if (isStaff) {
-      router.replace("/admin");
+      router.replace(resolvePostLoginRedirect(true, "/admin", user.role));
       return;
     }
 

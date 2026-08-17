@@ -21,6 +21,7 @@ import type {
   PosCustomerType,
   PosPaymentMethod,
   PosSale,
+  PosSaleChannel,
   PosSaleCustomer,
   PosSaleItem,
   PosSalePaymentAccount,
@@ -31,6 +32,7 @@ import type {
 export interface CompletePosSaleInput {
   branchId: string;
   branchName: string;
+  saleChannel?: PosSaleChannel;
   paymentMethod: PosPaymentMethod;
   tenderMethod: PosTenderMethod;
   paymentAccount?: PosSalePaymentAccount | null;
@@ -55,6 +57,7 @@ export async function getPosSales(options?: {
   branchId?: string | null;
   fromDate?: string | null;
   toDate?: string | null;
+  saleChannel?: PosSaleChannel | null;
   max?: number;
 }): Promise<PosSale[]> {
   const ref = collection(getClientDb(), COLLECTIONS.posSales).withConverter(
@@ -72,9 +75,14 @@ export async function getPosSales(options?: {
   if (to) constraints.push(where("createdAt", "<=", to));
   constraints.push(orderBy("createdAt", "desc"), limit(max));
 
+  const applyChannelFilter = (rows: PosSale[]) => {
+    if (!options?.saleChannel) return rows;
+    return rows.filter((sale) => sale.saleChannel === options.saleChannel);
+  };
+
   try {
     const snapshot = await getDocs(query(ref, ...constraints));
-    return snapshot.docs.map((d) => d.data());
+    return applyChannelFilter(snapshot.docs.map((d) => d.data()));
   } catch (error) {
     console.warn("getPosSales date query failed, using fallback", error);
     const fallback: QueryConstraint[] = [];
@@ -91,7 +99,7 @@ export async function getPosSales(options?: {
         return true;
       });
     }
-    return rows.slice(0, max);
+    return applyChannelFilter(rows).slice(0, max);
   }
 }
 
@@ -294,6 +302,7 @@ export async function completePosSale(
     tx.set(saleRef, {
       branchId: input.branchId,
       branchName: input.branchName,
+      saleChannel: input.saleChannel === "wholesale" ? "wholesale" : "shop",
       paymentMethod: input.paymentMethod,
       tenderMethod,
       paymentAccount: needsAccount ? input.paymentAccount ?? null : null,

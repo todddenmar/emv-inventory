@@ -23,8 +23,10 @@ function generateToken(): string {
   return crypto.randomUUID().replace(/-/g, "");
 }
 
-function normalizeInviteRole(role: unknown): InviteRole {
-  return role === "admin" ? "admin" : "manager";
+export function normalizeInviteRole(role: unknown): InviteRole {
+  if (role === "admin") return "admin";
+  if (role === "cashier") return "cashier";
+  return "manager";
 }
 
 export async function createInvite(input: {
@@ -36,16 +38,21 @@ export async function createInvite(input: {
   branchName: string | null;
 }): Promise<Invite> {
   const role = normalizeInviteRole(input.role);
-  if (role === "manager" && !input.branchId) {
-    throw new Error("Managers must be assigned to a branch");
+  if ((role === "manager" || role === "cashier") && !input.branchId) {
+    throw new Error(
+      role === "cashier"
+        ? "Cashiers must be assigned to a branch"
+        : "Managers must be assigned to a branch"
+    );
   }
 
   const token = generateToken();
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  const branchId = role === "manager" ? input.branchId : null;
-  const branchName = role === "manager" ? input.branchName : null;
+  const needsBranch = role === "manager" || role === "cashier";
+  const branchId = needsBranch ? input.branchId : null;
+  const branchName = needsBranch ? input.branchName : null;
 
   const docRef = await addDoc(collection(getClientDb(), "invites"), {
     token,
@@ -90,7 +97,7 @@ export async function getInvites(): Promise<Invite[]> {
   const snapshot = await getDocs(
     query(
       collection(getClientDb(), "invites"),
-      where("role", "in", ["manager", "admin"])
+      where("role", "in", ["manager", "admin", "cashier"])
     )
   );
   return snapshot.docs

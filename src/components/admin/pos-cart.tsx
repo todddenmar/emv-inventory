@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Loader2, Minus, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import type {
   PaymentAccount,
   PosCustomerType,
   PosPaymentMethod,
+  PosSaleChannel,
   PosSaleCustomer,
   PosTenderMethod,
   Voucher,
@@ -42,6 +44,8 @@ export interface PosCartLine {
   retailPrice: number | null;
   /** Whether retail came from the product catalog (vs entered this sale). */
   retailFromCatalog: boolean;
+  /** Suggested wholesale from catalog; null when unset. */
+  wholesalePrice?: number | null;
   unitPrice: number;
   quantity: number;
   maxStock: number;
@@ -168,8 +172,10 @@ function retailSubtotal(lines: PosCartLine[]): number | null {
 interface PosCartPanelProps {
   lines: PosCartLine[];
   charging: boolean;
+  saleChannel?: PosSaleChannel;
   onIncrement: (variantId: string) => void;
   onDecrement: (variantId: string) => void;
+  onQuantityChange?: (variantId: string, quantity: number) => void;
   onRemove: (variantId: string, isFreebie?: boolean) => void;
   onClear: () => void;
   onContinue: () => void;
@@ -179,18 +185,44 @@ interface PosCartPanelProps {
 export function PosCartPanel({
   lines,
   charging,
+  saleChannel = "shop",
   onIncrement,
   onDecrement,
+  onQuantityChange,
   onRemove,
   onClear,
   onContinue,
   className,
 }: PosCartPanelProps) {
   const itemCount = lines.reduce((sum, line) => sum + line.quantity, 0);
+  const isWholesale = saleChannel === "wholesale";
+  const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>(
+    {}
+  );
   const subtotal = lines.reduce(
-    (sum, line) => sum + line.cashPrice * line.quantity,
+    (sum, line) =>
+      sum +
+      (isWholesale || line.isFreebie
+        ? line.unitPrice
+        : line.cashPrice) *
+        line.quantity,
     0
   );
+
+  const commitQuantity = (variantId: string, raw: string, maxStock: number) => {
+    if (!onQuantityChange) return;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      onQuantityChange(variantId, 1);
+    } else {
+      onQuantityChange(variantId, Math.min(Math.floor(parsed), maxStock));
+    }
+    setQuantityDrafts((prev) => {
+      const next = { ...prev };
+      delete next[variantId];
+      return next;
+    });
+  };
 
   return (
     <div className={`flex h-full min-h-0 flex-col bg-background ${className ?? ""}`}>
@@ -251,6 +283,14 @@ export function PosCartPanel({
                     <p className="mt-1 text-sm tabular-nums text-muted-foreground">
                       {isFreebie ? (
                         "Free"
+                      ) : isWholesale ? (
+                        <>
+                          {formatCurrency(line.unitPrice)}
+                          <span className="text-muted-foreground/80">
+                            {" "}
+                            unit
+                          </span>
+                        </>
                       ) : (
                         <>
                           {formatCurrency(line.cashPrice)}
@@ -271,14 +311,71 @@ export function PosCartPanel({
                         disabled={
                           charging || isFreebie || line.quantity <= 1
                         }
-                        onClick={() => onDecrement(line.variantId)}
+                        onClick={() => {
+                          setQuantityDrafts((prev) => {
+                            if (!(line.variantId in prev)) return prev;
+                            const next = { ...prev };
+                            delete next[line.variantId];
+                            return next;
+                          });
+                          onDecrement(line.variantId);
+                        }}
                         aria-label="Decrease quantity"
                       >
                         <Minus className="h-3.5 w-3.5" />
                       </Button>
-                      <span className="min-w-8 text-center text-sm font-semibold tabular-nums">
-                        {line.quantity}
-                      </span>
+                      {isWholesale && !isFreebie && onQuantityChange ? (
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={line.maxStock}
+                          step={1}
+                          disabled={charging}
+                          className="h-8 w-16 px-1 text-center text-sm font-semibold tabular-nums"
+                          aria-label={`Quantity for ${line.productName}`}
+                          value={
+                            quantityDrafts[line.variantId] ??
+                            String(line.quantity)
+                          }
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            setQuantityDrafts((prev) => ({
+                              ...prev,
+                              [line.variantId]: raw,
+                            }));
+                            if (raw === "") return;
+                            const parsed = Number(raw);
+                            if (
+                              Number.isFinite(parsed) &&
+                              parsed >= 1 &&
+                              Number.isInteger(parsed)
+                            ) {
+                              onQuantityChange(
+                                line.variantId,
+                                Math.min(parsed, line.maxStock)
+                              );
+                            }
+                          }}
+                          onBlur={() =>
+                            commitQuantity(
+                              line.variantId,
+                              quantityDrafts[line.variantId] ??
+                                String(line.quantity),
+                              line.maxStock
+                            )
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span className="min-w-8 text-center text-sm font-semibold tabular-nums">
+                          {line.quantity}
+                        </span>
+                      )}
                       <Button
                         type="button"
                         size="icon-sm"
@@ -288,7 +385,15 @@ export function PosCartPanel({
                           isFreebie ||
                           line.quantity >= line.maxStock
                         }
-                        onClick={() => onIncrement(line.variantId)}
+                        onClick={() => {
+                          setQuantityDrafts((prev) => {
+                            if (!(line.variantId in prev)) return prev;
+                            const next = { ...prev };
+                            delete next[line.variantId];
+                            return next;
+                          });
+                          onIncrement(line.variantId);
+                        }}
                         aria-label="Increase quantity"
                       >
                         <Plus className="h-3.5 w-3.5" />
@@ -306,9 +411,17 @@ export function PosCartPanel({
                         <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </Button>
                     </div>
+                    {isWholesale && !isFreebie ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        Max {line.maxStock}
+                      </p>
+                    ) : null}
                     <p className="text-sm font-semibold tabular-nums">
                       {formatCurrency(
-                        isFreebie ? 0 : line.cashPrice * line.quantity
+                        isFreebie
+                          ? 0
+                          : (isWholesale ? line.unitPrice : line.cashPrice) *
+                              line.quantity
                       )}
                     </p>
                   </div>
@@ -346,6 +459,7 @@ interface PosCheckoutDialogProps {
   onStepChange: (step: PosCheckoutStep) => void;
   lines: PosCartLine[];
   branchName: string;
+  saleChannel?: PosSaleChannel;
   paymentMethod: PosPaymentMethod;
   tenderMethod: PosTenderMethod;
   paymentAccounts: PaymentAccount[];
@@ -364,6 +478,7 @@ interface PosCheckoutDialogProps {
   onApplyVoucherCode: () => void;
   onCustomerChange: (patch: Partial<PosCustomerDraft>) => void;
   onRetailPriceChange: (variantId: string, retailPrice: number | null) => void;
+  onUnitPriceChange?: (variantId: string, unitPrice: number) => void;
   onConfirmCharge: () => void;
 }
 
@@ -374,6 +489,7 @@ export function PosCheckoutDialog({
   onStepChange,
   lines,
   branchName,
+  saleChannel = "shop",
   paymentMethod,
   tenderMethod,
   paymentAccounts,
@@ -392,8 +508,10 @@ export function PosCheckoutDialog({
   onApplyVoucherCode,
   onCustomerChange,
   onRetailPriceChange,
+  onUnitPriceChange,
   onConfirmCharge,
 }: PosCheckoutDialogProps) {
+  const isWholesale = saleChannel === "wholesale";
   const { itemCount, subtotal, voucherApplied, amountDue } = cartTotals(
     lines,
     appliedVoucher
@@ -401,11 +519,17 @@ export function PosCheckoutDialog({
   const cashTotal = cashSubtotal(lines);
   const retailTotal = retailSubtotal(lines);
   const missingRetail =
+    !isWholesale &&
     paymentMethod === "retail" &&
     lines.some(
       (line) =>
         !line.isFreebie &&
         (line.retailPrice == null || line.retailPrice <= 0)
+    );
+  const missingWholesalePrice =
+    isWholesale &&
+    lines.some(
+      (line) => !line.isFreebie && (!(line.unitPrice > 0))
     );
   const needsPaymentAccount = tenderMethod === "ewallet";
   const accountsForTender = paymentAccounts.filter(
@@ -424,7 +548,7 @@ export function PosCheckoutDialog({
     needsPaymentAccount && !selectedPaymentAccount;
 
   const goToReview = () => {
-    if (missingRetail) return;
+    if (missingRetail || missingWholesalePrice) return;
     if (missingPaymentAccount) return;
     if (missingCustomerName) return;
     onStepChange("review");
@@ -470,6 +594,115 @@ export function PosCheckoutDialog({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {step === "details" ? (
             <div className="space-y-5">
+              {isWholesale ? (
+                <div className="space-y-3">
+                  <div>
+                    <Label>Wholesale unit prices</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Cash and retail are shown for reference. Edit the
+                      wholesale unit price charged for each line.
+                    </p>
+                  </div>
+                  <div className="space-y-2 rounded-lg border p-3">
+                    {lines
+                      .filter((line) => !line.isFreebie)
+                      .map((line) => {
+                        const label = lineLabel(line);
+                        const suggested =
+                          line.wholesalePrice != null && line.wholesalePrice > 0
+                            ? line.wholesalePrice
+                            : null;
+                        return (
+                          <div
+                            key={line.variantId}
+                            className="space-y-2 border-b pb-3 last:border-b-0 last:pb-0"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {line.quantity}× {line.productName}
+                              </p>
+                              {label ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {label}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div className="rounded-md border bg-muted/30 px-2.5 py-2">
+                                <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                                  Cash
+                                </p>
+                                <p className="tabular-nums font-medium">
+                                  {formatCurrency(line.cashPrice)}
+                                </p>
+                              </div>
+                              <div className="rounded-md border bg-muted/30 px-2.5 py-2">
+                                <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                                  Retail
+                                </p>
+                                <p className="tabular-nums font-medium">
+                                  {line.retailPrice != null &&
+                                  line.retailPrice > 0
+                                    ? formatCurrency(line.retailPrice)
+                                    : "—"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <Label
+                                  htmlFor={`checkout-wholesale-${line.variantId}`}
+                                  className="text-xs"
+                                >
+                                  Wholesale unit price
+                                </Label>
+                                {suggested != null ? (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    Suggested {formatCurrency(suggested)}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] text-muted-foreground">
+                                    No suggested price
+                                  </span>
+                                )}
+                              </div>
+                              <Input
+                                id={`checkout-wholesale-${line.variantId}`}
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                placeholder="0.00"
+                                disabled={charging}
+                                className="h-9"
+                                value={line.unitPrice || ""}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  onUnitPriceChange?.(
+                                    line.variantId,
+                                    raw === "" ? 0 : Number(raw)
+                                  );
+                                }}
+                              />
+                              {line.quantity > 1 && line.unitPrice > 0 ? (
+                                <p className="text-xs tabular-nums text-muted-foreground">
+                                  Line{" "}
+                                  {formatCurrency(
+                                    line.unitPrice * line.quantity
+                                  )}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                  {missingWholesalePrice ? (
+                    <p className="text-sm text-destructive">
+                      Enter a unit price greater than 0 for every item.
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
               <div className="space-y-3">
                 <div>
                   <Label>Price list</Label>
@@ -638,6 +871,7 @@ export function PosCheckoutDialog({
                   </p>
                 ) : null}
               </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="pos-tender-method">Payment method</Label>
@@ -931,9 +1165,17 @@ export function PosCheckoutDialog({
 
               <div className="grid gap-2 rounded-lg border p-3 text-sm">
                 <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Price list</span>
-                  <span className="font-medium capitalize">{paymentMethod}</span>
+                  <span className="text-muted-foreground">Channel</span>
+                  <span className="font-medium capitalize">
+                    {isWholesale ? "Wholesale" : "Shop"}
+                  </span>
                 </div>
+                {!isWholesale ? (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">Price list</span>
+                    <span className="font-medium capitalize">{paymentMethod}</span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground">Payment</span>
                   <span className="font-medium text-right">
@@ -1052,6 +1294,7 @@ export function PosCheckoutDialog({
                 disabled={
                   charging ||
                   missingRetail ||
+                  missingWholesalePrice ||
                   missingPaymentAccount ||
                   missingCustomerName ||
                   lines.length === 0
@@ -1078,6 +1321,7 @@ export function PosCheckoutDialog({
                 disabled={
                   charging ||
                   missingRetail ||
+                  missingWholesalePrice ||
                   missingPaymentAccount ||
                   missingCustomerName ||
                   lines.length === 0

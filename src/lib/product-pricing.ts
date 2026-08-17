@@ -13,6 +13,13 @@ export function normalizeRetailPrice(
   return value;
 }
 
+/** Same rules as retail: optional suggested price, null when unset/invalid. */
+export function normalizeWholesalePrice(
+  value: number | null | undefined
+): number | null {
+  return normalizeRetailPrice(value);
+}
+
 export function unitPriceForPaymentMethod(
   variant: Pick<ProductVariant, "price" | "retailPrice">,
   method: PosPaymentMethod

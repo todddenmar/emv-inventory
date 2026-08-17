@@ -59,6 +59,8 @@ const roleBadgeVariant = (
       return "default";
     case "manager":
       return "secondary";
+    case "cashier":
+      return "secondary";
     case "customer":
       return "outline";
   }
@@ -83,7 +85,13 @@ export default function AdminUsersPage() {
   const branchMap = Object.fromEntries(branches.map((b) => [b.id, b]));
 
   const roleOptions = useMemo(() => {
-    const all: UserRole[] = ["customer", "manager", "admin", "master-admin"];
+    const all: UserRole[] = [
+      "customer",
+      "cashier",
+      "manager",
+      "admin",
+      "master-admin",
+    ];
     if (!currentUser) return all.filter((r) => r !== "master-admin");
     return all.filter((r) => roleAssignableBy(currentUser.role, r));
   }, [currentUser]);
@@ -158,8 +166,12 @@ export default function AdminUsersPage() {
   const handleSave = async () => {
     if (!editingUser || !currentUser) return;
 
-    if (role === "manager" && !branchId) {
-      toast.error("Select a branch for managers");
+    if ((role === "manager" || role === "cashier") && !branchId) {
+      toast.error(
+        role === "cashier"
+          ? "Select a branch for cashiers"
+          : "Select a branch for managers"
+      );
       return;
     }
 
@@ -169,7 +181,8 @@ export default function AdminUsersPage() {
         editingUser.uid,
         {
           role,
-          branchId: role === "manager" ? branchId : null,
+          branchId:
+            role === "manager" || role === "cashier" ? branchId : null,
         },
         currentUser.uid
       );
@@ -202,7 +215,8 @@ export default function AdminUsersPage() {
         <div>
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-muted-foreground">
-            Assign admin and manager roles, and link managers to branches
+            Assign admin, manager, and cashier roles. Managers and cashiers
+            must be linked to a branch.
           </p>
         </div>
         <LinkButton href="/admin/settings/users/invites" variant="outline">
@@ -337,7 +351,7 @@ export default function AdminUsersPage() {
                   onValueChange={(v) => {
                     const nextRole = (v ?? "customer") as UserRole;
                     setRole(nextRole);
-                    if (nextRole !== "manager") {
+                    if (nextRole !== "manager" && nextRole !== "cashier") {
                       setBranchId("");
                     }
                   }}
@@ -359,7 +373,7 @@ export default function AdminUsersPage() {
                 </Select>
               </div>
 
-              {role === "manager" && (
+              {(role === "manager" || role === "cashier") && (
                 <div className="space-y-2">
                   <Label>Assigned branch</Label>
                   <Select
@@ -398,6 +412,13 @@ export default function AdminUsersPage() {
                 <p className="text-sm text-muted-foreground">
                   Admins have full catalog and branch access, except product
                   JSON import.
+                </p>
+              )}
+
+              {role === "cashier" && (
+                <p className="text-sm text-muted-foreground">
+                  Cashiers use POS and a branch sales overview. They are not
+                  set as the branch manager.
                 </p>
               )}
 

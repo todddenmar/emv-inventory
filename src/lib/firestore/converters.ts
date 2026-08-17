@@ -168,6 +168,7 @@ export const branchConverter: FirestoreDataConverter<Branch> = {
       managerId: branch.managerId,
       managerName: branch.managerName,
       isActive: branch.isActive,
+      supportsWholesale: branch.supportsWholesale,
       createdAt: branch.createdAt,
       updatedAt: branch.updatedAt,
     };
@@ -188,6 +189,7 @@ export const branchConverter: FirestoreDataConverter<Branch> = {
       managerId: data.managerId ?? null,
       managerName: data.managerName ?? null,
       isActive: data.isActive ?? true,
+      supportsWholesale: data.supportsWholesale === true,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
     };
@@ -385,7 +387,12 @@ export const inviteConverter: FirestoreDataConverter<Invite> = {
       id: snapshot.id,
       token: data.token,
       email: data.email ?? null,
-      role: data.role === "admin" ? "admin" : "manager",
+      role:
+        data.role === "admin"
+          ? "admin"
+          : data.role === "cashier"
+            ? "cashier"
+            : "manager",
       branchId: data.branchId ?? null,
       branchName: data.branchName ?? null,
       createdBy: data.createdBy,
@@ -542,6 +549,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
     return {
       branchId: sale.branchId,
       branchName: sale.branchName,
+      saleChannel: sale.saleChannel,
       paymentMethod: sale.paymentMethod,
       tenderMethod: sale.tenderMethod,
       paymentAccount: sale.paymentAccount,
@@ -588,6 +596,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       id: snapshot.id,
       branchId: data.branchId,
       branchName: data.branchName ?? "",
+      saleChannel: data.saleChannel === "wholesale" ? "wholesale" : "shop",
       paymentMethod: data.paymentMethod === "retail" ? "retail" : "cash",
       tenderMethod,
       paymentAccount: rawAccount

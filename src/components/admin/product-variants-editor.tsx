@@ -18,7 +18,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatVariantLabel } from "@/lib/product-variants";
-import { normalizeRetailPrice } from "@/lib/product-pricing";
+import {
+  normalizeRetailPrice,
+  normalizeWholesalePrice,
+} from "@/lib/product-pricing";
 import type { ProductImage, ProductOption, ProductVariant } from "@/types";
 
 interface ProductVariantsEditorProps {
@@ -49,7 +52,8 @@ export function ProductVariantsEditor({
       <div>
         <Label>Variants</Label>
         <p className="text-xs text-muted-foreground">
-          Set SKU, cash and retail pricing, and optional image per variant.
+          Set SKU, cash, retail, and optional wholesale pricing, and optional image
+          per variant.
         </p>
       </div>
 
@@ -61,6 +65,7 @@ export function ProductVariantsEditor({
               <TableHead className="w-36">SKU</TableHead>
               <TableHead className="w-28">Cash</TableHead>
               <TableHead className="w-28">Retail</TableHead>
+              <TableHead className="w-28">Wholesale</TableHead>
               <TableHead className="w-40">Image</TableHead>
             </TableRow>
           </TableHeader>
@@ -105,6 +110,23 @@ export function ProductVariantsEditor({
                     onChange={(e) =>
                       updateVariant(variant.id, {
                         retailPrice: normalizeRetailPrice(
+                          e.target.value === "" ? null : Number(e.target.value)
+                        ),
+                      })
+                    }
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    placeholder="Optional"
+                    value={variant.wholesalePrice ?? ""}
+                    disabled={disabled}
+                    onChange={(e) =>
+                      updateVariant(variant.id, {
+                        wholesalePrice: normalizeWholesalePrice(
                           e.target.value === "" ? null : Number(e.target.value)
                         ),
                       })
