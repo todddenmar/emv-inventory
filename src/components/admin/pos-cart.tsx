@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Minus, Plus, Trash2 } from "lucide-react";
+import { Loader2, Minus, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -179,6 +179,8 @@ interface PosCartPanelProps {
   onRemove: (variantId: string, isFreebie?: boolean) => void;
   onClear: () => void;
   onContinue: () => void;
+  /** When set, shows a close control aligned with Clear (e.g. mobile cart drawer). */
+  onClose?: () => void;
   className?: string;
 }
 
@@ -192,6 +194,7 @@ export function PosCartPanel({
   onRemove,
   onClear,
   onContinue,
+  onClose,
   className,
 }: PosCartPanelProps) {
   const itemCount = lines.reduce((sum, line) => sum + line.quantity, 0);
@@ -226,8 +229,8 @@ export function PosCartPanel({
 
   return (
     <div className={`flex h-full min-h-0 flex-col bg-background ${className ?? ""}`}>
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div>
+      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">Current sale</h2>
           <p className="text-sm text-muted-foreground">
             {itemCount === 0
@@ -235,17 +238,32 @@ export function PosCartPanel({
               : `${itemCount} item${itemCount === 1 ? "" : "s"}`}
           </p>
         </div>
-        {lines.length > 0 && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onClear}
-            disabled={charging}
-          >
-            Clear
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {lines.length > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8"
+              onClick={onClear}
+              disabled={charging}
+            >
+              Clear
+            </Button>
+          ) : null}
+          {onClose ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="h-8 w-8"
+              onClick={onClose}
+              aria-label="Close cart"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

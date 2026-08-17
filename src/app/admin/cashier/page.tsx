@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { History, Loader2, ShoppingCart } from "lucide-react";
+import { History, Loader2, PackageOpen, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -42,14 +42,12 @@ export default function CashierOverviewPage() {
           branchId: assignedBranchId,
           fromDate: todayStr,
           toDate: todayStr,
-          saleChannel: "shop",
           max: 500,
         }),
         getPosSales({
           branchId: assignedBranchId,
           fromDate: monthStart,
           toDate: todayStr,
-          saleChannel: "shop",
           max: 2000,
         }),
       ]);
@@ -93,6 +91,8 @@ export default function CashierOverviewPage() {
     );
   }
 
+  const supportsWholesale = branch?.supportsWholesale === true;
+
   return (
     <div className="mx-auto w-full max-w-lg space-y-6">
       <div>
@@ -133,6 +133,16 @@ export default function CashierOverviewPage() {
           <ShoppingCart className="mr-2 h-5 w-5" />
           Open POS
         </LinkButton>
+        {supportsWholesale ? (
+          <LinkButton
+            href="/admin/wholesale"
+            variant="outline"
+            className="h-12 w-full"
+          >
+            <PackageOpen className="mr-2 h-4 w-4" />
+            Wholesale POS
+          </LinkButton>
+        ) : null}
         <LinkButton
           href="/admin/cashier/sales"
           variant="outline"

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -65,7 +66,6 @@ export default function CashierSalesPage() {
         branchId: assignedBranchId,
         fromDate,
         toDate,
-        saleChannel: "shop",
         max: 500,
       });
       setSales(rows);
@@ -111,7 +111,7 @@ export default function CashierSalesPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Sales history</h1>
         <p className="text-muted-foreground">
-          Shop receipts for your branch till
+          Shop and wholesale receipts for your branch till
         </p>
       </div>
 
@@ -194,10 +194,21 @@ export default function CashierSalesPage() {
                         <p className="text-sm font-medium">
                           {formatDate(sale.createdAt)}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          {sale.createdByName ?? "Staff"} · {sale.itemCount}{" "}
-                          item{sale.itemCount === 1 ? "" : "s"}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {sale.saleChannel === "wholesale" ? (
+                            <Badge variant="outline" className="text-[10px]">
+                              Wholesale
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Shop
+                            </Badge>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {sale.createdByName ?? "Staff"} · {sale.itemCount}{" "}
+                            item{sale.itemCount === 1 ? "" : "s"}
+                          </p>
+                        </div>
                         <p className="line-clamp-2 text-xs text-muted-foreground">
                           {sale.items
                             .slice(0, 3)
@@ -223,6 +234,7 @@ export default function CashierSalesPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>When</TableHead>
+                      <TableHead>Channel</TableHead>
                       <TableHead>Staff</TableHead>
                       <TableHead>Items</TableHead>
                       <TableHead className="text-right">Total</TableHead>
@@ -236,6 +248,17 @@ export default function CashierSalesPage() {
                       <TableRow key={sale.id}>
                         <TableCell className="whitespace-nowrap text-sm">
                           {formatDate(sale.createdAt)}
+                        </TableCell>
+                        <TableCell>
+                          {sale.saleChannel === "wholesale" ? (
+                            <Badge variant="outline" className="text-xs">
+                              Wholesale
+                            </Badge>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">
+                              Shop
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {sale.createdByName ?? "Staff"}

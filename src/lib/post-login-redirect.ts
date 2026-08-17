@@ -11,6 +11,12 @@ export function isCashierAllowedPath(pathname: string): boolean {
   if (pathname === "/admin/pos" || pathname.startsWith("/admin/pos/")) {
     return true;
   }
+  if (
+    pathname === "/admin/wholesale" ||
+    pathname.startsWith("/admin/wholesale/")
+  ) {
+    return true;
+  }
   return false;
 }
 

@@ -1021,6 +1021,22 @@ export function PosWorkspace({
     />
   );
 
+  const mobileCartPanel = (
+    <PosCartPanel
+      lines={cart}
+      charging={charging}
+      saleChannel={saleChannel}
+      onIncrement={incrementLine}
+      onDecrement={decrementLine}
+      onQuantityChange={isWholesale ? setLineQuantity : undefined}
+      onRemove={removeLine}
+      onClear={clearCart}
+      onContinue={openCheckout}
+      onClose={() => setMobileCartOpen(false)}
+      className="h-full"
+    />
+  );
+
   return (
     <div
       className={
@@ -1316,12 +1332,12 @@ export function PosWorkspace({
         <SheetContent
           side="bottom"
           className="flex h-[85dvh] flex-col gap-0 p-0 sm:max-w-none"
-          showCloseButton
+          showCloseButton={false}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Current sale</SheetTitle>
           </SheetHeader>
-          {cartPanel}
+          {mobileCartPanel}
         </SheetContent>
       </Sheet>
 
