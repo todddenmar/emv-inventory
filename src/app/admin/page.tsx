@@ -117,6 +117,7 @@ export default function AdminDashboardPage() {
   const [branch, setBranch] = useState<Branch | null>(null);
   const [branchCount, setBranchCount] = useState(0);
   const [productCount, setProductCount] = useState(0);
+  const [variantCount, setVariantCount] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [sales, setSales] = useState<PosSale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,6 +132,9 @@ export default function AdminDashboardPage() {
       ]);
 
       setProductCount(products.length);
+      setVariantCount(
+        products.reduce((sum, product) => sum + product.variants.length, 0)
+      );
       setBranchCount(branches.length);
 
       const activeCategories = categories.filter((c) => !c.isArchived);
@@ -232,6 +236,12 @@ export default function AdminDashboardPage() {
           <CardHeader className="pb-2">
             <CardDescription>Catalog products</CardDescription>
             <CardTitle className="text-3xl">{productCount}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Product variants</CardDescription>
+            <CardTitle className="text-3xl">{variantCount}</CardTitle>
           </CardHeader>
         </Card>
         <Card>

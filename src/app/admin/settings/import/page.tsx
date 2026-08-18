@@ -99,8 +99,10 @@ import type { Category, Product, Vendor } from "@/types";
 
 const SAMPLE_FILE_NAME = "emv-products.json";
 const CATEGORIES_SAMPLE_FILE_NAME = "emv-categories.json";
+const ALL_CATEGORIES = "__all__";
 
 type BulkActionKind = "category" | "productType";
+type DbStatusFilter = "all" | "not_in_database" | "in_database";
 
 type SampleCategoryRow = {
   id: string;
@@ -243,10 +245,11 @@ export default function ProductJsonImportPage() {
 
   const [zeroPriceOpen, setZeroPriceOpen] = useState(false);
 
-  const [activeCategory, setActiveCategory] = useState("");
+  const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES);
   const [productSearch, setProductSearch] = useState("");
   const [variantSearch, setVariantSearch] = useState("");
   const [productTypeFilter, setProductTypeFilter] = useState("all");
+  const [dbStatusFilter, setDbStatusFilter] = useState<DbStatusFilter>("all");
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [browseAllProducts, setBrowseAllProducts] = useState(false);
   const [productPage, setProductPage] = useState(1);
@@ -317,13 +320,88 @@ export default function ProductJsonImportPage() {
     [selectedProductIds, importProductDbStatusById]
   );
 
-  const activeCategoryTab = useMemo(
-    () => categoryTabs.find((tab) => tab.categoryName === activeCategory),
-    [categoryTabs, activeCategory]
-  );
+  const importDbOverview = useMemo(() => {
+    let inDatabase = 0;
+    let notInDatabase = 0;
+    for (const status of importProductDbStatusById.values()) {
+      if (status.kind === "in_database") inDatabase += 1;
+      else notInDatabase += 1;
+    }
+    return { inDatabase, notInDatabase };
+  }, [importProductDbStatusById]);
+
+  const matchesDbStatusFilter = (
+    productId: string,
+    filter: DbStatusFilter
+  ): boolean => {
+    if (filter === "all") return true;
+    const status = importProductDbStatusById.get(productId);
+    if (filter === "not_in_database") return status?.kind === "ready";
+    return status?.kind === "in_database";
+  };
+
+  const isViewingAllCategories = activeCategory === ALL_CATEGORIES;
+
+  const categoryTabsForNav = useMemo(() => {
+    if (dbStatusFilter === "all") return categoryTabs;
+    return categoryTabs.map((tab) => {
+      const matching = products.filter(
+        (product) =>
+          product.categoryName === tab.categoryName &&
+          matchesDbStatusFilter(product.id, dbStatusFilter)
+      );
+      return {
+        categoryName: tab.categoryName,
+        productCount: matching.length,
+        variantCount: matching.reduce(
+          (sum, product) => sum + product.variants.length,
+          0
+        ),
+      };
+    });
+  }, [
+    categoryTabs,
+    products,
+    dbStatusFilter,
+    importProductDbStatusById,
+  ]);
+
+  const activeCategoryTab = useMemo(() => {
+    if (isViewingAllCategories) {
+      const matching = products.filter((product) =>
+        matchesDbStatusFilter(product.id, dbStatusFilter)
+      );
+      return {
+        categoryName: "All categories",
+        productCount: matching.length,
+        variantCount: matching.reduce(
+          (sum, product) => sum + product.variants.length,
+          0
+        ),
+      };
+    }
+    return categoryTabsForNav.find(
+      (tab) => tab.categoryName === activeCategory
+    );
+  }, [
+    isViewingAllCategories,
+    categoryTabsForNav,
+    activeCategory,
+    products,
+    dbStatusFilter,
+    importProductDbStatusById,
+  ]);
+
+  const allCategoriesNavCount = useMemo(() => {
+    if (dbStatusFilter === "all") return products.length;
+    return products.filter((product) =>
+      matchesDbStatusFilter(product.id, dbStatusFilter)
+    ).length;
+  }, [products, dbStatusFilter, importProductDbStatusById]);
 
   const sourceProducts = useMemo(() => {
     if (!activeCategoryTab) return [];
+    if (isViewingAllCategories) return products;
     if (browseAllProducts) {
       return products.filter(
         (product) => product.categoryName !== activeCategory
@@ -332,11 +410,18 @@ export default function ProductJsonImportPage() {
     return products.filter(
       (product) => product.categoryName === activeCategory
     );
-  }, [activeCategoryTab, browseAllProducts, products, activeCategory]);
+  }, [
+    activeCategoryTab,
+    browseAllProducts,
+    products,
+    activeCategory,
+    isViewingAllCategories,
+  ]);
 
   const filteredProductRows = useMemo(() => {
     return sourceProducts
       .map((product) => {
+        if (!matchesDbStatusFilter(product.id, dbStatusFilter)) return null;
         if (
           productTypeFilter !== "all" &&
           product.productType !== productTypeFilter
@@ -357,7 +442,14 @@ export default function ProductJsonImportPage() {
       .sort((a, b) =>
         a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
       );
-  }, [sourceProducts, productSearch, variantSearch, productTypeFilter]);
+  }, [
+    sourceProducts,
+    productSearch,
+    variantSearch,
+    productTypeFilter,
+    dbStatusFilter,
+    importProductDbStatusById,
+  ]);
 
   const totalProductPages = Math.max(
     1,
@@ -456,8 +548,9 @@ export default function ProductJsonImportPage() {
       setActiveCategory("");
       return;
     }
+    if (activeCategory === ALL_CATEGORIES) return;
     if (!categoryTabs.some((tab) => tab.categoryName === activeCategory)) {
-      setActiveCategory(categoryTabs[0].categoryName);
+      setActiveCategory(ALL_CATEGORIES);
     }
   }, [categoryTabs, activeCategory]);
 
@@ -469,6 +562,7 @@ export default function ProductJsonImportPage() {
     productSearch,
     variantSearch,
     productTypeFilter,
+    dbStatusFilter,
   ]);
 
   useEffect(() => {
@@ -1417,11 +1511,41 @@ export default function ProductJsonImportPage() {
         </Card>
       ) : hasCatalog ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Products</CardDescription>
                 <CardTitle className="text-3xl">{summary.productCount}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card
+              className="cursor-pointer transition-colors hover:bg-muted/40"
+              onClick={() => {
+                setDbStatusFilter("in_database");
+                setActiveCategory(ALL_CATEGORIES);
+                setBrowseAllProducts(false);
+              }}
+            >
+              <CardHeader className="pb-2">
+                <CardDescription>In database</CardDescription>
+                <CardTitle className="text-3xl">
+                  {loadingDbProducts ? "…" : importDbOverview.inDatabase}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card
+              className="cursor-pointer transition-colors hover:bg-muted/40"
+              onClick={() => {
+                setDbStatusFilter("not_in_database");
+                setActiveCategory(ALL_CATEGORIES);
+                setBrowseAllProducts(false);
+              }}
+            >
+              <CardHeader className="pb-2">
+                <CardDescription>Not in database</CardDescription>
+                <CardTitle className="text-3xl">
+                  {loadingDbProducts ? "…" : importDbOverview.notInDatabase}
+                </CardTitle>
               </CardHeader>
             </Card>
             <Card>
@@ -1502,7 +1626,32 @@ export default function ProductJsonImportPage() {
                       </Button>
                     </div>
                     <nav className="max-h-[32rem] space-y-1 overflow-y-auto rounded-lg border p-1">
-                      {categoryTabs.map((tab) => {
+                      <button
+                        type="button"
+                        onClick={() => selectCategory(ALL_CATEGORIES)}
+                        className={cn(
+                          "flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left text-sm transition-colors",
+                          isViewingAllCategories
+                            ? "bg-accent text-accent-foreground"
+                            : "hover:bg-muted"
+                        )}
+                      >
+                        <span className="truncate font-medium">
+                          All categories
+                        </span>
+                        <span
+                          className={cn(
+                            "text-xs",
+                            isViewingAllCategories
+                              ? "text-accent-foreground/70"
+                              : "text-muted-foreground"
+                          )}
+                        >
+                          {allCategoriesNavCount} product
+                          {allCategoriesNavCount === 1 ? "" : "s"}
+                        </span>
+                      </button>
+                      {categoryTabsForNav.map((tab) => {
                         const isActive = activeCategory === tab.categoryName;
                         return (
                           <button
@@ -1555,58 +1704,102 @@ export default function ProductJsonImportPage() {
                         <Button
                           type="button"
                           onClick={openCreateProduct}
-                          disabled={browseAllProducts}
+                          disabled={browseAllProducts || isViewingAllCategories}
                         >
                           <Plus className="mr-2 h-4 w-4" />
                           Add product
                         </Button>
-                        <Button
-                          type="button"
-                          variant={browseAllProducts ? "default" : "outline"}
-                          onClick={() => {
-                            setBrowseAllProducts((v) => !v);
-                            setSelectedProductIds([]);
-                            setProductSearch("");
-                            setVariantSearch("");
-                            setProductTypeFilter("all");
-                          }}
-                        >
-                          {browseAllProducts
-                            ? "Show this category"
-                            : "Browse other products"}
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">
-                                  Category actions
-                                </span>
-                              </Button>
-                            }
-                          />
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() =>
-                                openEditCategory(
-                                  activeCategoryTab.categoryName
-                                )
+                        {!isViewingAllCategories && (
+                          <Button
+                            type="button"
+                            variant={browseAllProducts ? "default" : "outline"}
+                            onClick={() => {
+                              setBrowseAllProducts((v) => !v);
+                              setSelectedProductIds([]);
+                              setProductSearch("");
+                              setVariantSearch("");
+                              setProductTypeFilter("all");
+                            }}
+                          >
+                            {browseAllProducts
+                              ? "Show this category"
+                              : "Browse other products"}
+                          </Button>
+                        )}
+                        {!isViewingAllCategories && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                  <span className="sr-only">
+                                    Category actions
+                                  </span>
+                                </Button>
                               }
-                            >
-                              <Pencil className="h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                            />
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  openEditCategory(
+                                    activeCategoryTab.categoryName
+                                  )
+                                }
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                     </div>
 
-                    <div className="grid gap-3 lg:grid-cols-3">
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="space-y-2">
+                        <Label>Database status</Label>
+                        <Select
+                          value={dbStatusFilter}
+                          onValueChange={(value) =>
+                            setDbStatusFilter(
+                              (value as DbStatusFilter | null) ?? "all"
+                            )
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="All products">
+                              {(value) => {
+                                if (value === "not_in_database") {
+                                  return "Not in database";
+                                }
+                                if (value === "in_database") {
+                                  return "In database";
+                                }
+                                return "All products";
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All products</SelectItem>
+                            <SelectItem value="not_in_database">
+                              Not in database
+                              {loadingDbProducts
+                                ? ""
+                                : ` (${importDbOverview.notInDatabase})`}
+                            </SelectItem>
+                            <SelectItem value="in_database">
+                              In database
+                              {loadingDbProducts
+                                ? ""
+                                : ` (${importDbOverview.inDatabase})`}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div className="space-y-2">
                         <Label>Filter by product type</Label>
                         <Select
@@ -1727,15 +1920,18 @@ export default function ProductJsonImportPage() {
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-sm text-muted-foreground">
-                        {browseAllProducts
-                          ? "Browsing products from other categories."
-                          : "Products in this category."}{" "}
+                        {isViewingAllCategories
+                          ? "Browsing all categories."
+                          : browseAllProducts
+                            ? "Browsing products from other categories."
+                            : "Products in this category."}{" "}
                         {filteredProductRows.length === 0
                           ? "No matches."
                           : `Showing ${productRangeStart}–${productRangeEnd} of ${filteredProductRows.length}`}
                         {(productSearch ||
                           variantSearch ||
-                          productTypeFilter !== "all") &&
+                          productTypeFilter !== "all" ||
+                          dbStatusFilter !== "all") &&
                           " (filtered)"}
                         .
                       </p>
@@ -1776,9 +1972,15 @@ export default function ProductJsonImportPage() {
 
                     {filteredProductRows.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
-                        {browseAllProducts
-                          ? "No other products match these filters."
-                          : "No products in this category yet. Browse other products and assign them here, or bulk-assign from another category."}
+                        {isViewingAllCategories
+                          ? dbStatusFilter === "not_in_database"
+                            ? "No products outside the database match these filters."
+                            : dbStatusFilter === "in_database"
+                              ? "No products already in the database match these filters."
+                              : "No products match these filters."
+                          : browseAllProducts
+                            ? "No other products match these filters."
+                            : "No products in this category yet. Browse other products and assign them here, or bulk-assign from another category."}
                       </p>
                     ) : (
                       <div className="space-y-4">

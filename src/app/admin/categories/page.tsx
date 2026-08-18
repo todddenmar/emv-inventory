@@ -130,10 +130,23 @@ export default function AdminCategoriesPage() {
 
   useEffect(() => {
     loadCategories();
-    getProducts(true)
+    getProducts(false)
       .then(setCatalogProducts)
       .catch(console.error);
   }, []);
+
+  const categoryCounts = useMemo(() => {
+    const map = new Map<string, { products: number; variants: number }>();
+    for (const product of catalogProducts) {
+      for (const categoryId of product.categoryIds) {
+        const current = map.get(categoryId) ?? { products: 0, variants: 0 };
+        current.products += 1;
+        current.variants += product.variants.length;
+        map.set(categoryId, current);
+      }
+    }
+    return map;
+  }, [catalogProducts]);
 
   useEffect(() => {
     setPage(1);
@@ -351,12 +364,19 @@ export default function AdminCategoriesPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Tags</TableHead>
+                    <TableHead className="w-24 text-right">Products</TableHead>
+                    <TableHead className="w-24 text-right">Variants</TableHead>
                     <TableHead className="w-24">Low at</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedCategories.map((category) => (
+                  {pagedCategories.map((category) => {
+                    const counts = categoryCounts.get(category.id) ?? {
+                      products: 0,
+                      variants: 0,
+                    };
+                    return (
                     <TableRow key={category.id}>
                       <TableCell className="font-medium">
                         <Link
@@ -380,6 +400,12 @@ export default function AdminCategoriesPage() {
                             ))
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell className="tabular-nums text-right text-muted-foreground">
+                        {counts.products}
+                      </TableCell>
+                      <TableCell className="tabular-nums text-right text-muted-foreground">
+                        {counts.variants}
                       </TableCell>
                       <TableCell className="tabular-nums text-muted-foreground">
                         {category.lowStockThreshold}
@@ -423,7 +449,8 @@ export default function AdminCategoriesPage() {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
 

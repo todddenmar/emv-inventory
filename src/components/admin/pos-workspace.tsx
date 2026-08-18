@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Search, ShoppingCart } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,11 +22,8 @@ import {
 } from "@/components/ui/sheet";
 import {
   PosCartPanel,
-  PosCheckoutDialog,
   emptyPosCustomerDraft,
-  normalizePosCustomer,
   type PosCartLine,
-  type PosCheckoutStep,
   type PosCustomerDraft,
 } from "@/components/admin/pos-cart";
 import {
@@ -36,21 +34,13 @@ import {
   VariantSearchDialog,
 } from "@/components/admin/variant-search-dialog";
 import { useBranchAccess } from "@/hooks/use-branch-access";
-import { useAuthStore } from "@/stores/auth-store";
 import { getBranches } from "@/lib/firestore/branches";
 import { getCategories } from "@/lib/firestore/categories";
 import { getBranchInventory } from "@/lib/firestore/inventory";
 import {
   getProducts,
   getProductsByCategoryId,
-  setVariantRetailPrices,
 } from "@/lib/firestore/products";
-import { completePosSale } from "@/lib/firestore/pos-sales";
-import { getPaymentAccounts } from "@/lib/firestore/payment-accounts";
-import {
-  getVoucherByCode,
-  isVoucherRedeemable,
-} from "@/lib/firestore/vouchers";
 import {
   buildActivePromotionPriceMap,
   getActivePricePromotions,
@@ -73,6 +63,12 @@ import {
   computeDesiredFreebies,
   type DesiredFreebie,
 } from "@/lib/pos-freebies";
+import {
+  clearPosCheckoutDraft,
+  loadPosCheckoutDraft,
+  posCheckoutPath,
+  savePosCheckoutDraft,
+} from "@/lib/pos-checkout-draft";
 import { formatCurrency } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
 import { TablePagination } from "@/components/admin/table-pagination";
@@ -81,7 +77,6 @@ import type {
   Branch,
   BranchInventory,
   Category,
-  PaymentAccount,
   PosCustomerType,
   PosPaymentMethod,
   PosSaleChannel,
@@ -116,7 +111,7 @@ export function PosWorkspace({
   const isWholesale = saleChannel === "wholesale";
   const { isElevatedAdmin, assignedBranchId, isCashier } = useBranchAccess();
   const { catalogImageSource } = useAppSettings();
-  const user = useAuthStore((s) => s.user);
+  const router = useRouter();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -136,7 +131,6 @@ export function PosWorkspace({
   const [paymentMethod, setPaymentMethod] =
     useState<PosPaymentMethod>("cash");
   const [tenderMethod, setTenderMethod] = useState<PosTenderMethod>("cash");
-  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
   const [selectedPaymentAccountId, setSelectedPaymentAccountId] = useState<
     string | null
   >(null);
@@ -158,10 +152,6 @@ export function PosWorkspace({
     useState<FreebieShortfall | null>(null);
   const [freebiePickerOpen, setFreebiePickerOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [checkoutStep, setCheckoutStep] =
-    useState<PosCheckoutStep>("details");
-  const [charging, setCharging] = useState(false);
   const [promoMap, setPromoMap] = useState<Map<string, EffectiveSalePrices>>(
     () => new Map()
   );
@@ -175,17 +165,15 @@ export function PosWorkspace({
   useEffect(() => {
     async function bootstrap() {
       try {
-        const [branchListRaw, cats, promotions, accounts] = await Promise.all([
+        const [branchListRaw, cats, promotions] = await Promise.all([
           getBranches(true),
           getCategories(),
           getActivePricePromotions(),
-          getPaymentAccounts(true),
         ]);
         const branchList = isWholesale
           ? branchListRaw.filter((b) => b.supportsWholesale)
           : branchListRaw;
         setBranches(branchList);
-        setPaymentAccounts(accounts);
         setPromoMap(buildActivePromotionPriceMap(promotions));
         const activeCats = cats.filter((c) => !c.isArchived);
         setCategories(activeCats);
@@ -232,19 +220,32 @@ export function PosWorkspace({
       });
 
     setCategoryCache({});
-    setCart([]);
-    setPaymentMethod("cash");
-    setTenderMethod("cash");
-    setSelectedPaymentAccountId(null);
-    setCustomerType("walk_in");
-    setCustomer(emptyPosCustomerDraft());
-    setAppliedVoucher(null);
-    setVoucherCodeInput("");
     setIgnoredFreebieVariantIds(new Set());
     setResolvedFreebieShortfalls(new Set());
     setAlternateFreebies([]);
     setFreebieShortfall(null);
-  }, [activeBranchId]);
+
+    const draft = loadPosCheckoutDraft(saleChannel);
+    if (draft && draft.branchId === activeBranchId && draft.lines.length > 0) {
+      setCart(draft.lines);
+      setPaymentMethod(draft.paymentMethod);
+      setTenderMethod(draft.tenderMethod);
+      setSelectedPaymentAccountId(draft.selectedPaymentAccountId);
+      setCustomerType(draft.customerType);
+      setCustomer(draft.customer);
+      setAppliedVoucher(draft.appliedVoucher);
+      setVoucherCodeInput(draft.voucherCodeInput);
+    } else {
+      setCart([]);
+      setPaymentMethod("cash");
+      setTenderMethod("cash");
+      setSelectedPaymentAccountId(null);
+      setCustomerType("walk_in");
+      setCustomer(emptyPosCustomerDraft());
+      setAppliedVoucher(null);
+      setVoucherCodeInput("");
+    }
+  }, [activeBranchId, saleChannel]);
 
   const resetSaleExtras = () => {
     setCustomer(emptyPosCustomerDraft());
@@ -340,33 +341,6 @@ export function PosWorkspace({
   }, [page, safePage]);
 
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
-
-  const handleApplyVoucherId = (voucherId: string | null) => {
-    if (!voucherId) {
-      setAppliedVoucher(null);
-    }
-  };
-
-  const handleApplyVoucherCode = async () => {
-    const code = voucherCodeInput.trim();
-    if (!code) return;
-    try {
-      const voucher = await getVoucherByCode(code);
-      if (!voucher || !isVoucherRedeemable(voucher)) {
-        toast.error("Invalid or unusable voucher");
-        return;
-      }
-
-      setAppliedVoucher(voucher);
-      setVoucherCodeInput("");
-      toast.success(
-        `Applied ${voucher.name ? `${voucher.name} (${voucher.code})` : voucher.code}`
-      );
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to look up voucher");
-    }
-  };
 
   const catalogProducts = categoryCache[ALL_CATEGORIES_ID] ?? categoryProducts;
 
@@ -578,58 +552,6 @@ export function PosWorkspace({
     });
   };
 
-  const applyPaymentMethod = (method: PosPaymentMethod) => {
-    setPaymentMethod(method);
-    setCart((prev) =>
-      prev.map((line) =>
-        line.isFreebie
-          ? { ...line, unitPrice: 0 }
-          : {
-              ...line,
-              unitPrice: resolveUnitPrice(
-                line.cashPrice,
-                line.retailPrice,
-                method
-              ),
-            }
-      )
-    );
-  };
-
-  const setLineRetailPrice = (
-    variantId: string,
-    retailPrice: number | null
-  ) => {
-    const normalized = normalizeRetailPrice(retailPrice);
-    setCart((prev) =>
-      prev.map((line) =>
-        line.variantId === variantId && !line.isFreebie
-          ? {
-              ...line,
-              retailPrice: normalized,
-              unitPrice: resolveUnitPrice(
-                line.cashPrice,
-                normalized,
-                paymentMethod
-              ),
-            }
-          : line
-      )
-    );
-  };
-
-  const setLineUnitPrice = (variantId: string, unitPrice: number) => {
-    const next =
-      Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0;
-    setCart((prev) =>
-      prev.map((line) =>
-        line.variantId === variantId && !line.isFreebie
-          ? { ...line, unitPrice: next }
-          : line
-      )
-    );
-  };
-
   const incrementLine = (variantId: string) => {
     setCart((prev) => {
       const paid = prev.filter((line) => !line.isFreebie);
@@ -730,6 +652,7 @@ export function PosWorkspace({
   const clearCart = () => {
     setCart([]);
     resetSaleExtras();
+    clearPosCheckoutDraft(saleChannel);
   };
 
   const handleContinueWithoutFreebie = () => {
@@ -805,161 +728,6 @@ export function PosWorkspace({
     );
   };
 
-  const missingRetailLines =
-    !isWholesale && paymentMethod === "retail"
-      ? cart.filter(
-          (line) =>
-            !line.isFreebie &&
-            (line.retailPrice == null || line.retailPrice <= 0)
-        )
-      : [];
-
-  const missingWholesaleLines = isWholesale
-    ? cart.filter((line) => !line.isFreebie && !(line.unitPrice > 0))
-    : [];
-
-  const handleCharge = async () => {
-    if (!user || !activeBranch || cart.length === 0) return;
-    if (missingRetailLines.length > 0) {
-      toast.error("Enter retail price for every item");
-      return;
-    }
-    if (missingWholesaleLines.length > 0) {
-      toast.error("Enter a unit price greater than 0 for every item");
-      return;
-    }
-
-    const needsAccount = tenderMethod === "ewallet";
-    const selectedAccount = paymentAccounts.find(
-      (a) => a.id === selectedPaymentAccountId && a.type === "ewallet"
-    );
-    if (needsAccount && !selectedAccount) {
-      toast.error("Select an e-wallet account");
-      setCheckoutStep("details");
-      return;
-    }
-
-    if (
-      (customerType === "reservation" || customerType === "delivery") &&
-      !customer.name.trim()
-    ) {
-      toast.error("Enter customer name");
-      setCheckoutStep("details");
-      return;
-    }
-
-    setCharging(true);
-    try {
-      const retailToPersist = isWholesale
-        ? []
-        : cart
-            .filter(
-              (line) =>
-                !line.isFreebie &&
-                !line.retailFromCatalog &&
-                line.retailPrice != null &&
-                line.retailPrice > 0
-            )
-            .map((line) => ({
-              productId: line.productId,
-              variantId: line.variantId,
-              retailPrice: line.retailPrice as number,
-            }));
-
-      if (retailToPersist.length > 0) {
-        await setVariantRetailPrices(retailToPersist);
-        setCategoryCache({});
-      }
-
-      await completePosSale({
-        branchId: activeBranch.id,
-        branchName: activeBranch.name,
-        saleChannel,
-        paymentMethod: isWholesale ? "cash" : paymentMethod,
-        tenderMethod,
-        paymentAccount: selectedAccount
-          ? {
-              id: selectedAccount.id,
-              type: selectedAccount.type,
-              provider: selectedAccount.provider,
-              accountName: selectedAccount.accountName,
-              accountNumber: selectedAccount.accountNumber,
-            }
-          : null,
-        customerType,
-        customer:
-          customerType === "walk_in" ? null : normalizePosCustomer(customer),
-        resellerId: appliedVoucher?.resellerId ?? null,
-        resellerName: appliedVoucher?.resellerName ?? null,
-        voucherId: appliedVoucher?.id ?? null,
-        items: (() => {
-          const merged = new Map<
-            string,
-            {
-              productId: string;
-              variantId: string;
-              productName: string;
-              quantity: number;
-              unitPrice: number;
-              lineTotal: number;
-            }
-          >();
-          for (const line of cart) {
-            const name =
-              line.isFreebie
-                ? `${
-                    line.variantLabel && line.variantLabel !== "Default"
-                      ? `${line.productName} — ${line.variantLabel}`
-                      : line.productName
-                  } (Freebie)`
-                : line.variantLabel && line.variantLabel !== "Default"
-                  ? `${line.productName} — ${line.variantLabel}`
-                  : line.productName;
-            const unitPrice = line.isFreebie ? 0 : line.unitPrice;
-            const lineTotal = unitPrice * line.quantity;
-            const existing = merged.get(line.variantId);
-            if (!existing) {
-              merged.set(line.variantId, {
-                productId: line.productId,
-                variantId: line.variantId,
-                productName: name,
-                quantity: line.quantity,
-                unitPrice,
-                lineTotal,
-              });
-            } else {
-              const quantity = existing.quantity + line.quantity;
-              const total = existing.lineTotal + lineTotal;
-              existing.quantity = quantity;
-              existing.lineTotal = total;
-              existing.unitPrice = quantity > 0 ? total / quantity : 0;
-              if (line.isFreebie && !existing.productName.includes("(Freebie)")) {
-                existing.productName = `${existing.productName} + freebie`;
-              }
-            }
-          }
-          return [...merged.values()];
-        })(),
-        createdBy: user.uid,
-        createdByName: user.displayName ?? user.email,
-      });
-
-      toast.success("Sale completed");
-      setCart([]);
-      resetSaleExtras();
-      setCheckoutOpen(false);
-      setCheckoutStep("details");
-      setMobileCartOpen(false);
-
-      const inv = await getBranchInventory(activeBranch.id);
-      setInventory(inv);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Sale failed");
-    } finally {
-      setCharging(false);
-    }
-  };
-
   const branchSelectLabel = (value: string | null) => {
     if (!value) return null;
     const branch = branches.find((b) => b.id === value);
@@ -1000,16 +768,29 @@ export function PosWorkspace({
   }
 
   const openCheckout = () => {
-    if (cart.length === 0) return;
-    setCheckoutStep("details");
-    setCheckoutOpen(true);
+    if (cart.length === 0 || !activeBranch) return;
+    savePosCheckoutDraft({
+      saleChannel,
+      branchId: activeBranch.id,
+      branchName: activeBranch.name,
+      lines: cart,
+      paymentMethod,
+      tenderMethod,
+      selectedPaymentAccountId,
+      customerType,
+      customer,
+      appliedVoucher,
+      voucherCodeInput,
+      savedAt: Date.now(),
+    });
     setMobileCartOpen(false);
+    router.push(posCheckoutPath(saleChannel));
   };
 
   const cartPanel = (
     <PosCartPanel
       lines={cart}
-      charging={charging}
+      charging={false}
       saleChannel={saleChannel}
       onIncrement={incrementLine}
       onDecrement={decrementLine}
@@ -1024,7 +805,7 @@ export function PosWorkspace({
   const mobileCartPanel = (
     <PosCartPanel
       lines={cart}
-      charging={charging}
+      charging={false}
       saleChannel={saleChannel}
       onIncrement={incrementLine}
       onDecrement={decrementLine}
@@ -1074,19 +855,6 @@ export function PosWorkspace({
               </SelectContent>
             </Select>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            className="relative lg:hidden"
-            onClick={() => setMobileCartOpen(true)}
-          >
-            <ShoppingCart className="h-4 w-4" />
-            {cartCount > 0 ? (
-              <Badge className="absolute -top-2 -right-2 h-5 min-w-5 px-1">
-                {cartCount}
-              </Badge>
-            ) : null}
-          </Button>
         </div>
       </div>
 
@@ -1340,63 +1108,6 @@ export function PosWorkspace({
           {mobileCartPanel}
         </SheetContent>
       </Sheet>
-
-      <PosCheckoutDialog
-        open={checkoutOpen}
-        onOpenChange={(open) => {
-          setCheckoutOpen(open);
-          if (!open) setCheckoutStep("details");
-        }}
-        step={checkoutStep}
-        onStepChange={setCheckoutStep}
-        lines={cart}
-        branchName={activeBranch?.name ?? ""}
-        saleChannel={saleChannel}
-        paymentMethod={paymentMethod}
-        tenderMethod={tenderMethod}
-        paymentAccounts={paymentAccounts}
-        selectedPaymentAccountId={selectedPaymentAccountId}
-        customerType={customerType}
-        customer={customer}
-        appliedVoucher={appliedVoucher}
-        voucherCodeInput={voucherCodeInput}
-        charging={charging}
-        onPaymentMethodChange={applyPaymentMethod}
-        onTenderMethodChange={(method) => {
-          setTenderMethod(method);
-          setSelectedPaymentAccountId(null);
-        }}
-        onPaymentAccountChange={setSelectedPaymentAccountId}
-        onCustomerTypeChange={(type) => {
-          setCustomerType(type);
-          if (type === "walk_in") {
-            setCustomer(emptyPosCustomerDraft());
-          }
-        }}
-        onApplyVoucherId={handleApplyVoucherId}
-        onVoucherCodeInputChange={setVoucherCodeInput}
-        onApplyVoucherCode={() => {
-          handleApplyVoucherCode().catch(console.error);
-        }}
-        onCustomerChange={(patch) =>
-          setCustomer((prev) => ({ ...prev, ...patch }))
-        }
-        onRetailPriceChange={setLineRetailPrice}
-        onUnitPriceChange={setLineUnitPrice}
-        onConfirmCharge={() => {
-          if (missingRetailLines.length > 0) {
-            toast.error("Enter retail price for every item");
-            setCheckoutStep("details");
-            return;
-          }
-          if (missingWholesaleLines.length > 0) {
-            toast.error("Enter a unit price greater than 0 for every item");
-            setCheckoutStep("details");
-            return;
-          }
-          handleCharge().catch(console.error);
-        }}
-      />
 
       <FreebieShortfallDialog
         open={Boolean(freebieShortfall) && !freebiePickerOpen}

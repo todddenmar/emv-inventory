@@ -10,9 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -471,8 +468,10 @@ export function PosCartPanel({
 }
 
 interface PosCheckoutDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  layout?: "dialog" | "page";
+  onBack?: () => void;
   step: PosCheckoutStep;
   onStepChange: (step: PosCheckoutStep) => void;
   lines: PosCartLine[];
@@ -501,8 +500,10 @@ interface PosCheckoutDialogProps {
 }
 
 export function PosCheckoutDialog({
-  open,
+  open = true,
   onOpenChange,
+  layout = "dialog",
+  onBack,
   step,
   onStepChange,
   lines,
@@ -530,6 +531,7 @@ export function PosCheckoutDialog({
   onConfirmCharge,
 }: PosCheckoutDialogProps) {
   const isWholesale = saleChannel === "wholesale";
+  const isPage = layout === "page";
   const { itemCount, subtotal, voucherApplied, amountDue } = cartTotals(
     lines,
     appliedVoucher
@@ -572,44 +574,108 @@ export function PosCheckoutDialog({
     onStepChange("review");
   };
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (charging) return;
-        onOpenChange(next);
-      }}
-    >
-      <DialogContent
-        className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
-        showCloseButton={!charging}
-      >
-        <DialogHeader className="border-b px-4 py-3 text-left">
-          <DialogTitle>
-            {step === "details" ? "Checkout details" : "Review invoice"}
-          </DialogTitle>
-          <DialogDescription>
-            {step === "details"
-              ? "Step 1 of 2 — payment, customer, and voucher"
-              : "Step 2 of 2 — confirm before charging"}
-          </DialogDescription>
-          <div className="flex gap-2 pt-2">
-            <div
-              className={`h-1.5 flex-1 rounded-full ${
-                step === "details" || step === "review"
-                  ? "bg-primary"
-                  : "bg-muted"
-              }`}
-            />
-            <div
-              className={`h-1.5 flex-1 rounded-full ${
-                step === "review" ? "bg-primary" : "bg-muted"
-              }`}
-            />
-          </div>
-        </DialogHeader>
+  const handleBackToCart = () => {
+    if (charging) return;
+    if (onBack) {
+      onBack();
+      return;
+    }
+    onOpenChange?.(false);
+  };
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+  const header = (
+    <div className="border-b px-4 py-3 text-left">
+      <h2 className="text-lg font-semibold">
+        {step === "details" ? "Checkout details" : "Review invoice"}
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        {step === "details"
+          ? "Step 1 of 2 — payment, customer, and voucher"
+          : "Step 2 of 2 — confirm before charging"}
+        {branchName ? ` · ${branchName}` : ""}
+      </p>
+      <div className="flex gap-2 pt-2">
+        <div
+          className={`h-1.5 flex-1 rounded-full ${
+            step === "details" || step === "review"
+              ? "bg-primary"
+              : "bg-muted"
+          }`}
+        />
+        <div
+          className={`h-1.5 flex-1 rounded-full ${
+            step === "review" ? "bg-primary" : "bg-muted"
+          }`}
+        />
+      </div>
+    </div>
+  );
+
+  const footer = (
+    <div className="flex gap-2 border-t p-4">
+      {step === "details" ? (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            disabled={charging}
+            onClick={handleBackToCart}
+          >
+            Back to cart
+          </Button>
+          <Button
+            type="button"
+            className="flex-1"
+            disabled={
+              charging ||
+              missingRetail ||
+              missingWholesalePrice ||
+              missingPaymentAccount ||
+              missingCustomerName ||
+              lines.length === 0
+            }
+            onClick={goToReview}
+          >
+            Review invoice
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            disabled={charging}
+            onClick={() => onStepChange("details")}
+          >
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="flex-1"
+            disabled={
+              charging ||
+              missingRetail ||
+              missingWholesalePrice ||
+              missingPaymentAccount ||
+              missingCustomerName ||
+              lines.length === 0
+            }
+            onClick={onConfirmCharge}
+          >
+            {charging ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            Confirm charge {formatCurrency(amountDue)}
+          </Button>
+        </>
+      )}
+    </div>
+  );
+
+  const scrollBody = (
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {step === "details" ? (
             <div className="space-y-5">
               {isWholesale ? (
@@ -1292,68 +1358,34 @@ export function PosCheckoutDialog({
               </div>
             </div>
           )}
-        </div>
+    </div>
+  );
 
-        <div className="flex gap-2 border-t p-4">
-          {step === "details" ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                disabled={charging}
-                onClick={() => onOpenChange(false)}
-              >
-                Back to cart
-              </Button>
-              <Button
-                type="button"
-                className="flex-1"
-                disabled={
-                  charging ||
-                  missingRetail ||
-                  missingWholesalePrice ||
-                  missingPaymentAccount ||
-                  missingCustomerName ||
-                  lines.length === 0
-                }
-                onClick={goToReview}
-              >
-                Review invoice
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                disabled={charging}
-                onClick={() => onStepChange("details")}
-              >
-                Back
-              </Button>
-              <Button
-                type="button"
-                className="flex-1"
-                disabled={
-                  charging ||
-                  missingRetail ||
-                  missingWholesalePrice ||
-                  missingPaymentAccount ||
-                  missingCustomerName ||
-                  lines.length === 0
-                }
-                onClick={onConfirmCharge}
-              >
-                {charging ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                Confirm charge {formatCurrency(amountDue)}
-              </Button>
-            </>
-          )}
-        </div>
+  if (isPage) {
+    return (
+      <div className="mx-auto flex w-full max-w-lg flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
+        {header}
+        {scrollBody}
+        {footer}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (charging) return;
+        onOpenChange?.(next);
+      }}
+    >
+      <DialogContent
+        className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+        showCloseButton={!charging}
+      >
+        {header}
+        {scrollBody}
+        {footer}
       </DialogContent>
     </Dialog>
   );
