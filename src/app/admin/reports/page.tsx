@@ -37,6 +37,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   formatDateInputLabel,
@@ -78,6 +85,7 @@ import type {
   Category,
   CategoryGroup,
   InventoryLog,
+  InventoryLogReason,
   PosSale,
   PosSaleChannel,
   Product,
@@ -201,7 +209,7 @@ function BarMeter({
 }
 
 export default function AdminReportsPage() {
-  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
+  const { canViewAllBranches, assignedBranchId } = useBranchAccess();
   const initial = applyPreset("today");
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -224,8 +232,11 @@ export default function AdminReportsPage() {
   const [staffPage, setStaffPage] = useState(1);
   const [movementPage, setMovementPage] = useState(1);
   const [receiptPage, setReceiptPage] = useState(1);
+  const [selectedMovementReason, setSelectedMovementReason] =
+    useState<InventoryLogReason | null>(null);
+  const [movementDetailPage, setMovementDetailPage] = useState(1);
 
-  const scopeBranchId = isElevatedAdmin
+  const scopeBranchId = canViewAllBranches
     ? selectedBranchId === "all"
       ? null
       : selectedBranchId
@@ -246,15 +257,15 @@ export default function AdminReportsPage() {
         setCategories(categoryList);
         setCategoryGroups(groupList);
         setProducts(productList);
-        if (!isElevatedAdmin && assignedBranchId) {
+        if (!canViewAllBranches && assignedBranchId) {
           setSelectedBranchId(assignedBranchId);
         }
       })
       .catch(console.error);
-  }, [isElevatedAdmin, assignedBranchId]);
+  }, [canViewAllBranches, assignedBranchId]);
 
   const load = useCallback(async () => {
-    if (!isElevatedAdmin && !assignedBranchId) {
+    if (!canViewAllBranches && !assignedBranchId) {
       setSales([]);
       setPrevSales([]);
       setLogs([]);
@@ -308,7 +319,7 @@ export default function AdminReportsPage() {
     assignedBranchId,
     effectiveFrom,
     effectiveTo,
-    isElevatedAdmin,
+    canViewAllBranches,
     mode,
     scopeBranchId,
     selectedSaleChannel,
@@ -359,12 +370,23 @@ export default function AdminReportsPage() {
     [filteredLogs]
   );
 
+  const movementDetailLogs = useMemo(() => {
+    if (!selectedMovementReason) return [];
+    return filteredLogs
+      .filter((log) => log.reason === selectedMovementReason)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }, [filteredLogs, selectedMovementReason]);
+
   useEffect(() => {
     setProductPage(1);
     setStaffPage(1);
     setMovementPage(1);
     setReceiptPage(1);
   }, [effectiveFrom, effectiveTo, scopeBranchId, selectedCategoryIds]);
+
+  useEffect(() => {
+    setMovementDetailPage(1);
+  }, [selectedMovementReason]);
 
   const {
     page: safeProductPage,
@@ -394,6 +416,15 @@ export default function AdminReportsPage() {
     [movementRows, movementPage]
   );
   const {
+    page: safeMovementDetailPage,
+    totalPages: movementDetailTotalPages,
+    pagedItems: pagedMovementDetailLogs,
+    total: movementDetailTotal,
+  } = useMemo(
+    () => paginateItems(movementDetailLogs, movementDetailPage),
+    [movementDetailLogs, movementDetailPage]
+  );
+  const {
     page: safeReceiptPage,
     totalPages: receiptTotalPages,
     pagedItems: pagedReceipts,
@@ -412,6 +443,11 @@ export default function AdminReportsPage() {
   useEffect(() => {
     if (movementPage !== safeMovementPage) setMovementPage(safeMovementPage);
   }, [movementPage, safeMovementPage]);
+  useEffect(() => {
+    if (movementDetailPage !== safeMovementDetailPage) {
+      setMovementDetailPage(safeMovementDetailPage);
+    }
+  }, [movementDetailPage, safeMovementDetailPage]);
   useEffect(() => {
     if (receiptPage !== safeReceiptPage) setReceiptPage(safeReceiptPage);
   }, [receiptPage, safeReceiptPage]);
@@ -486,10 +522,10 @@ export default function AdminReportsPage() {
             ))}
           </div>
 
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
-            <div className="space-y-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label>Mode</Label>
-              <div className="flex gap-2">
+              <div className="flex h-8 items-center gap-2">
                 <Button
                   type="button"
                   size="sm"
@@ -516,7 +552,7 @@ export default function AdminReportsPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="reports-from">
                 {mode === "day" ? "Date" : "From"}
               </Label>
@@ -530,12 +566,12 @@ export default function AdminReportsPage() {
                   setPreset("custom");
                   if (mode === "day") setToDate(next);
                 }}
-                className="w-full lg:w-44"
+                className="w-full sm:w-44"
               />
             </div>
 
             {mode === "range" ? (
-              <div className="space-y-2">
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label htmlFor="reports-to">To</Label>
                 <Input
                   id="reports-to"
@@ -545,19 +581,19 @@ export default function AdminReportsPage() {
                     setToDate(e.target.value || toDateInputValue());
                     setPreset("custom");
                   }}
-                  className="w-full lg:w-44"
+                  className="w-full sm:w-44"
                 />
               </div>
             ) : null}
 
-            {isElevatedAdmin ? (
-              <div className="space-y-2">
+            {canViewAllBranches ? (
+              <div className="flex min-w-0 flex-col gap-2">
                 <Label>Branch</Label>
                 <Select
                   value={selectedBranchId}
                   onValueChange={(v) => setSelectedBranchId(v ?? "all")}
                 >
-                  <SelectTrigger className="w-full lg:w-56">
+                  <SelectTrigger size="sm" className="w-full sm:w-56">
                     <SelectValue placeholder="All branches">
                       {(value) => branchSelectLabel(value as string | null)}
                     </SelectValue>
@@ -574,7 +610,7 @@ export default function AdminReportsPage() {
               </div>
             ) : null}
 
-            <div className="space-y-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label>Sale channel</Label>
               <Select
                 value={selectedSaleChannel}
@@ -582,7 +618,7 @@ export default function AdminReportsPage() {
                   setSelectedSaleChannel((v as SaleChannelFilter) ?? "all")
                 }
               >
-                <SelectTrigger className="w-full lg:w-44">
+                <SelectTrigger size="sm" className="w-full sm:w-44">
                   <SelectValue>
                     {(value) => {
                       if (value === "shop") return "Shop";
@@ -599,8 +635,8 @@ export default function AdminReportsPage() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label className="invisible">Category</Label>
+            <div className="flex min-w-0 flex-col gap-2">
+              <Label>Categories</Label>
               <CategoryFilterPanel
                 categories={categories}
                 groups={categoryGroups}
@@ -848,7 +884,8 @@ export default function AdminReportsPage() {
             <CardHeader>
               <CardTitle className="text-base">Stock movements</CardTitle>
               <CardDescription>
-                Inventory activity alongside sales — units in/out by reason
+                Inventory activity alongside sales — units in/out by reason.
+                Click a row to see items and who made each change.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -870,7 +907,11 @@ export default function AdminReportsPage() {
                     </TableHeader>
                     <TableBody>
                       {pagedMovements.map((row) => (
-                        <TableRow key={row.reason}>
+                        <TableRow
+                          key={row.reason}
+                          className="cursor-pointer"
+                          onClick={() => setSelectedMovementReason(row.reason)}
+                        >
                           <TableCell>
                             <Badge variant="outline">
                               {inventoryLogReasonLabel(row.reason)}
@@ -1000,6 +1041,112 @@ export default function AdminReportsPage() {
       </Card>
         </>
       )}
+
+      <Dialog
+        open={selectedMovementReason != null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedMovementReason(null);
+        }}
+      >
+        <DialogContent
+          className="flex max-h-[85vh] w-full flex-col gap-4 overflow-hidden sm:max-w-4xl"
+          showCloseButton
+        >
+          <DialogHeader className="text-left">
+            <DialogTitle>
+              {selectedMovementReason
+                ? inventoryLogReasonLabel(selectedMovementReason)
+                : "Stock movements"}
+            </DialogTitle>
+            <DialogDescription>
+              {movementDetailTotal === 0
+                ? "No activities for this type in the selected period."
+                : `${movementDetailTotal} activit${
+                    movementDetailTotal === 1 ? "y" : "ies"
+                  } in ${periodLabel}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {movementDetailLogs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No activities match the current filters.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>When</TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead>Branch</TableHead>
+                        <TableHead>By</TableHead>
+                        <TableHead className="text-right">Change</TableHead>
+                        <TableHead className="text-right">Stock</TableHead>
+                        <TableHead className="w-12 text-right">
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedMovementDetailLogs.map((log) => (
+                        <TableRow key={log.id}>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {formatDate(log.createdAt)}
+                          </TableCell>
+                          <TableCell className="max-w-[200px]">
+                            <p className="truncate text-sm font-medium">
+                              {log.productName ?? log.productId}
+                            </p>
+                            {log.referenceLabel ? (
+                              <p className="truncate text-xs text-muted-foreground">
+                                {log.referenceLabel}
+                              </p>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {log.branchName ?? log.branchId}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {log.performedByName ?? "Staff"}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "text-right font-medium tabular-nums",
+                              log.delta > 0
+                                ? "text-emerald-700"
+                                : log.delta < 0
+                                  ? "text-red-700"
+                                  : ""
+                            )}
+                          >
+                            {log.delta > 0 ? "+" : ""}
+                            {log.delta}
+                          </TableCell>
+                          <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                            {log.previousStock} → {log.newStock}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {log.reason === "pos_sale" && log.referenceId ? (
+                              <SaleInvoiceButton saleId={log.referenceId} />
+                            ) : null}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <TablePagination
+                  page={safeMovementDetailPage}
+                  totalPages={movementDetailTotalPages}
+                  total={movementDetailTotal}
+                  onPageChange={setMovementDetailPage}
+                />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

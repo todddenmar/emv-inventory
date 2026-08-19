@@ -82,7 +82,7 @@ export function InventoryActivityFeed({
           <CardDescription>{description}</CardDescription>
         </div>
         {showViewAll && (
-          <LinkButton href="/admin/transfers" variant="outline" size="sm">
+          <LinkButton href="/admin/inventory/transfers" variant="outline" size="sm">
             Transfers
           </LinkButton>
         )}

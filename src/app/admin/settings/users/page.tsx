@@ -57,6 +57,8 @@ const roleBadgeVariant = (
       return "default";
     case "admin":
       return "default";
+    case "owner":
+      return "secondary";
     case "manager":
       return "secondary";
     case "cashier":
@@ -89,6 +91,7 @@ export default function AdminUsersPage() {
       "customer",
       "cashier",
       "manager",
+      "owner",
       "admin",
       "master-admin",
     ];
@@ -215,8 +218,9 @@ export default function AdminUsersPage() {
         <div>
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-muted-foreground">
-            Assign admin, manager, and cashier roles. Managers and cashiers
-            must be linked to a branch.
+            Assign admin, owner, manager, and cashier roles. Managers and
+            cashiers must be linked to a branch. Owners can view sales reports
+            and inventory across all branches.
           </p>
         </div>
         <LinkButton href="/admin/settings/users/invites" variant="outline">
@@ -412,6 +416,13 @@ export default function AdminUsersPage() {
                 <p className="text-sm text-muted-foreground">
                   Admins have full catalog and branch access, except product
                   JSON import.
+                </p>
+              )}
+
+              {role === "owner" && (
+                <p className="text-sm text-muted-foreground">
+                  Owners can view sales reports and inventory across all
+                  branches. They cannot edit stock or access other admin tools.
                 </p>
               )}
 

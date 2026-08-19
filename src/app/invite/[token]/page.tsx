@@ -88,7 +88,11 @@ function InviteContent({ token }: { token: string }) {
             onClick={() =>
               router.push(
                 `/login?invite=${token}&redirect=${
-                  invite.role === "cashier" ? "/admin/cashier" : "/admin"
+                  invite.role === "cashier"
+                    ? "/admin/cashier"
+                    : invite.role === "owner"
+                      ? "/admin/reports"
+                      : "/admin"
                 }`
               )
             }

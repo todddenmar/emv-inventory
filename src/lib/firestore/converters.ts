@@ -390,9 +390,11 @@ export const inviteConverter: FirestoreDataConverter<Invite> = {
       role:
         data.role === "admin"
           ? "admin"
-          : data.role === "cashier"
-            ? "cashier"
-            : "manager",
+          : data.role === "owner"
+            ? "owner"
+            : data.role === "cashier"
+              ? "cashier"
+              : "manager",
       branchId: data.branchId ?? null,
       branchName: data.branchName ?? null,
       createdBy: data.createdBy,

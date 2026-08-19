@@ -25,6 +25,7 @@ function generateToken(): string {
 
 export function normalizeInviteRole(role: unknown): InviteRole {
   if (role === "admin") return "admin";
+  if (role === "owner") return "owner";
   if (role === "cashier") return "cashier";
   return "manager";
 }
@@ -97,7 +98,7 @@ export async function getInvites(): Promise<Invite[]> {
   const snapshot = await getDocs(
     query(
       collection(getClientDb(), "invites"),
-      where("role", "in", ["manager", "admin", "cashier"])
+      where("role", "in", ["manager", "admin", "cashier", "owner"])
     )
   );
   return snapshot.docs

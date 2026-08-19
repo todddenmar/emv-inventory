@@ -8,11 +8,8 @@ import {
   Tags,
   Warehouse,
   Store,
-  ArrowRightLeft,
   TrendingUp,
   ShoppingCart,
-  History,
-  PackagePlus,
   Settings,
   BarChart3,
   Tag,
@@ -39,19 +36,6 @@ export const adminNavItems = [
     icon: BarChart3,
     masterOnly: false,
   },
-  {
-    href: "/admin/stock-in",
-    label: "Supplier stock in",
-    icon: PackagePlus,
-    masterOnly: false,
-  },
-  {
-    href: "/admin/adjustment-history",
-    label: "Adjustment history",
-    icon: History,
-    masterOnly: false,
-  },
-  { href: "/admin/transfers", label: "Transfers", icon: ArrowRightLeft, masterOnly: false },
   {
     href: "/admin/price-changes",
     label: "Price changes",
@@ -81,11 +65,14 @@ export function AdminNavLinks({
   compactLabels?: boolean;
 }) {
   const pathname = usePathname();
-  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
+  const { isElevatedAdmin, isOwner, assignedBranchId } = useBranchAccess();
 
-  const items = adminNavItems.filter(
-    (item) => isElevatedAdmin || !item.masterOnly
-  );
+  const items = adminNavItems.filter((item) => {
+    if (isOwner) {
+      return item.href === "/admin/reports" || item.href === "/admin/inventory";
+    }
+    return isElevatedAdmin || !item.masterOnly;
+  });
 
   return (
     <nav className={cn("space-y-1", className)}>
@@ -129,7 +116,7 @@ export function AdminNavLinks({
           </Link>
         );
       })}
-      {!isElevatedAdmin && assignedBranchId && (
+      {!isElevatedAdmin && !isOwner && assignedBranchId && (
         <div
           className={cn(
             "px-3 pt-3",

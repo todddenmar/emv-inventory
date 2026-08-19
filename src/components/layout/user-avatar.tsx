@@ -31,6 +31,8 @@ export function formatUserRole(
       return "Master admin";
     case "admin":
       return "Admin";
+    case "owner":
+      return "Owner";
     case "manager":
       return "Manager";
     case "cashier":

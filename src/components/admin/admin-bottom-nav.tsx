@@ -27,10 +27,7 @@ const bottomNavCandidates = [
   { href: "/admin/pos", label: "POS" },
   { href: "/admin/inventory", label: "Inventory" },
   { href: "/admin/reports", label: "Reports" },
-  { href: "/admin/transfers", label: "Transfers" },
-  { href: "/admin/stock-in", label: "Stock in" },
   { href: "/admin/settings", label: "Settings" },
-  { href: "/admin/adjustment-history", label: "History" },
   { href: "/admin/price-changes", label: "Prices" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/categories", label: "Categories" },
@@ -76,7 +73,7 @@ function useVisibleSlotCount(enabled: boolean) {
 
 export function AdminBottomNav() {
   const pathname = usePathname();
-  const { isElevatedAdmin } = useBranchAccess();
+  const { isElevatedAdmin, isOwner } = useBranchAccess();
   const [moreOpen, setMoreOpen] = useState(false);
   const { navRef, count: visibleSlotCount } = useVisibleSlotCount(true);
 
@@ -85,6 +82,12 @@ export function AdminBottomNav() {
   const allowedCandidates = bottomNavCandidates.filter((candidate) => {
     const item = navByHref.get(candidate.href);
     if (!item) return false;
+    if (isOwner) {
+      return (
+        candidate.href === "/admin/reports" ||
+        candidate.href === "/admin/inventory"
+      );
+    }
     return isElevatedAdmin || !item.masterOnly;
   });
 
@@ -101,10 +104,13 @@ export function AdminBottomNav() {
 
   const barHrefs = new Set<string>(barItems.map((item) => item.href));
 
-  const moreItems = adminNavItems.filter(
-    (item) =>
-      (isElevatedAdmin || !item.masterOnly) && !barHrefs.has(item.href)
-  );
+  const moreItems = adminNavItems.filter((item) => {
+    if (barHrefs.has(item.href)) return false;
+    if (isOwner) {
+      return item.href === "/admin/reports" || item.href === "/admin/inventory";
+    }
+    return isElevatedAdmin || !item.masterOnly;
+  });
 
   const moreActive = moreItems.some((item) => isNavActive(pathname, item.href));
   const showMore = moreItems.length > 0;

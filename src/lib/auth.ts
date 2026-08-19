@@ -55,7 +55,7 @@ async function handlePostLogin(user: User, inviteToken?: string) {
     }
 
     const appUser = await upsertUserOnLogin(user, {
-      role: "admin",
+      role: invite.role === "owner" ? "owner" : "admin",
       branchId: null,
     });
     await acceptInvite(invite.id, user.uid);

@@ -99,9 +99,19 @@ export function UserMenu({
         {showAdminLink && isStaffRole(user.role) && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push("/admin")}>
+              <DropdownMenuItem
+                onClick={() =>
+                  router.push(
+                    user.role === "owner"
+                      ? "/admin/reports"
+                      : user.role === "cashier"
+                        ? "/admin/cashier"
+                        : "/admin"
+                  )
+                }
+              >
                 <LayoutDashboard className="mr-2 h-4 w-4" />
-                Admin dashboard
+                {user.role === "owner" ? "Reports" : "Admin dashboard"}
               </DropdownMenuItem>
             </>
           )}

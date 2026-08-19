@@ -12,7 +12,7 @@ service cloud.firestore {
 
     function isStaff() {
       return isSignedIn() &&
-        userDoc().data.role in ['master-admin', 'admin', 'manager', 'cashier'];
+        userDoc().data.role in ['master-admin', 'admin', 'owner', 'manager', 'cashier'];
     }
 
     function isMasterAdmin() {
@@ -25,10 +25,20 @@ service cloud.firestore {
         userDoc().data.role in ['master-admin', 'admin'];
     }
 
+    function isOwner() {
+      return isSignedIn() &&
+        userDoc().data.role == 'owner';
+    }
+
+    function canReadAllBranches() {
+      return isElevatedAdmin() || isOwner();
+    }
+
     function managerBranchId() {
       return userDoc().data.branchId;
     }
 
+    // Elevated only — owners are read-only and must not pass write checks.
     function canAccessBranch(branchId) {
       return isElevatedAdmin() || managerBranchId() == branchId;
     }
@@ -88,6 +98,7 @@ service cloud.firestore {
     match /branches/{branchId} {
       allow read: if resource.data.isActive == true;
       allow read: if isStaff() && canAccessBranch(branchId);
+      allow read: if canReadAllBranches();
       allow write: if isElevatedAdmin();
     }
 
@@ -95,8 +106,8 @@ service cloud.firestore {
       allow read: if resource.data.branchId != null &&
         isOnlineShopBranch(resource.data.branchId);
       allow read: if resource.data.branchId != null &&
-        (isElevatedAdmin() || managerBranchId() == resource.data.branchId);
-      allow read: if isElevatedAdmin();
+        (canReadAllBranches() || managerBranchId() == resource.data.branchId);
+      allow read: if canReadAllBranches();
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
@@ -116,7 +127,7 @@ service cloud.firestore {
       allow read: if isSignedIn() &&
         (resource.data.customerId == request.auth.uid ||
           (isStaff() &&
-            (isElevatedAdmin() || resource.data.branchId == managerBranchId())));
+            (canReadAllBranches() || resource.data.branchId == managerBranchId())));
       allow update: if isStaff() &&
         (isElevatedAdmin() || resource.data.branchId == managerBranchId());
     }
@@ -133,7 +144,7 @@ service cloud.firestore {
 
     match /inventoryLogs/{logId} {
       allow read: if isStaff() &&
-        (isElevatedAdmin() || resource.data.branchId == managerBranchId());
+        (canReadAllBranches() || resource.data.branchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
@@ -145,7 +156,7 @@ service cloud.firestore {
 
     match /branchTransfers/{transferId} {
       allow read: if isStaff() &&
-        (isElevatedAdmin() ||
+        (canReadAllBranches() ||
           resource.data.fromBranchId == managerBranchId() ||
           resource.data.toBranchId == managerBranchId());
       allow create: if isStaff() &&
@@ -185,8 +196,8 @@ service cloud.firestore {
 
     match /physicalBranchInventory/{inventoryId} {
       allow read: if resource.data.branchId != null &&
-        (isElevatedAdmin() || managerBranchId() == resource.data.branchId);
-      allow read: if isElevatedAdmin();
+        (canReadAllBranches() || managerBranchId() == resource.data.branchId);
+      allow read: if canReadAllBranches();
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
@@ -198,7 +209,7 @@ service cloud.firestore {
 
     match /physicalInventoryLogs/{logId} {
       allow read: if isStaff() &&
-        (isElevatedAdmin() || resource.data.branchId == managerBranchId());
+        (canReadAllBranches() || resource.data.branchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
@@ -213,7 +224,7 @@ service cloud.firestore {
 
     match /physicalBranchTransfers/{transferId} {
       allow read: if isStaff() &&
-        (isElevatedAdmin() ||
+        (canReadAllBranches() ||
           resource.data.fromBranchId == managerBranchId() ||
           resource.data.toBranchId == managerBranchId());
       allow create: if isStaff() &&
@@ -224,7 +235,7 @@ service cloud.firestore {
 
     match /physicalPosSales/{saleId} {
       allow read: if isStaff() &&
-        (isElevatedAdmin() || resource.data.branchId == managerBranchId());
+        (canReadAllBranches() || resource.data.branchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
@@ -233,7 +244,7 @@ service cloud.firestore {
 
     match /physicalSupplierStockIns/{stockInId} {
       allow read: if isStaff() &&
-        (isElevatedAdmin() || resource.data.branchId == managerBranchId());
+        (canReadAllBranches() || resource.data.branchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);

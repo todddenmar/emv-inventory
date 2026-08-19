@@ -4,6 +4,7 @@ export function isStaffRole(role: UserRole | null | undefined): boolean {
   return (
     role === "master-admin" ||
     role === "admin" ||
+    role === "owner" ||
     role === "manager" ||
     role === "cashier"
   );
@@ -11,6 +12,10 @@ export function isStaffRole(role: UserRole | null | undefined): boolean {
 
 export function isCashierRole(role: UserRole | null | undefined): boolean {
   return role === "cashier";
+}
+
+export function isOwnerRole(role: UserRole | null | undefined): boolean {
+  return role === "owner";
 }
 
 /** Manager or cashier — branch-scoped staff (not elevated). */
@@ -31,6 +36,13 @@ export function isElevatedAdminRole(
   return role === "master-admin" || role === "admin";
 }
 
+/** Elevated admin or owner — can view data across all branches. */
+export function canViewAllBranchesRole(
+  role: UserRole | null | undefined
+): boolean {
+  return isElevatedAdminRole(role) || isOwnerRole(role);
+}
+
 export function roleAssignableBy(
   actorRole: UserRole,
   targetRole: UserRole
@@ -39,6 +51,7 @@ export function roleAssignableBy(
   if (actorRole === "admin") {
     return (
       targetRole === "admin" ||
+      targetRole === "owner" ||
       targetRole === "manager" ||
       targetRole === "cashier" ||
       targetRole === "customer"

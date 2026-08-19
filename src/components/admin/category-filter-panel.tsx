@@ -95,6 +95,7 @@ export function CategoryFilterPanel({
         type="button"
         variant={selectedCount > 0 ? "default" : "outline"}
         size="sm"
+        className="h-8"
         onClick={() => setOpen(true)}
       >
         <Filter className="mr-2 h-4 w-4" />

@@ -67,7 +67,7 @@ function toStockNumber(value: number | "" | undefined, fallback: number): number
 }
 
 export default function AdminInventoryPage() {
-  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
+  const { canViewAllBranches, isOwner, assignedBranchId } = useBranchAccess();
   const { catalogImageSource } = useAppSettings();
   const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -86,14 +86,17 @@ export default function AdminInventoryPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [page, setPage] = useState(1);
 
-  const activeBranchId = isElevatedAdmin ? selectedBranchId : assignedBranchId ?? "";
+  const activeBranchId = canViewAllBranches
+    ? selectedBranchId
+    : assignedBranchId ?? "";
+  const canEditStock = !isOwner;
 
   const loadBranches = async () => {
     const all = await getBranches(true);
     setBranches(all);
     if (!selectedBranchId && all.length > 0) {
       setSelectedBranchId(
-        isElevatedAdmin
+        canViewAllBranches
           ? all[0].id
           : assignedBranchId ?? all[0].id
       );
@@ -104,7 +107,7 @@ export default function AdminInventoryPage() {
     if (!branchId) return;
     const [p, inv, cats] = await Promise.all([
       getProducts(),
-      isElevatedAdmin && branchId === "all"
+      canViewAllBranches && branchId === "all"
         ? getAllBranchInventory()
         : getBranchInventory(branchId),
       getCategories(),
@@ -243,7 +246,7 @@ export default function AdminInventoryPage() {
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
 
   const branchSummaries = useMemo(() => {
-    if (!isElevatedAdmin) return [];
+    if (!canViewAllBranches) return [];
     return branches.map((branch) => {
       const branchInv = inventory.filter((i) => i.branchId === branch.id);
       const rows = mergeSellingVariantsWithInventory(
@@ -255,7 +258,7 @@ export default function AdminInventoryPage() {
       const low = getLowStockVariants(rows).length;
       return { branch, stocked, low, totalSkus: rows.length };
     });
-  }, [branches, inventory, products, categories, isElevatedAdmin]);
+  }, [branches, inventory, products, categories, canViewAllBranches]);
 
   const updateDraftStock = (variantId: string, value: number | "") => {
     setDraft((prev) => ({
@@ -265,6 +268,7 @@ export default function AdminInventoryPage() {
   };
 
   const saveStock = async (variantId: string, productId: string) => {
+    if (!canEditStock) return;
     if (!activeBranchId || activeBranchId === "all") return;
     const row = variantsWithStock.find((v) => v.id === variantId);
     if (!row) return;
@@ -327,12 +331,14 @@ export default function AdminInventoryPage() {
         <div>
           <h1 className="text-2xl font-bold">Inventory</h1>
           <p className="text-muted-foreground">
-            {isElevatedAdmin
-              ? "Stock levels across branches"
+            {canViewAllBranches
+              ? isOwner
+                ? "View stock levels across branches"
+                : "Stock levels across branches"
               : `Stock for ${activeBranch?.name ?? "your branch"}`}
           </p>
         </div>
-        {isElevatedAdmin && (
+        {canViewAllBranches && (
           <Select
             value={selectedBranchId}
             onValueChange={(v) => setSelectedBranchId(v ?? "")}
@@ -354,7 +360,7 @@ export default function AdminInventoryPage() {
         )}
       </div>
 
-      {isElevatedAdmin && selectedBranchId === "all" && (
+      {canViewAllBranches && selectedBranchId === "all" && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {branchSummaries.map(({ branch, stocked, low, totalSkus }) => (
             <Card
@@ -492,16 +498,20 @@ export default function AdminInventoryPage() {
                           className="py-8 text-center text-muted-foreground"
                         >
                           {variantsWithStock.length === 0 ? (
-                            <>
-                              No selling variants for this branch.{" "}
-                              <Link
-                                href="/admin/settings/assortment"
-                                className="underline underline-offset-2"
-                              >
-                                Assign variants in Branch assortment
-                              </Link>
-                              .
-                            </>
+                            isOwner ? (
+                              "No selling variants for this branch."
+                            ) : (
+                              <>
+                                No selling variants for this branch.{" "}
+                                <Link
+                                  href="/admin/settings/assortment"
+                                  className="underline underline-offset-2"
+                                >
+                                  Assign variants in Branch assortment
+                                </Link>
+                                .
+                              </>
+                            )
                           ) : (
                             "No variants match your filters."
                           )}
@@ -593,21 +603,25 @@ export default function AdminInventoryPage() {
                               : "—"}
                           </TableCell>
                           <TableCell>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={stockInput}
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                if (raw === "") {
-                                  updateDraftStock(row.id, "");
-                                  return;
-                                }
-                                const next = Number(raw);
-                                if (!Number.isFinite(next) || next < 0) return;
-                                updateDraftStock(row.id, next);
-                              }}
-                            />
+                            {canEditStock ? (
+                              <Input
+                                type="number"
+                                min={0}
+                                value={stockInput}
+                                onChange={(e) => {
+                                  const raw = e.target.value;
+                                  if (raw === "") {
+                                    updateDraftStock(row.id, "");
+                                    return;
+                                  }
+                                  const next = Number(raw);
+                                  if (!Number.isFinite(next) || next < 0) return;
+                                  updateDraftStock(row.id, next);
+                                }}
+                              />
+                            ) : (
+                              <span className="tabular-nums">{stock}</span>
+                            )}
                           </TableCell>
                           <TableCell className="tabular-nums text-muted-foreground">
                             {row.lowStockThreshold}
@@ -647,15 +661,17 @@ export default function AdminInventoryPage() {
                                   <History className="h-4 w-4" />
                                   Adjustment history
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={savingId === row.id}
-                                  onClick={() =>
-                                    void saveStock(row.id, row.productId)
-                                  }
-                                >
-                                  <Save className="h-4 w-4" />
-                                  Save stock
-                                </DropdownMenuItem>
+                                {canEditStock ? (
+                                  <DropdownMenuItem
+                                    disabled={savingId === row.id}
+                                    onClick={() =>
+                                      void saveStock(row.id, row.productId)
+                                    }
+                                  >
+                                    <Save className="h-4 w-4" />
+                                    Save stock
+                                  </DropdownMenuItem>
+                                ) : null}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>

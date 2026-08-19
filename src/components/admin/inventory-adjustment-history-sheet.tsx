@@ -236,7 +236,7 @@ export function InventoryAdjustmentHistorySheet({
           ) : null}
           <p className="mt-4 text-xs text-muted-foreground">
             <Link
-              href="/admin/adjustment-history"
+              href="/admin/inventory/adjustment-history"
               className="underline underline-offset-2"
             >
               View full adjustment history

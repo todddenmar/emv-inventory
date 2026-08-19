@@ -4,6 +4,7 @@ import { AdminBottomNav } from "@/components/admin/admin-bottom-nav";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { CashierBottomNav } from "@/components/admin/cashier-bottom-nav";
 import { CashierRouteGuard } from "@/components/admin/cashier-route-guard";
+import { OwnerRouteGuard } from "@/components/admin/owner-route-guard";
 import { AdminHeader } from "@/components/layout/admin-header";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { CASHIER_HOME } from "@/lib/post-login-redirect";
@@ -34,7 +35,7 @@ function CashierHeader() {
 }
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
-  const { isCashier } = useBranchAccess();
+  const { isCashier, isOwner } = useBranchAccess();
 
   if (isCashier) {
     return (
@@ -50,7 +51,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return (
+  const shell = (
     <div className="flex min-h-screen w-full flex-col">
       <AdminHeader />
       <div className="flex w-full flex-1 flex-col lg:flex-row">
@@ -62,4 +63,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <AdminBottomNav />
     </div>
   );
+
+  if (isOwner) {
+    return <OwnerRouteGuard>{shell}</OwnerRouteGuard>;
+  }
+
+  return shell;
 }

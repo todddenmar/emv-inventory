@@ -171,7 +171,8 @@ export default function AdminInvitesPage() {
         <div>
           <h1 className="text-2xl font-bold">Staff invites</h1>
           <p className="text-muted-foreground">
-            Invite managers, cashiers (branch-scoped), or admins (full access)
+            Invite managers, cashiers, owners (reports + inventory), or admins
+            (full access)
           </p>
         </div>
         <Button
@@ -217,6 +218,7 @@ export default function AdminInvitesPage() {
                   <SelectContent>
                     <SelectItem value="cashier">Cashier</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="owner">Owner</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
@@ -249,6 +251,11 @@ export default function AdminInvitesPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              ) : role === "owner" ? (
+                <p className="text-sm text-muted-foreground">
+                  Owners can view sales reports and inventory across all
+                  branches. No branch assignment needed.
+                </p>
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Admins get full catalog and multi-branch access (except
