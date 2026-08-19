@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -128,6 +128,7 @@ export function PosWorkspace({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [cart, setCart] = useState<PosCartLine[]>([]);
+  const productListRef = useRef<HTMLDivElement>(null);
   const [paymentMethod, setPaymentMethod] =
     useState<PosPaymentMethod>("cash");
   const [tenderMethod, setTenderMethod] = useState<PosTenderMethod>("cash");
@@ -339,6 +340,10 @@ export function PosWorkspace({
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+
+  useEffect(() => {
+    productListRef.current?.scrollTo({ top: 0 });
+  }, [safePage, selectedCategoryId, search]);
 
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
 
@@ -929,7 +934,10 @@ export function PosWorkspace({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-40 lg:pb-4">
+          <div
+            ref={productListRef}
+            className="min-h-0 flex-1 overflow-y-auto p-4 pb-40 lg:pb-4"
+          >
             {loadingCategory && !categoryCache[selectedCategoryId] ? (
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -943,7 +951,7 @@ export function PosWorkspace({
               </p>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {pagedVariants.map((row) => {
                     const product = categoryProducts.find(
                       (p) => p.id === row.productId
@@ -956,6 +964,10 @@ export function PosWorkspace({
                       row,
                       product?.options ?? []
                     );
+                    const displayName =
+                      variantLabel !== "Default"
+                        ? `${row.productName} — ${variantLabel}`
+                        : row.productName;
                     const effective = resolveEffectivePrices(
                       row,
                       promoMap,
@@ -976,10 +988,10 @@ export function PosWorkspace({
                         type="button"
                         disabled={outOfStock}
                         onClick={() => addVariant(row)}
-                        className="flex min-h-[140px] flex-col overflow-hidden rounded-xl border bg-card text-left transition hover:border-primary/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                        className="flex min-h-0 flex-row items-stretch gap-3 overflow-hidden rounded-xl border bg-card p-3 text-left transition hover:border-primary/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[140px] sm:flex-col sm:gap-0 sm:p-0"
                       >
                         {showCatalogImages(catalogImageSource) ? (
-                          <div className="aspect-[4/3] w-full bg-muted">
+                          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted sm:aspect-[4/3] sm:h-auto sm:w-full sm:rounded-none">
                             {thumb ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
@@ -994,10 +1006,10 @@ export function PosWorkspace({
                             )}
                           </div>
                         ) : null}
-                        <div className="flex flex-1 flex-col gap-1 p-3">
-                          <div className="flex items-start justify-between gap-1">
-                            <p className="line-clamp-2 text-sm font-medium leading-snug">
-                              {row.productName}
+                        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 text-sm font-medium leading-snug break-words">
+                              {displayName}
                             </p>
                             {effective.onSale ? (
                               <Badge
@@ -1008,11 +1020,6 @@ export function PosWorkspace({
                               </Badge>
                             ) : null}
                           </div>
-                          {variantLabel !== "Default" ? (
-                            <p className="line-clamp-1 text-xs text-muted-foreground">
-                              {variantLabel}
-                            </p>
-                          ) : null}
                           <div className="mt-auto flex items-end justify-between gap-2 pt-2">
                             <span className="text-sm font-semibold tabular-nums">
                               {(() => {
@@ -1052,14 +1059,20 @@ export function PosWorkspace({
                     );
                   })}
                 </div>
-                <TablePagination
-                  page={safePage}
-                  totalPages={totalPages}
-                  total={total}
-                  pageSize={POS_PAGE_SIZE}
-                  onPageChange={setPage}
-                  className="mt-4"
-                />
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {total === 0
+                      ? "No variants"
+                      : `Showing ${(safePage - 1) * POS_PAGE_SIZE + 1}–${Math.min(safePage * POS_PAGE_SIZE, total)} of ${total}`}
+                  </p>
+                  <TablePagination
+                    page={safePage}
+                    totalPages={totalPages}
+                    total={total}
+                    pageSize={POS_PAGE_SIZE}
+                    onPageChange={setPage}
+                  />
+                </div>
               </>
             )}
           </div>
