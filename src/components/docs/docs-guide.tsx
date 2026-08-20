@@ -581,9 +581,9 @@ export function DocsGuide({
 
   if (isDialog) {
     return (
-      <div className="docs-guide flex min-h-0 flex-1 flex-col gap-3 text-[#12141a]">
-        {searchField}
-        <div className="min-h-0 flex-1 lg:grid lg:grid-cols-[180px_minmax(0,1fr)] lg:gap-6">
+      <div className="docs-guide flex min-h-0 flex-1 flex-col gap-3 overflow-hidden text-[#12141a]">
+        <div className="shrink-0">{searchField}</div>
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden lg:grid lg:grid-cols-[180px_minmax(0,1fr)] lg:gap-6">
           <aside className="shrink-0 space-y-2">
             <p className="hidden text-xs font-semibold tracking-[0.18em] text-[#5a6478] uppercase lg:block">
               Contents
@@ -596,7 +596,7 @@ export function DocsGuide({
           </aside>
           <div
             ref={scrollRootRef}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] touch-pan-y pr-1"
           >
             {visibleToc.length === 0 ? (
               <p className="py-8 text-center text-sm text-[#5a6478]">

@@ -48,7 +48,7 @@ export function DocsHelpButton({
         }}
       >
         <DialogContent
-          className={`${fraunces.variable} flex h-[min(92dvh,880px)] w-full max-w-[calc(100%-1rem)] flex-col gap-3 overflow-hidden bg-[#e8edf2] p-3 sm:max-w-3xl sm:p-5 lg:max-w-4xl`}
+          className={`${fraunces.variable} flex max-h-[min(92dvh,880px)] h-[min(92dvh,880px)] w-full max-w-[calc(100%-1rem)] flex-col gap-3 overflow-hidden bg-[#e8edf2] p-3 sm:max-w-3xl sm:p-5 lg:max-w-4xl`}
           showCloseButton
         >
           <style>{`
