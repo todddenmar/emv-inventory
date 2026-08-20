@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -127,6 +128,13 @@ function LoginContent() {
               Continue with Google
             </Button>
           )}
+
+          <p className="text-center text-sm text-muted-foreground">
+            New to the system?{" "}
+            <Link href="/docs" className="font-medium text-foreground underline">
+              Read the staff guide
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

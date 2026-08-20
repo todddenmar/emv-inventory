@@ -29,30 +29,44 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   formatDateInputLabel,
   toDateInputValue,
 } from "@/lib/dates";
 import {
+  filterInventoryLogsByProducts,
+  productIdsForCategoryFilter,
+} from "@/lib/category-filters";
+import {
   buildDailyStockChanges,
   summarizeDailyStockChanges,
 } from "@/lib/daily-stock-changes";
 import { getBranches } from "@/lib/firestore/branches";
 import { getCategories } from "@/lib/firestore/categories";
+import { getCategoryGroups } from "@/lib/firestore/category-groups";
 import { getInventoryLogs } from "@/lib/firestore/inventory-logs";
 import { getProducts } from "@/lib/firestore/products";
 import { paginateItems } from "@/lib/pagination";
 import { cn } from "@/lib/utils";
-import type { Branch, Category, InventoryLog, Product } from "@/types";
+import type {
+  Branch,
+  Category,
+  CategoryGroup,
+  InventoryLog,
+  Product,
+} from "@/types";
 
 export default function AdminDailyStockChangesPage() {
   const { canViewAllBranches, assignedBranchId } = useBranchAccess();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("all");
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [date, setDate] = useState(() => toDateInputValue());
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -64,10 +78,16 @@ export default function AdminDailyStockChangesPage() {
     : assignedBranchId;
 
   useEffect(() => {
-    Promise.all([getBranches(true), getCategories(), getProducts()])
-      .then(([branchList, categoryList, productList]) => {
+    Promise.all([
+      getBranches(true),
+      getCategories(),
+      getCategoryGroups(),
+      getProducts(),
+    ])
+      .then(([branchList, categoryList, groupList, productList]) => {
         setBranches(branchList);
         setCategories(categoryList.filter((category) => !category.isArchived));
+        setCategoryGroups(groupList);
         setProducts(productList);
         if (!canViewAllBranches && assignedBranchId) {
           setSelectedBranchId(assignedBranchId);
@@ -106,11 +126,19 @@ export default function AdminDailyStockChangesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [date, scopeBranchId]);
+  }, [date, scopeBranchId, selectedCategoryIds]);
+
+  const filteredLogs = useMemo(() => {
+    const allowedProductIds = productIdsForCategoryFilter(
+      products,
+      selectedCategoryIds
+    );
+    return filterInventoryLogsByProducts(logs, allowedProductIds);
+  }, [logs, products, selectedCategoryIds]);
 
   const changeRows = useMemo(
-    () => buildDailyStockChanges(logs, products, categories),
-    [logs, products, categories]
+    () => buildDailyStockChanges(filteredLogs, products, categories),
+    [filteredLogs, products, categories]
   );
 
   const summary = useMemo(
@@ -193,6 +221,15 @@ export default function AdminDailyStockChangesPage() {
                 </Select>
               </div>
             ) : null}
+            <div className="flex min-w-0 flex-col gap-2">
+              <Label>Categories</Label>
+              <CategoryFilterPanel
+                categories={categories}
+                groups={categoryGroups}
+                selectedCategoryIds={selectedCategoryIds}
+                onChange={setSelectedCategoryIds}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

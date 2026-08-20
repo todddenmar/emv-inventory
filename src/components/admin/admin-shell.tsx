@@ -9,6 +9,7 @@ import { AdminHeader } from "@/components/layout/admin-header";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { CASHIER_HOME } from "@/lib/post-login-redirect";
 import { BrandLogo } from "@/components/layout/brand-logo";
+import { DocsHelpButton } from "@/components/docs/docs-help-button";
 import { Badge } from "@/components/ui/badge";
 import { UserMenu } from "@/components/layout/user-menu";
 import { useAuthStore } from "@/stores/auth-store";
@@ -26,7 +27,8 @@ function CashierHeader() {
             Cashier
           </Badge>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <DocsHelpButton />
           {!loading && user && <UserMenu showAdminLink={false} />}
         </div>
       </div>

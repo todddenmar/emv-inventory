@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { BrandLogo } from "@/components/layout/brand-logo";
+import { DocsHelpButton } from "@/components/docs/docs-help-button";
 import { UserMenu } from "@/components/layout/user-menu";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -19,7 +20,8 @@ export function AdminHeader() {
           </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <DocsHelpButton />
           {!loading && user && <UserMenu showAdminLink={false} />}
         </div>
       </div>
