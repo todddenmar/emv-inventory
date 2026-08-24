@@ -75,7 +75,14 @@ export function AdminNavLinks({
   });
 
   return (
-    <nav className={cn("space-y-1", className)}>
+    <nav
+      className={cn(
+        "space-y-1",
+        compactLabels &&
+          "flex flex-col items-center group-hover/sidebar:items-stretch",
+        className
+      )}
+    >
       {items.map((item) => {
         const Icon = item.icon;
         const hasMoreSpecificMatch = items.some(
@@ -96,8 +103,10 @@ export function AdminNavLinks({
             onClick={onNavigate}
             title={item.label}
             className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2.5 text-sm transition-colors",
-              compactLabels && "justify-center group-hover/sidebar:justify-start",
+              "flex items-center rounded-md text-sm transition-colors",
+              compactLabels
+                ? "size-10 justify-center gap-0 p-0 group-hover/sidebar:h-auto group-hover/sidebar:w-full group-hover/sidebar:justify-start group-hover/sidebar:gap-2 group-hover/sidebar:px-3 group-hover/sidebar:py-2.5"
+                : "gap-2 px-3 py-2.5",
               isActive
                 ? "bg-primary text-primary-foreground"
                 : "hover:bg-muted"
@@ -108,7 +117,7 @@ export function AdminNavLinks({
               className={cn(
                 "truncate",
                 compactLabels &&
-                  "max-w-0 overflow-hidden opacity-0 transition-all duration-200 group-hover/sidebar:max-w-[12rem] group-hover/sidebar:opacity-100"
+                  "hidden group-hover/sidebar:inline group-hover/sidebar:max-w-[12rem]"
               )}
             >
               {item.label}
@@ -120,8 +129,7 @@ export function AdminNavLinks({
         <div
           className={cn(
             "px-3 pt-3",
-            compactLabels &&
-              "hidden group-hover/sidebar:block"
+            compactLabels && "hidden group-hover/sidebar:block"
           )}
         >
           <Badge variant="outline" className="text-xs">
@@ -141,54 +149,19 @@ export function AdminSidebar() {
     <>
       {/* Spacer keeps main content offset while the fixed sidebar expands on hover */}
       <div
-        className={cn(
-          "hidden shrink-0 lg:block",
-          compact ? "w-16" : "w-64"
-        )}
+        className={cn("hidden shrink-0 lg:block", compact ? "w-16" : "w-64")}
         aria-hidden
       />
       <aside
         className={cn(
-          "group/sidebar fixed top-16 bottom-0 left-0 z-40 hidden flex-col overflow-hidden border-r bg-muted/95 p-3 backdrop-blur transition-[width] duration-200 lg:flex",
-          compact ? "w-16 hover:w-64 hover:shadow-lg" : "w-64 p-4"
+          "group/sidebar fixed top-16 bottom-0 left-0 z-40 hidden flex-col overflow-hidden border-r bg-muted/95 backdrop-blur transition-[width] duration-200 lg:flex",
+          compact
+            ? "w-16 items-center p-3 hover:w-64 hover:items-stretch hover:shadow-lg"
+            : "w-64 p-4"
         )}
       >
-        <div
-          className={cn(
-            "mb-6 overflow-hidden px-1",
-            compact && "group-hover/sidebar:px-1"
-          )}
-        >
-          <h2
-            className={cn(
-              "text-lg font-semibold whitespace-nowrap",
-              compact &&
-                "text-center text-sm group-hover/sidebar:text-left group-hover/sidebar:text-lg"
-            )}
-          >
-            {compact ? (
-              <>
-                <span className="group-hover/sidebar:hidden">EMV</span>
-                <span className="hidden group-hover/sidebar:inline">
-                  Inventory
-                </span>
-              </>
-            ) : (
-              "Inventory"
-            )}
-          </h2>
-          <p
-            className={cn(
-              "text-sm text-muted-foreground whitespace-nowrap",
-              compact &&
-                "max-h-0 overflow-hidden opacity-0 group-hover/sidebar:max-h-8 group-hover/sidebar:opacity-100"
-            )}
-          >
-            Physical stores
-          </p>
-        </div>
         <AdminNavLinks
-          className="flex-1 overflow-y-auto"
+          className="w-full flex-1 overflow-y-auto"
           compactLabels={compact}
         />
       </aside>
