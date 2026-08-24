@@ -543,6 +543,9 @@ export function PosWorkspace({
             quantity: 1,
             maxStock: stock,
             isFreebie: false,
+            promotionId: effective.promotionId,
+            promotionName: effective.promotionName,
+            baseCashPrice: effective.onSale ? row.price : null,
           },
         ];
       }
@@ -1011,12 +1014,13 @@ export function PosWorkspace({
                             <p className="min-w-0 text-sm font-medium leading-snug break-words">
                               {displayName}
                             </p>
-                            {effective.onSale ? (
+                            {effective.onSale && effective.promotionName ? (
                               <Badge
                                 variant="outline"
-                                className="shrink-0 text-[10px] text-amber-700"
+                                className="max-w-[7.5rem] shrink-0 truncate text-[10px] text-amber-700"
+                                title={effective.promotionName}
                               >
-                                Sale
+                                {effective.promotionName}
                               </Badge>
                             ) : null}
                           </div>
@@ -1035,8 +1039,40 @@ export function PosWorkspace({
                                   pricedRow,
                                   paymentMethod
                                 );
+                                const catalogDisplay = unitPriceForPaymentMethod(
+                                  {
+                                    price: row.price,
+                                    retailPrice: normalizeRetailPrice(
+                                      row.retailPrice
+                                    ),
+                                  },
+                                  paymentMethod
+                                );
+                                const showStrike =
+                                  effective.onSale &&
+                                  catalogDisplay != null &&
+                                  display != null &&
+                                  catalogDisplay !== display;
+
                                 if (display != null) {
-                                  return formatCurrency(display);
+                                  return (
+                                    <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
+                                      {showStrike ? (
+                                        <span className="text-xs font-normal text-muted-foreground line-through">
+                                          {formatCurrency(catalogDisplay)}
+                                        </span>
+                                      ) : null}
+                                      <span
+                                        className={
+                                          effective.onSale
+                                            ? "text-amber-800"
+                                            : undefined
+                                        }
+                                      >
+                                        {formatCurrency(display)}
+                                      </span>
+                                    </span>
+                                  );
                                 }
                                 return paymentMethod === "retail"
                                   ? "Set retail"

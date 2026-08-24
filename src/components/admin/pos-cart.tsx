@@ -50,6 +50,11 @@ export interface PosCartLine {
   isFreebie?: boolean;
   /** Category ids whose freebie rules produced this line. */
   freebieSourceCategoryIds?: string[];
+  /** Active price promotion applied when the line was added. */
+  promotionId?: string | null;
+  promotionName?: string | null;
+  /** Catalog cash before promotion (for strikethrough display). */
+  baseCashPrice?: number | null;
 }
 
 export type PosCustomerDraft = {
@@ -289,6 +294,15 @@ export function PosCartPanel({
                           Freebie
                         </Badge>
                       ) : null}
+                      {!isFreebie && line.promotionName ? (
+                        <Badge
+                          variant="outline"
+                          className="max-w-[10rem] shrink-0 truncate text-[10px] text-amber-700"
+                          title={line.promotionName}
+                        >
+                          {line.promotionName}
+                        </Badge>
+                      ) : null}
                     </div>
                     {label ? (
                       <p className="truncate text-sm text-muted-foreground">
@@ -308,7 +322,21 @@ export function PosCartPanel({
                         </>
                       ) : (
                         <>
-                          {formatCurrency(line.cashPrice)}
+                          {line.baseCashPrice != null &&
+                          line.baseCashPrice !== line.cashPrice ? (
+                            <span className="mr-1.5 line-through opacity-60">
+                              {formatCurrency(line.baseCashPrice)}
+                            </span>
+                          ) : null}
+                          <span
+                            className={
+                              line.promotionName
+                                ? "font-medium text-amber-800"
+                                : undefined
+                            }
+                          >
+                            {formatCurrency(line.cashPrice)}
+                          </span>
                           <span className="text-muted-foreground/80">
                             {" "}
                             cash

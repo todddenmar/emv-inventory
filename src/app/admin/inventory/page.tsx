@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { History, Loader2, MoreHorizontal, Save, AlertTriangle } from "lucide-react";
+import { History, Loader2, MoreHorizontal, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,8 +39,11 @@ import {
   InventoryAdjustmentHistorySheet,
   type AdjustmentHistoryTarget,
 } from "@/components/admin/inventory-adjustment-history-sheet";
+import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
+import { StockChangePopover } from "@/components/admin/stock-change-popover";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { productIdsForCategoryFilter } from "@/lib/category-filters";
 import { getBranches } from "@/lib/firestore/branches";
 import {
   getAllBranchInventory,
@@ -49,22 +52,24 @@ import {
 } from "@/lib/firestore/inventory";
 import { getProducts } from "@/lib/firestore/products";
 import { getCategories } from "@/lib/firestore/categories";
+import { getCategoryGroups } from "@/lib/firestore/category-groups";
 import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
 import { mergeSellingVariantsWithInventory, getLowStockVariants } from "@/lib/inventory";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { formatCurrency } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
 import { formatVariantLabel } from "@/lib/product-variants";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { Branch, BranchInventory, Category, Product } from "@/types";
+import type {
+  Branch,
+  BranchInventory,
+  Category,
+  CategoryGroup,
+  Product,
+} from "@/types";
 
-type StockDraft = Record<string, number | "">;
 type StockFilter = "all" | "low" | "in_stock" | "out_of_stock";
-
-function toStockNumber(value: number | "" | undefined, fallback: number): number {
-  if (value === "" || value == null) return fallback;
-  return Number.isFinite(value) ? value : fallback;
-}
 
 export default function AdminInventoryPage() {
   const { canViewAllBranches, isOwner, assignedBranchId } = useBranchAccess();
@@ -72,14 +77,14 @@ export default function AdminInventoryPage() {
   const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<BranchInventory[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>("");
-  const [draft, setDraft] = useState<StockDraft>({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [historyTarget, setHistoryTarget] =
     useState<AdjustmentHistoryTarget | null>(null);
@@ -105,26 +110,18 @@ export default function AdminInventoryPage() {
 
   const loadInventory = async (branchId: string) => {
     if (!branchId) return;
-    const [p, inv, cats] = await Promise.all([
+    const [p, inv, cats, groups] = await Promise.all([
       getProducts(),
       canViewAllBranches && branchId === "all"
         ? getAllBranchInventory()
         : getBranchInventory(branchId),
       getCategories(),
+      getCategoryGroups(),
     ]);
     setProducts(p);
     setInventory(inv);
     setCategories(cats.filter((c) => !c.isArchived));
-
-    if (branchId !== "all") {
-      const activeCats = cats.filter((c) => !c.isArchived);
-      const variantRows = mergeSellingVariantsWithInventory(p, inv, activeCats);
-      const nextDraft: StockDraft = {};
-      for (const row of variantRows) {
-        nextDraft[row.id] = row.stock;
-      }
-      setDraft(nextDraft);
-    }
+    setCategoryGroups(groups);
   };
 
   useEffect(() => {
@@ -150,56 +147,38 @@ export default function AdminInventoryPage() {
     );
   }, [products, branchInventory, activeBranchId, categories]);
 
-  const getDraftStock = (
-    variantId: string,
-    row: (typeof variantsWithStock)[0]
-  ): number => toStockNumber(draft[variantId], row.stock);
+  const isLowStockRow = (row: (typeof variantsWithStock)[0]) =>
+    row.stock > 0 && row.stock <= row.lowStockThreshold;
 
-  const getDraftStockInput = (
-    variantId: string,
-    row: (typeof variantsWithStock)[0]
-  ): number | "" =>
-    draft[variantId] !== undefined ? draft[variantId]! : row.stock;
-
-  const isLowStockRow = (row: (typeof variantsWithStock)[0]) => {
-    const stock = getDraftStock(row.id, row);
-    return stock > 0 && stock <= row.lowStockThreshold;
-  };
-
-  const filteredVariants = useMemo(
-    () =>
-      variantsWithStock.filter((row) => {
-        const product = products.find((p) => p.id === row.productId);
-        const matchesSearch =
-          row.productName.toLowerCase().includes(search.toLowerCase()) ||
-          row.sku.toLowerCase().includes(search.toLowerCase()) ||
-          formatVariantLabel(row, product?.options ?? [])
-            .toLowerCase()
-            .includes(search.toLowerCase());
-        const matchesCategory =
-          categoryFilter === "all" || row.categoryIds.includes(categoryFilter);
-        const stock = getDraftStock(row.id, row);
-        const matchesStock =
-          stockFilter === "all" ||
-          (stockFilter === "low" && isLowStockRow(row)) ||
-          (stockFilter === "in_stock" && stock > 0) ||
-          (stockFilter === "out_of_stock" && stock <= 0);
-
-        return matchesSearch && matchesCategory && matchesStock;
-      }),
-    [
-      variantsWithStock,
+  const filteredVariants = useMemo(() => {
+    const allowedProductIds = productIdsForCategoryFilter(
       products,
-      search,
-      categoryFilter,
-      stockFilter,
-      draft,
-    ]
-  );
+      selectedCategoryIds
+    );
+
+    return variantsWithStock.filter((row) => {
+      const product = products.find((p) => p.id === row.productId);
+      const matchesSearch =
+        row.productName.toLowerCase().includes(search.toLowerCase()) ||
+        row.sku.toLowerCase().includes(search.toLowerCase()) ||
+        formatVariantLabel(row, product?.options ?? [])
+          .toLowerCase()
+          .includes(search.toLowerCase());
+      const matchesCategory =
+        !allowedProductIds || allowedProductIds.has(row.productId);
+      const matchesStock =
+        stockFilter === "all" ||
+        (stockFilter === "low" && isLowStockRow(row)) ||
+        (stockFilter === "in_stock" && row.stock > 0) ||
+        (stockFilter === "out_of_stock" && row.stock <= 0);
+
+      return matchesSearch && matchesCategory && matchesStock;
+    });
+  }, [variantsWithStock, products, search, selectedCategoryIds, stockFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, categoryFilter, stockFilter, activeBranchId]);
+  }, [search, selectedCategoryIds, stockFilter, activeBranchId]);
 
   const {
     page: safePage,
@@ -223,11 +202,6 @@ export default function AdminInventoryPage() {
     if (value === "all") return "All branches (overview)";
     const branch = branches.find((b) => b.id === value);
     return branch ? `${branch.name} (${branch.code})` : null;
-  };
-
-  const categorySelectLabel = (value: string | null) => {
-    if (!value || value === "all") return "All categories";
-    return categories.find((c) => c.id === value)?.name ?? null;
   };
 
   const stockSelectLabel = (value: string | null) => {
@@ -260,28 +234,20 @@ export default function AdminInventoryPage() {
     });
   }, [branches, inventory, products, categories, canViewAllBranches]);
 
-  const updateDraftStock = (variantId: string, value: number | "") => {
-    setDraft((prev) => ({
-      ...prev,
-      [variantId]: value,
-    }));
-  };
-
-  const saveStock = async (variantId: string, productId: string) => {
-    if (!canEditStock) return;
-    if (!activeBranchId || activeBranchId === "all") return;
+  const saveStock = async (
+    variantId: string,
+    productId: string,
+    stock: number
+  ): Promise<boolean> => {
+    if (!canEditStock) return false;
+    if (!activeBranchId || activeBranchId === "all") return false;
     const row = variantsWithStock.find((v) => v.id === variantId);
-    if (!row) return;
-    const raw = draft[variantId];
-    if (raw === "") {
-      toast.error("Enter a stock quantity");
-      return;
-    }
-    const stock = getDraftStock(variantId, row);
+    if (!row) return false;
     if (!Number.isFinite(stock) || stock < 0) {
       toast.error("Stock must be zero or greater");
-      return;
+      return false;
     }
+    if (stock === row.stock) return false;
 
     setSavingId(variantId);
     try {
@@ -302,8 +268,10 @@ export default function AdminInventoryPage() {
       );
       toast.success("Stock saved");
       await loadInventory(activeBranchId);
+      return true;
     } catch {
       toast.error("Failed to save stock");
+      return false;
     } finally {
       setSavingId(null);
     }
@@ -439,24 +407,12 @@ export default function AdminInventoryPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="max-w-md"
                 />
-                <Select
-                  value={categoryFilter}
-                  onValueChange={(v) => setCategoryFilter(v ?? "all")}
-                >
-                  <SelectTrigger className="w-full lg:w-48">
-                    <SelectValue placeholder="All categories">
-                      {(value) => categorySelectLabel(value as string | null)}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All categories</SelectItem>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <CategoryFilterPanel
+                  categories={categories}
+                  groups={categoryGroups}
+                  selectedCategoryIds={selectedCategoryIds}
+                  onChange={setSelectedCategoryIds}
+                />
                 <Select
                   value={stockFilter}
                   onValueChange={(v) =>
@@ -525,8 +481,6 @@ export default function AdminInventoryPage() {
                         product && showImages
                           ? getCatalogImageUrl(product, row, catalogImageSource)
                           : null;
-                      const stock = getDraftStock(row.id, row);
-                      const stockInput = getDraftStockInput(row.id, row);
                       const isLow = isLowStockRow(row);
                       const variantLabel = formatVariantLabel(
                         row,
@@ -603,25 +557,28 @@ export default function AdminInventoryPage() {
                               : "—"}
                           </TableCell>
                           <TableCell>
-                            {canEditStock ? (
-                              <Input
-                                type="number"
-                                min={0}
-                                value={stockInput}
-                                onChange={(e) => {
-                                  const raw = e.target.value;
-                                  if (raw === "") {
-                                    updateDraftStock(row.id, "");
-                                    return;
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "min-w-8 tabular-nums font-medium",
+                                  isLow && "text-amber-700"
+                                )}
+                              >
+                                {row.stock}
+                              </span>
+                              {canEditStock ? (
+                                <StockChangePopover
+                                  previousStock={row.stock}
+                                  saving={savingId === row.id}
+                                  disabled={
+                                    savingId != null && savingId !== row.id
                                   }
-                                  const next = Number(raw);
-                                  if (!Number.isFinite(next) || next < 0) return;
-                                  updateDraftStock(row.id, next);
-                                }}
-                              />
-                            ) : (
-                              <span className="tabular-nums">{stock}</span>
-                            )}
+                                  onSave={(nextStock) =>
+                                    saveStock(row.id, row.productId, nextStock)
+                                  }
+                                />
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell className="tabular-nums text-muted-foreground">
                             {row.lowStockThreshold}
@@ -661,17 +618,6 @@ export default function AdminInventoryPage() {
                                   <History className="h-4 w-4" />
                                   Adjustment history
                                 </DropdownMenuItem>
-                                {canEditStock ? (
-                                  <DropdownMenuItem
-                                    disabled={savingId === row.id}
-                                    onClick={() =>
-                                      void saveStock(row.id, row.productId)
-                                    }
-                                  >
-                                    <Save className="h-4 w-4" />
-                                    Save stock
-                                  </DropdownMenuItem>
-                                ) : null}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
