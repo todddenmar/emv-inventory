@@ -242,6 +242,19 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /physicalDailyExpenses/{expenseId} {
+      allow read: if isStaff() &&
+        (canReadAllBranches() || resource.data.branchId == managerBranchId());
+      allow create: if isStaff() &&
+        request.resource.data.branchId != null &&
+        (canReadAllBranches() ||
+          canAccessBranch(request.resource.data.branchId));
+      allow delete: if isStaff() &&
+        (canReadAllBranches() ||
+          canAccessBranch(resource.data.branchId));
+      allow update: if false;
+    }
+
     match /physicalSupplierStockIns/{stockInId} {
       allow read: if isStaff() &&
         (canReadAllBranches() || resource.data.branchId == managerBranchId());

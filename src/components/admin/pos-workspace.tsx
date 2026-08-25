@@ -69,6 +69,12 @@ import {
   posCheckoutPath,
   savePosCheckoutDraft,
 } from "@/lib/pos-checkout-draft";
+import {
+  defaultCartLinePayment,
+  defaultItemPayments,
+  ensureCartLinePaymentFields,
+  syncPaymentsToLineTotal,
+} from "@/lib/pos-payments";
 import { formatCurrency } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
 import { TablePagination } from "@/components/admin/table-pagination";
@@ -80,7 +86,6 @@ import type {
   PosCustomerType,
   PosPaymentMethod,
   PosSaleChannel,
-  PosTenderMethod,
   Product,
   Voucher,
 } from "@/types";
@@ -131,10 +136,6 @@ export function PosWorkspace({
   const productListRef = useRef<HTMLDivElement>(null);
   const [paymentMethod, setPaymentMethod] =
     useState<PosPaymentMethod>("cash");
-  const [tenderMethod, setTenderMethod] = useState<PosTenderMethod>("cash");
-  const [selectedPaymentAccountId, setSelectedPaymentAccountId] = useState<
-    string | null
-  >(null);
   const [customerType, setCustomerType] =
     useState<PosCustomerType>("walk_in");
   const [customer, setCustomer] = useState<PosCustomerDraft>(emptyPosCustomerDraft);
@@ -230,8 +231,6 @@ export function PosWorkspace({
     if (draft && draft.branchId === activeBranchId && draft.lines.length > 0) {
       setCart(draft.lines);
       setPaymentMethod(draft.paymentMethod);
-      setTenderMethod(draft.tenderMethod);
-      setSelectedPaymentAccountId(draft.selectedPaymentAccountId);
       setCustomerType(draft.customerType);
       setCustomer(draft.customer);
       setAppliedVoucher(draft.appliedVoucher);
@@ -239,8 +238,6 @@ export function PosWorkspace({
     } else {
       setCart([]);
       setPaymentMethod("cash");
-      setTenderMethod("cash");
-      setSelectedPaymentAccountId(null);
       setCustomerType("walk_in");
       setCustomer(emptyPosCustomerDraft());
       setAppliedVoucher(null);
@@ -254,8 +251,6 @@ export function PosWorkspace({
     setAppliedVoucher(null);
     setVoucherCodeInput("");
     setPaymentMethod("cash");
-    setTenderMethod("cash");
-    setSelectedPaymentAccountId(null);
     setIgnoredFreebieVariantIds(new Set());
     setResolvedFreebieShortfalls(new Set());
     setAlternateFreebies([]);
@@ -403,6 +398,8 @@ export function PosWorkspace({
       maxStock: stock,
       isFreebie: true,
       freebieSourceCategoryIds: desired.sourceCategoryIds,
+      ...defaultCartLinePayment(),
+      payments: [],
     };
   };
 
@@ -514,39 +511,54 @@ export function PosWorkspace({
         }
         nextPaid = paid.map((line) =>
           line.variantId === row.id
-            ? {
-                ...line,
-                quantity: line.quantity + 1,
-                maxStock: stock,
-              }
+            ? (() => {
+                const quantity = line.quantity + 1;
+                const lineTotal =
+                  Math.round(line.unitPrice * quantity * 100) / 100;
+                return {
+                  ...line,
+                  quantity,
+                  maxStock: stock,
+                  payments: syncPaymentsToLineTotal(
+                    line.payments ?? [],
+                    lineTotal
+                  ),
+                };
+              })()
             : line
         );
       } else {
         nextPaid = [
           ...paid,
-          {
-            productId: row.productId,
-            variantId: row.id,
-            productName: row.productName,
-            variantLabel,
-            cashPrice: effective.price,
-            retailPrice,
-            retailFromCatalog: retailPrice != null,
-            wholesalePrice: normalizeWholesalePrice(row.wholesalePrice),
-            unitPrice: isWholesale
+          (() => {
+            const unitPrice = isWholesale
               ? resolveWholesaleUnitPrice(row.wholesalePrice)
               : resolveUnitPrice(
                   effective.price,
                   retailPrice,
                   paymentMethod
-                ),
-            quantity: 1,
-            maxStock: stock,
-            isFreebie: false,
-            promotionId: effective.promotionId,
-            promotionName: effective.promotionName,
-            baseCashPrice: effective.onSale ? row.price : null,
-          },
+                );
+            return {
+              productId: row.productId,
+              variantId: row.id,
+              productName: row.productName,
+              variantLabel,
+              cashPrice: effective.price,
+              retailPrice,
+              retailFromCatalog: retailPrice != null,
+              wholesalePrice: normalizeWholesalePrice(row.wholesalePrice),
+              unitPrice,
+              quantity: 1,
+              maxStock: stock,
+              isFreebie: false,
+              promotionId: effective.promotionId,
+              promotionName: effective.promotionName,
+              baseCashPrice: effective.onSale ? row.price : null,
+              ...defaultCartLinePayment(),
+              priceList: isWholesale ? ("cash" as const) : paymentMethod,
+              payments: defaultItemPayments(unitPrice),
+            };
+          })(),
         ];
       }
 
@@ -572,7 +584,20 @@ export function PosWorkspace({
       }
       const nextPaid = paid.map((line) =>
         line.variantId === variantId
-          ? { ...line, quantity: line.quantity + 1, maxStock: stock }
+          ? (() => {
+              const quantity = line.quantity + 1;
+              const lineTotal =
+                Math.round(line.unitPrice * quantity * 100) / 100;
+              return {
+                ...line,
+                quantity,
+                maxStock: stock,
+                payments: syncPaymentsToLineTotal(
+                  line.payments ?? [],
+                  lineTotal
+                ),
+              };
+            })()
           : line
       );
       const { nextCart, shortfalls } = mergePaidWithFreebies(nextPaid);
@@ -590,7 +615,19 @@ export function PosWorkspace({
       const paid = prev.filter((line) => !line.isFreebie);
       const nextPaid = paid.map((line) =>
         line.variantId === variantId
-          ? { ...line, quantity: Math.max(1, line.quantity - 1) }
+          ? (() => {
+              const quantity = Math.max(1, line.quantity - 1);
+              const lineTotal =
+                Math.round(line.unitPrice * quantity * 100) / 100;
+              return {
+                ...line,
+                quantity,
+                payments: syncPaymentsToLineTotal(
+                  line.payments ?? [],
+                  lineTotal
+                ),
+              };
+            })()
           : line
       );
       const { nextCart } = mergePaidWithFreebies(nextPaid);
@@ -616,7 +653,19 @@ export function PosWorkspace({
       }
       const nextPaid = paid.map((line) =>
         line.variantId === variantId
-          ? { ...line, quantity: nextQty, maxStock: stock }
+          ? (() => {
+              const lineTotal =
+                Math.round(line.unitPrice * nextQty * 100) / 100;
+              return {
+                ...line,
+                quantity: nextQty,
+                maxStock: stock,
+                payments: syncPaymentsToLineTotal(
+                  line.payments ?? [],
+                  lineTotal
+                ),
+              };
+            })()
           : line
       );
       const { nextCart, shortfalls } = mergePaidWithFreebies(nextPaid);
@@ -718,6 +767,8 @@ export function PosWorkspace({
       maxStock: stock,
       isFreebie: true,
       freebieSourceCategoryIds: freebieShortfall.sourceCategoryIds,
+      ...defaultCartLinePayment(),
+      payments: [],
     };
     const nextAlternates = [
       ...alternateFreebies.filter((l) => l.variantId !== row.id),
@@ -781,10 +832,8 @@ export function PosWorkspace({
       saleChannel,
       branchId: activeBranch.id,
       branchName: activeBranch.name,
-      lines: cart,
+      lines: cart.map((line) => ensureCartLinePaymentFields(line)),
       paymentMethod,
-      tenderMethod,
-      selectedPaymentAccountId,
       customerType,
       customer,
       appliedVoucher,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,19 +21,28 @@ import {
   isVoucherRedeemable,
 } from "@/lib/firestore/vouchers";
 import { normalizeRetailPrice } from "@/lib/product-pricing";
+import { formatCurrency } from "@/lib/format";
 import {
   clearPosCheckoutDraft,
+  draftAmountDue,
   loadPosCheckoutDraft,
   posHomePath,
   savePosCheckoutDraft,
   type PosCheckoutDraft,
 } from "@/lib/pos-checkout-draft";
+import {
+  ensureCartLinePaymentFields,
+  resolvePaymentsFromCartLines,
+  snapshotPaymentAccount,
+  syncPaymentsToLineTotal,
+  tenderNeedsPaymentAccount,
+} from "@/lib/pos-payments";
 import type {
   PaymentAccount,
   PosCustomerType,
   PosPaymentMethod,
   PosSaleChannel,
-  PosTenderMethod,
+  PosSaleItem,
   Voucher,
 } from "@/types";
 
@@ -55,13 +64,9 @@ export function PosCheckoutWorkspace({
   const [lines, setLines] = useState<PosCartLine[]>([]);
   const [paymentMethod, setPaymentMethod] =
     useState<PosPaymentMethod>("cash");
-  const [tenderMethod, setTenderMethod] = useState<PosTenderMethod>("cash");
   const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>(
     []
   );
-  const [selectedPaymentAccountId, setSelectedPaymentAccountId] = useState<
-    string | null
-  >(null);
   const [customerType, setCustomerType] =
     useState<PosCustomerType>("walk_in");
   const [customer, setCustomer] = useState<PosCustomerDraft>(
@@ -85,10 +90,22 @@ export function PosCheckoutWorkspace({
       branchId: draft.branchId,
       branchName: draft.branchName,
     });
-    setLines(draft.lines);
+    setLines(
+      draft.lines.map((line) => {
+        const ensured = ensureCartLinePaymentFields(
+          line,
+          draft.paymentMethod === "retail" ? "retail" : "cash"
+        );
+        if (ensured.isFreebie) return ensured;
+        const lineTotal =
+          Math.round(ensured.unitPrice * ensured.quantity * 100) / 100;
+        return {
+          ...ensured,
+          payments: syncPaymentsToLineTotal(ensured.payments, lineTotal),
+        };
+      })
+    );
     setPaymentMethod(draft.paymentMethod);
-    setTenderMethod(draft.tenderMethod);
-    setSelectedPaymentAccountId(draft.selectedPaymentAccountId);
     setCustomerType(draft.customerType);
     setCustomer(draft.customer);
     setAppliedVoucher(draft.appliedVoucher);
@@ -100,6 +117,11 @@ export function PosCheckoutWorkspace({
       .catch(console.error);
   }, [saleChannel, homePath, router]);
 
+  const amountDue = useMemo(
+    () => draftAmountDue({ lines, appliedVoucher }),
+    [lines, appliedVoucher]
+  );
+
   const persistDraft = useCallback(
     (patch: Partial<PosCheckoutDraft>) => {
       if (!draftMeta) return;
@@ -109,8 +131,6 @@ export function PosCheckoutWorkspace({
         branchName: draftMeta.branchName,
         lines,
         paymentMethod,
-        tenderMethod,
-        selectedPaymentAccountId,
         customerType,
         customer,
         appliedVoucher,
@@ -128,30 +148,9 @@ export function PosCheckoutWorkspace({
       lines,
       paymentMethod,
       saleChannel,
-      selectedPaymentAccountId,
-      tenderMethod,
       voucherCodeInput,
     ]
   );
-
-  const applyPaymentMethod = (method: PosPaymentMethod) => {
-    setPaymentMethod(method);
-    setLines((prev) => {
-      const next = prev.map((line) =>
-        line.isFreebie
-          ? { ...line, unitPrice: 0 }
-          : {
-              ...line,
-              unitPrice:
-                method === "cash"
-                  ? line.cashPrice
-                  : normalizeRetailPrice(line.retailPrice) ?? 0,
-            }
-      );
-      persistDraft({ paymentMethod: method, lines: next });
-      return next;
-    });
-  };
 
   const setLineRetailPrice = (
     variantId: string,
@@ -159,18 +158,18 @@ export function PosCheckoutWorkspace({
   ) => {
     const normalized = normalizeRetailPrice(retailPrice);
     setLines((prev) => {
-      const next = prev.map((line) =>
-        line.variantId === variantId && !line.isFreebie
-          ? {
-              ...line,
-              retailPrice: normalized,
-              unitPrice:
-                paymentMethod === "cash"
-                  ? line.cashPrice
-                  : normalized ?? 0,
-            }
-          : line
-      );
+      const next = prev.map((line) => {
+        if (line.variantId !== variantId || line.isFreebie) return line;
+        const unitPrice =
+          line.priceList === "cash" ? line.cashPrice : normalized ?? 0;
+        const lineTotal = Math.round(unitPrice * line.quantity * 100) / 100;
+        return {
+          ...line,
+          retailPrice: normalized,
+          unitPrice,
+          payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal),
+        };
+      });
       persistDraft({ lines: next });
       return next;
     });
@@ -180,11 +179,15 @@ export function PosCheckoutWorkspace({
     const nextPrice =
       Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0;
     setLines((prev) => {
-      const next = prev.map((line) =>
-        line.variantId === variantId && !line.isFreebie
-          ? { ...line, unitPrice: nextPrice }
-          : line
-      );
+      const next = prev.map((line) => {
+        if (line.variantId !== variantId || line.isFreebie) return line;
+        const lineTotal = Math.round(nextPrice * line.quantity * 100) / 100;
+        return {
+          ...line,
+          unitPrice: nextPrice,
+          payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal),
+        };
+      });
       persistDraft({ lines: next });
       return next;
     });
@@ -223,10 +226,10 @@ export function PosCheckoutWorkspace({
 
     const missingRetail =
       !isWholesale &&
-      paymentMethod === "retail" &&
       lines.some(
         (line) =>
           !line.isFreebie &&
+          line.priceList === "retail" &&
           (line.retailPrice == null || line.retailPrice <= 0)
       );
     if (missingRetail) {
@@ -244,12 +247,14 @@ export function PosCheckoutWorkspace({
       return;
     }
 
-    const needsAccount = tenderMethod === "ewallet";
-    const selectedAccount = paymentAccounts.find(
-      (a) => a.id === selectedPaymentAccountId && a.type === "ewallet"
-    );
-    if (needsAccount && !selectedAccount) {
-      toast.error("Select an e-wallet account");
+    let payments;
+    try {
+      payments =
+        amountDue <= 0.01
+          ? []
+          : resolvePaymentsFromCartLines(lines, paymentAccounts, amountDue);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invalid payments");
       setCheckoutStep("details");
       return;
     }
@@ -289,17 +294,17 @@ export function PosCheckoutWorkspace({
         branchId: draftMeta.branchId,
         branchName: draftMeta.branchName,
         saleChannel,
-        paymentMethod: isWholesale ? "cash" : paymentMethod,
-        tenderMethod,
-        paymentAccount: selectedAccount
-          ? {
-              id: selectedAccount.id,
-              type: selectedAccount.type,
-              provider: selectedAccount.provider,
-              accountName: selectedAccount.accountName,
-              accountNumber: selectedAccount.accountNumber,
-            }
-          : null,
+        paymentMethod: isWholesale
+          ? "cash"
+          : (() => {
+              const lists = lines
+                .filter((l) => !l.isFreebie)
+                .map((l) => l.priceList);
+              if (lists.length === 0) return "cash";
+              const allSame = lists.every((p) => p === lists[0]);
+              return allSame ? lists[0] : "cash";
+            })(),
+        payments,
         customerType,
         customer:
           customerType === "walk_in" ? null : normalizePosCustomer(customer),
@@ -307,17 +312,18 @@ export function PosCheckoutWorkspace({
         resellerName: appliedVoucher?.resellerName ?? null,
         voucherId: appliedVoucher?.id ?? null,
         items: (() => {
-          const merged = new Map<
-            string,
-            {
-              productId: string;
-              variantId: string;
-              productName: string;
-              quantity: number;
-              unitPrice: number;
-              lineTotal: number;
-            }
-          >();
+          const items: PosSaleItem[] = [];
+          const scale =
+            amountDue > 0.01
+              ? amountDue /
+                Math.max(
+                  0.01,
+                  lines
+                    .filter((l) => !l.isFreebie)
+                    .reduce((s, l) => s + l.unitPrice * l.quantity, 0)
+                )
+              : 1;
+
           for (const line of lines) {
             const name = line.isFreebie
               ? `${
@@ -330,28 +336,46 @@ export function PosCheckoutWorkspace({
                 : line.productName;
             const unitPrice = line.isFreebie ? 0 : line.unitPrice;
             const lineTotal = unitPrice * line.quantity;
-            const existing = merged.get(line.variantId);
-            if (!existing) {
-              merged.set(line.variantId, {
-                productId: line.productId,
-                variantId: line.variantId,
-                productName: name,
-                quantity: line.quantity,
-                unitPrice,
-                lineTotal,
-              });
-            } else {
-              const quantity = existing.quantity + line.quantity;
-              const total = existing.lineTotal + lineTotal;
-              existing.quantity = quantity;
-              existing.lineTotal = total;
-              existing.unitPrice = quantity > 0 ? total / quantity : 0;
-              if (line.isFreebie && !existing.productName.includes("(Freebie)")) {
-                existing.productName = `${existing.productName} + freebie`;
-              }
-            }
+
+            const itemPayments =
+              line.isFreebie || !(line.payments?.length > 0)
+                ? []
+                : line.payments.map((pay) => {
+                    const account =
+                      tenderNeedsPaymentAccount(pay.tenderMethod) &&
+                      pay.paymentAccountId
+                        ? paymentAccounts.find(
+                            (a) => a.id === pay.paymentAccountId
+                          )
+                        : null;
+                    return {
+                      tenderMethod: pay.tenderMethod,
+                      amount: Math.round(pay.amount * scale * 100) / 100,
+                      paymentAccount: account
+                        ? snapshotPaymentAccount(account)
+                        : null,
+                      kind: pay.kind,
+                      note: pay.note.trim() ? pay.note.trim() : null,
+                    };
+                  });
+
+            const primary = itemPayments[0] ?? null;
+            items.push({
+              productId: line.productId,
+              variantId: line.variantId,
+              productName: name,
+              quantity: line.quantity,
+              unitPrice,
+              lineTotal,
+              priceList: line.isFreebie || isWholesale ? null : line.priceList,
+              payments: itemPayments,
+              tenderMethod: primary?.tenderMethod ?? null,
+              paymentAccount: primary?.paymentAccount ?? null,
+              kind: primary?.kind ?? null,
+              note: primary?.note ?? null,
+            });
           }
-          return [...merged.values()];
+          return items;
         })(),
         createdBy: user.uid,
         createdByName: user.displayName ?? user.email,
@@ -376,11 +400,19 @@ export function PosCheckoutWorkspace({
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg space-y-4 pb-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Checkout</h1>
-        <p className="text-muted-foreground">
-          {isWholesale ? "Wholesale" : "Shop"} · {draftMeta.branchName}
+    <div className="mx-auto w-full max-w-6xl space-y-4 pb-8">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Checkout</h1>
+          <p className="text-muted-foreground">
+            {isWholesale ? "Wholesale" : "Shop"} · {draftMeta.branchName}
+          </p>
+        </div>
+        <p className="text-sm tabular-nums text-muted-foreground sm:text-right">
+          Amount due{" "}
+          <span className="text-base font-semibold text-foreground">
+            {formatCurrency(amountDue)}
+          </span>
         </p>
       </div>
       <PosCheckoutDialog
@@ -391,27 +423,51 @@ export function PosCheckoutWorkspace({
         lines={lines}
         branchName={draftMeta.branchName}
         saleChannel={saleChannel}
-        paymentMethod={paymentMethod}
-        tenderMethod={tenderMethod}
         paymentAccounts={paymentAccounts}
-        selectedPaymentAccountId={selectedPaymentAccountId}
         customerType={customerType}
         customer={customer}
         appliedVoucher={appliedVoucher}
         voucherCodeInput={voucherCodeInput}
         charging={charging}
-        onPaymentMethodChange={applyPaymentMethod}
-        onTenderMethodChange={(method) => {
-          setTenderMethod(method);
-          setSelectedPaymentAccountId(null);
-          persistDraft({
-            tenderMethod: method,
-            selectedPaymentAccountId: null,
+        onLineChange={(variantId, patch) => {
+          setLines((prev) => {
+            const next = prev.map((line) => {
+              if (line.variantId !== variantId || line.isFreebie) return line;
+              let nextLine = { ...line, ...patch };
+              if (patch.priceList) {
+                const unitPrice =
+                  patch.priceList === "cash"
+                    ? line.cashPrice
+                    : normalizeRetailPrice(line.retailPrice) ?? 0;
+                const lineTotal =
+                  Math.round(unitPrice * line.quantity * 100) / 100;
+                nextLine = {
+                  ...nextLine,
+                  unitPrice,
+                  payments: syncPaymentsToLineTotal(
+                    patch.payments ?? line.payments ?? [],
+                    lineTotal
+                  ),
+                };
+              }
+              return nextLine;
+            });
+            const lists = next
+              .filter((l) => !l.isFreebie)
+              .map((l) => l.priceList);
+            const nextMethod =
+              lists.length > 0 && lists.every((p) => p === lists[0])
+                ? lists[0]
+                : paymentMethod;
+            if (nextMethod !== paymentMethod) {
+              setPaymentMethod(nextMethod);
+            }
+            persistDraft({
+              lines: next,
+              paymentMethod: nextMethod,
+            });
+            return next;
           });
-        }}
-        onPaymentAccountChange={(id) => {
-          setSelectedPaymentAccountId(id);
-          persistDraft({ selectedPaymentAccountId: id });
         }}
         onCustomerTypeChange={(type) => {
           setCustomerType(type);

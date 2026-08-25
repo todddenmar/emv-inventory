@@ -19,6 +19,7 @@ import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
 import { isVoucherRedeemable } from "@/lib/firestore/vouchers";
 import type {
   PosCustomerType,
+  PosPaymentLine,
   PosPaymentMethod,
   PosSale,
   PosSaleChannel,
@@ -28,14 +29,23 @@ import type {
   PosTenderMethod,
   Voucher,
 } from "@/types";
+import {
+  PAYMENT_AMOUNT_TOLERANCE,
+  paymentsCoverAmountDue,
+  roundMoney,
+  synthesizePaymentsFromLegacy,
+  tenderNeedsPaymentAccount,
+} from "@/lib/pos-payments";
 
 export interface CompletePosSaleInput {
   branchId: string;
   branchName: string;
   saleChannel?: PosSaleChannel;
   paymentMethod: PosPaymentMethod;
-  tenderMethod: PosTenderMethod;
+  /** Prefer `payments`. Kept for callers that still pass a single tender. */
+  tenderMethod?: PosTenderMethod;
   paymentAccount?: PosSalePaymentAccount | null;
+  payments?: PosPaymentLine[];
   customerType: PosCustomerType;
   customer?: PosSaleCustomer | null;
   resellerId?: string | null;
@@ -113,18 +123,45 @@ export async function completePosSale(
     throw new Error("Cart is empty");
   }
 
-  const tenderMethod = input.tenderMethod;
-  const needsAccount = tenderMethod === "ewallet";
-  if (needsAccount) {
-    const account = input.paymentAccount;
-    if (
-      !account?.id ||
-      !account.provider ||
-      !account.accountName ||
-      !account.accountNumber ||
-      account.type !== "ewallet"
-    ) {
-      throw new Error("Select an e-wallet account");
+  const providedPayments =
+    input.payments && input.payments.length > 0
+      ? input.payments.map((line) => ({
+          tenderMethod: line.tenderMethod,
+          amount: roundMoney(line.amount),
+          paymentAccount: tenderNeedsPaymentAccount(line.tenderMethod)
+            ? line.paymentAccount
+            : null,
+          kind: line.kind ?? "full",
+          note:
+            typeof line.note === "string" && line.note.trim()
+              ? line.note.trim()
+              : null,
+        }))
+      : null;
+
+  if (providedPayments) {
+    for (const line of providedPayments) {
+      if (!Number.isFinite(line.amount) || line.amount <= 0) {
+        throw new Error("Each payment amount must be greater than 0");
+      }
+      if (tenderNeedsPaymentAccount(line.tenderMethod)) {
+        const account = line.paymentAccount;
+        const expectedType =
+          line.tenderMethod === "bank_transfer" ? "bank_transfer" : "ewallet";
+        if (
+          !account?.id ||
+          !account.provider ||
+          !account.accountName ||
+          !account.accountNumber ||
+          account.type !== expectedType
+        ) {
+          throw new Error(
+            expectedType === "bank_transfer"
+              ? "Select a bank transfer account for each bank transfer payment"
+              : "Select an e-wallet account for each e-wallet payment"
+          );
+        }
+      }
     }
   }
 
@@ -267,6 +304,23 @@ export async function completePosSale(
 
     const amountDue = Math.max(0, total - voucherAmountApplied);
 
+    let payments: PosPaymentLine[] = [];
+    if (amountDue > PAYMENT_AMOUNT_TOLERANCE) {
+      payments =
+        providedPayments ??
+        synthesizePaymentsFromLegacy(
+          input.tenderMethod ?? "cash",
+          input.paymentAccount ?? null,
+          amountDue
+        );
+      if (!paymentsCoverAmountDue(amountDue, payments)) {
+        throw new Error("Payment amounts must equal the amount due");
+      }
+    }
+
+    const primaryTender = payments[0]?.tenderMethod ?? "cash";
+    const primaryAccount = payments[0]?.paymentAccount ?? null;
+
     for (const row of rows) {
       tx.update(row.invRef, {
         stock: row.newStock,
@@ -304,8 +358,9 @@ export async function completePosSale(
       branchName: input.branchName,
       saleChannel: input.saleChannel === "wholesale" ? "wholesale" : "shop",
       paymentMethod: input.paymentMethod,
-      tenderMethod,
-      paymentAccount: needsAccount ? input.paymentAccount ?? null : null,
+      tenderMethod: primaryTender,
+      paymentAccount: primaryAccount,
+      payments,
       customerType,
       customer:
         customerType === "walk_in" ? null : (input.customer ?? null),

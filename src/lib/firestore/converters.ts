@@ -12,6 +12,7 @@ import type {
   BranchTransfer,
   Category,
   CategoryGroup,
+  DailyExpense,
   InventoryLog,
   Invite,
   PaymentAccount,
@@ -555,6 +556,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       paymentMethod: sale.paymentMethod,
       tenderMethod: sale.tenderMethod,
       paymentAccount: sale.paymentAccount,
+      payments: sale.payments,
       customerType: sale.customerType,
       customer: sale.customer,
       resellerId: sale.resellerId,
@@ -581,9 +583,14 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
     const rawAccount = data.paymentAccount as PosSale["paymentAccount"] | undefined;
     const total = Number(data.total ?? 0);
     const voucherAmountApplied = Number(data.voucherAmountApplied ?? 0);
+    const amountDue =
+      data.amountDue != null
+        ? Number(data.amountDue)
+        : Math.max(0, total - voucherAmountApplied);
     const tenderRaw = data.tenderMethod;
     const tenderMethod =
       tenderRaw === "ewallet" ||
+      tenderRaw === "bank_transfer" ||
       tenderRaw === "home_credit" ||
       tenderRaw === "skyro" ||
       tenderRaw === "salmon" ||
@@ -594,6 +601,80 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       data.customerType === "reservation" || data.customerType === "delivery"
         ? data.customerType
         : "walk_in";
+    const paymentAccount: PosSale["paymentAccount"] = rawAccount
+      ? {
+          id: String(rawAccount.id ?? ""),
+          type:
+            rawAccount.type === "bank_transfer" ? "bank_transfer" : "ewallet",
+          provider: String(rawAccount.provider ?? ""),
+          accountName: String(rawAccount.accountName ?? ""),
+          accountNumber: String(rawAccount.accountNumber ?? ""),
+        }
+      : null;
+
+    const parsePaymentLine = (raw: unknown): PosSale["payments"][number] | null => {
+      if (!raw || typeof raw !== "object") return null;
+      const row = raw as Record<string, unknown>;
+      const method: PosSale["tenderMethod"] =
+        row.tenderMethod === "ewallet" ||
+        row.tenderMethod === "bank_transfer" ||
+        row.tenderMethod === "home_credit" ||
+        row.tenderMethod === "skyro" ||
+        row.tenderMethod === "salmon" ||
+        row.tenderMethod === "card_swipe"
+          ? row.tenderMethod
+          : "cash";
+      const amount = Number(row.amount ?? 0);
+      if (!Number.isFinite(amount)) return null;
+      const acct = row.paymentAccount as PosSale["paymentAccount"] | undefined;
+      const lineAccount: PosSale["paymentAccount"] = acct
+        ? {
+            id: String(acct.id ?? ""),
+            type: acct.type === "bank_transfer" ? "bank_transfer" : "ewallet",
+            provider: String(acct.provider ?? ""),
+            accountName: String(acct.accountName ?? ""),
+            accountNumber: String(acct.accountNumber ?? ""),
+          }
+        : null;
+      return {
+        tenderMethod: method,
+        amount,
+        paymentAccount: lineAccount,
+        kind:
+          row.kind === "down_payment" ||
+          row.kind === "balance" ||
+          row.kind === "other"
+            ? row.kind
+            : "full",
+        note:
+          typeof row.note === "string" && row.note.trim()
+            ? row.note.trim()
+            : null,
+      };
+    };
+
+    const rawPayments = Array.isArray(data.payments) ? data.payments : null;
+    const parsedPayments =
+      rawPayments
+        ?.map(parsePaymentLine)
+        .filter((line): line is PosSale["payments"][number] => line != null) ??
+      [];
+    const payments =
+      parsedPayments.length > 0
+        ? parsedPayments
+        : [
+            {
+              tenderMethod,
+              amount: Math.max(0, amountDue),
+              paymentAccount:
+                tenderMethod === "ewallet" || tenderMethod === "bank_transfer"
+                  ? paymentAccount
+                  : null,
+              kind: "full" as const,
+              note: null,
+            },
+          ];
+
     return {
       id: snapshot.id,
       branchId: data.branchId,
@@ -601,16 +682,8 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       saleChannel: data.saleChannel === "wholesale" ? "wholesale" : "shop",
       paymentMethod: data.paymentMethod === "retail" ? "retail" : "cash",
       tenderMethod,
-      paymentAccount: rawAccount
-        ? {
-            id: String(rawAccount.id ?? ""),
-            type:
-              rawAccount.type === "bank_transfer" ? "bank_transfer" : "ewallet",
-            provider: String(rawAccount.provider ?? ""),
-            accountName: String(rawAccount.accountName ?? ""),
-            accountNumber: String(rawAccount.accountNumber ?? ""),
-          }
-        : null,
+      paymentAccount,
+      payments,
       customerType,
       customer: rawCustomer
         ? {
@@ -626,18 +699,93 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       voucherCode: data.voucherCode ?? null,
       voucherAmountApplied,
       total,
-      amountDue:
-        data.amountDue != null
-          ? Number(data.amountDue)
-          : Math.max(0, total - voucherAmountApplied),
-      items: rawItems.map((item) => ({
-        productId: item.productId,
-        variantId: item.variantId,
-        productName: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        lineTotal: item.lineTotal,
-      })),
+      amountDue,
+      items: rawItems.map((item) => {
+        const tenderMethod =
+          item.tenderMethod === "ewallet" ||
+          item.tenderMethod === "bank_transfer" ||
+          item.tenderMethod === "home_credit" ||
+          item.tenderMethod === "skyro" ||
+          item.tenderMethod === "salmon" ||
+          item.tenderMethod === "card_swipe" ||
+          item.tenderMethod === "cash"
+            ? item.tenderMethod
+            : null;
+        const acct = item.paymentAccount as
+          | PosSale["paymentAccount"]
+          | undefined
+          | null;
+        const lineAccount: PosSale["paymentAccount"] = acct
+          ? {
+              id: String(acct.id ?? ""),
+              type:
+                acct.type === "bank_transfer" ? "bank_transfer" : "ewallet",
+              provider: String(acct.provider ?? ""),
+              accountName: String(acct.accountName ?? ""),
+              accountNumber: String(acct.accountNumber ?? ""),
+            }
+          : null;
+        const kind =
+          item.kind === "down_payment" ||
+          item.kind === "balance" ||
+          item.kind === "other" ||
+          item.kind === "full"
+            ? item.kind
+            : null;
+        const note =
+          typeof item.note === "string" && item.note.trim()
+            ? item.note.trim()
+            : null;
+        const priceList =
+          item.priceList === "retail" || item.priceList === "cash"
+            ? item.priceList
+            : null;
+
+        const rawItemPayments = Array.isArray(item.payments)
+          ? item.payments
+          : null;
+        const parsedItemPayments =
+          rawItemPayments
+            ?.map((raw) => {
+              if (!raw || typeof raw !== "object") return null;
+              return parsePaymentLine(raw);
+            })
+            .filter(
+              (line): line is PosSale["payments"][number] => line != null
+            ) ?? [];
+
+        const payments: PosSale["payments"] =
+          parsedItemPayments.length > 0
+            ? parsedItemPayments
+            : tenderMethod
+              ? [
+                  {
+                    tenderMethod,
+                    amount: Number(item.lineTotal ?? 0),
+                    paymentAccount: lineAccount,
+                    kind: kind ?? "full",
+                    note,
+                  },
+                ]
+              : [];
+
+        const primary = payments[0] ?? null;
+
+        return {
+          productId: item.productId,
+          variantId: item.variantId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          lineTotal: item.lineTotal,
+          priceList,
+          payments,
+          tenderMethod: primary?.tenderMethod ?? tenderMethod,
+          paymentAccount: primary?.paymentAccount ?? lineAccount,
+          kind: primary?.kind ?? kind,
+          note: primary?.note ?? note,
+        };
+      }),
       itemCount: data.itemCount ?? 0,
       createdBy: data.createdBy,
       createdByName: data.createdByName ?? null,
@@ -857,6 +1005,38 @@ export const pricePromotionConverter: FirestoreDataConverter<PricePromotion> = {
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
       endedAt: data.endedAt ? toDate(data.endedAt) : null,
+    };
+  },
+};
+
+export const dailyExpenseConverter: FirestoreDataConverter<DailyExpense> = {
+  toFirestore(entry: DailyExpense): DocumentData {
+    return {
+      branchId: entry.branchId,
+      branchName: entry.branchName,
+      date: entry.date,
+      description: entry.description,
+      amount: entry.amount,
+      createdBy: entry.createdBy,
+      createdByName: entry.createdByName,
+      createdAt: entry.createdAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): DailyExpense {
+    const data = snapshot.data(options);
+    return {
+      id: snapshot.id,
+      branchId: data.branchId,
+      branchName: data.branchName ?? "",
+      date: String(data.date ?? ""),
+      description: String(data.description ?? "").trim(),
+      amount: Number(data.amount ?? 0),
+      createdBy: data.createdBy ?? "",
+      createdByName: data.createdByName ?? null,
+      createdAt: toDate(data.createdAt),
     };
   },
 };

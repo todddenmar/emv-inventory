@@ -69,7 +69,9 @@ export function AdminNavLinks({
 
   const items = adminNavItems.filter((item) => {
     if (isOwner) {
-      return item.href === "/admin/reports" || item.href === "/admin/inventory";
+      return (
+        item.href === "/admin/reports" || item.href === "/admin/inventory"
+      );
     }
     return isElevatedAdmin || !item.masterOnly;
   });

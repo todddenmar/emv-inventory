@@ -93,6 +93,7 @@ function getAdminApp(): App {
 
   adminApp = initializeApp({
     credential: cert(credentials),
+    projectId: credentials.projectId,
   });
   return adminApp;
 }

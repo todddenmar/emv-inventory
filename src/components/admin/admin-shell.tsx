@@ -44,7 +44,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <CashierRouteGuard>
         <div className="flex min-h-screen w-full flex-col">
           <CashierHeader />
-          <div className="min-w-0 w-full flex-1 overflow-auto p-4 pb-24 md:p-6">
+          <div className="min-w-0 w-full flex-1 overflow-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-6">
             {children}
           </div>
           <CashierBottomNav />
@@ -58,7 +58,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <AdminHeader />
       <div className="flex w-full flex-1 flex-col lg:flex-row">
         <AdminSidebar />
-        <div className="min-w-0 w-full flex-1 overflow-auto p-4 pb-24 md:p-6 lg:pb-6">
+        <div className="min-w-0 w-full flex-1 overflow-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-6 lg:pb-6">
           {children}
         </div>
       </div>

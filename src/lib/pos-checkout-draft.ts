@@ -2,11 +2,11 @@ import type {
   PosCartLine,
   PosCustomerDraft,
 } from "@/components/admin/pos-cart";
+import { ensureCartLinePaymentFields } from "@/lib/pos-payments";
 import type {
   PosPaymentMethod,
   PosSaleChannel,
   PosCustomerType,
-  PosTenderMethod,
   Voucher,
 } from "@/types";
 
@@ -16,8 +16,6 @@ export interface PosCheckoutDraft {
   branchName: string;
   lines: PosCartLine[];
   paymentMethod: PosPaymentMethod;
-  tenderMethod: PosTenderMethod;
-  selectedPaymentAccountId: string | null;
   customerType: PosCustomerType;
   customer: PosCustomerDraft;
   appliedVoucher: Voucher | null;
@@ -29,11 +27,38 @@ function draftKey(saleChannel: PosSaleChannel): string {
   return `emv-pos-checkout:${saleChannel}`;
 }
 
+function merchandiseSubtotal(lines: PosCartLine[]): number {
+  return lines.reduce(
+    (sum, line) =>
+      sum + (line.isFreebie ? 0 : line.unitPrice * line.quantity),
+    0
+  );
+}
+
+function voucherAppliedAmount(
+  voucher: Voucher | null,
+  subtotal: number
+): number {
+  if (!voucher) return 0;
+  return Math.min(Math.max(0, voucher.remainingAmount), subtotal);
+}
+
+export function draftAmountDue(draft: {
+  lines: PosCartLine[];
+  appliedVoucher: Voucher | null;
+}): number {
+  const subtotal = merchandiseSubtotal(draft.lines);
+  return Math.max(0, subtotal - voucherAppliedAmount(draft.appliedVoucher, subtotal));
+}
+
 export function savePosCheckoutDraft(draft: PosCheckoutDraft): void {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(
     draftKey(draft.saleChannel),
-    JSON.stringify({ ...draft, savedAt: Date.now() })
+    JSON.stringify({
+      ...draft,
+      savedAt: Date.now(),
+    })
   );
 }
 
@@ -54,7 +79,6 @@ export function loadPosCheckoutDraft(
     ) {
       return null;
     }
-    // Revive voucher dates if present
     if (parsed.appliedVoucher) {
       const v = parsed.appliedVoucher;
       parsed.appliedVoucher = {
@@ -64,7 +88,11 @@ export function loadPosCheckoutDraft(
         expiresAt: v.expiresAt ? new Date(v.expiresAt) : null,
       } as Voucher;
     }
-    return parsed;
+
+    return {
+      ...parsed,
+      lines: parsed.lines.map((line) => ensureCartLinePaymentFields(line)),
+    };
   } catch {
     return null;
   }
@@ -75,12 +103,12 @@ export function clearPosCheckoutDraft(saleChannel: PosSaleChannel): void {
   sessionStorage.removeItem(draftKey(saleChannel));
 }
 
+export function posHomePath(saleChannel: PosSaleChannel): string {
+  return saleChannel === "wholesale" ? "/admin/wholesale" : "/admin/pos";
+}
+
 export function posCheckoutPath(saleChannel: PosSaleChannel): string {
   return saleChannel === "wholesale"
     ? "/admin/wholesale/checkout"
     : "/admin/pos/checkout";
-}
-
-export function posHomePath(saleChannel: PosSaleChannel): string {
-  return saleChannel === "wholesale" ? "/admin/wholesale" : "/admin/pos";
 }

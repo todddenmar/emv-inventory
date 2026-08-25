@@ -235,6 +235,7 @@ export type PosSaleChannel = "shop" | "wholesale";
 export type PosTenderMethod =
   | "cash"
   | "ewallet"
+  | "bank_transfer"
   | "home_credit"
   | "skyro"
   | "salmon"
@@ -264,6 +265,24 @@ export interface PosSalePaymentAccount {
   accountNumber: string;
 }
 
+/** How this tender line applies to the sale. */
+export type PosPaymentKind =
+  | "full"
+  | "down_payment"
+  | "balance"
+  | "other";
+
+/** One tender amount toward the sale's amount due. */
+export interface PosPaymentLine {
+  tenderMethod: PosTenderMethod;
+  amount: number;
+  paymentAccount: PosSalePaymentAccount | null;
+  /** Defaults to full for legacy sales. */
+  kind: PosPaymentKind;
+  /** Optional free-text note (e.g. custom label when kind is other). */
+  note: string | null;
+}
+
 export interface PosSaleCustomer {
   name: string | null;
   mobile: string | null;
@@ -278,6 +297,19 @@ export interface PosSaleItem {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  /**
+   * Cash vs retail for this line (shop). Null for wholesale, freebies, or legacy.
+   */
+  priceList: PosPaymentMethod | null;
+  /** Split tenders covering this line. Empty for freebies / legacy. */
+  payments: PosPaymentLine[];
+  /**
+   * Primary tender (first payment). Kept for legacy readers / daily notes.
+   */
+  tenderMethod: PosTenderMethod | null;
+  paymentAccount: PosSalePaymentAccount | null;
+  kind: PosPaymentKind | null;
+  note: string | null;
 }
 
 export interface PosSale {
@@ -288,10 +320,17 @@ export interface PosSale {
   saleChannel: PosSaleChannel;
   /** Price list used for line prices (cash vs retail) on shop sales. */
   paymentMethod: PosPaymentMethod;
-  /** How the customer paid (cash, e-wallet, bank transfer). */
+  /**
+   * Primary tender (first payment line). Kept for legacy readers.
+   * Prefer `payments` for the full breakdown.
+   */
   tenderMethod: PosTenderMethod;
-  /** Receiving account when tender is e-wallet or bank transfer. */
+  /**
+   * Primary receiving account (first payment line). Kept for legacy readers.
+   */
   paymentAccount: PosSalePaymentAccount | null;
+  /** Full tender split covering amountDue. */
+  payments: PosPaymentLine[];
   customerType: PosCustomerType;
   customer: PosSaleCustomer | null;
   resellerId: string | null;
@@ -305,6 +344,20 @@ export interface PosSale {
   amountDue: number;
   items: PosSaleItem[];
   itemCount: number;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+}
+
+/** Day/branch expense row for the daily sales report. */
+export interface DailyExpense {
+  id: string;
+  branchId: string;
+  branchName: string;
+  /** Local calendar day as YYYY-MM-DD. */
+  date: string;
+  description: string;
+  amount: number;
   createdBy: string;
   createdByName: string | null;
   createdAt: Date;

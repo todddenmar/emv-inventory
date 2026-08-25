@@ -10,6 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -21,9 +25,27 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
 import { voucherOwnerLabel } from "@/lib/firestore/vouchers";
+import {
+  POS_TENDER_METHODS as PAYMENT_TENDER_METHODS,
+  POS_PAYMENT_KINDS,
+  accountTypeForTender,
+  createItemPaymentLine,
+  formatPaymentLineNote,
+  itemPaymentsCoverLineTotal,
+  moneyInputText,
+  parseMoneyInput,
+  paymentKindLabel,
+  paymentRemaining,
+  sumCheckoutPaymentAmounts,
+  tenderMethodLabel as paymentTenderMethodLabel,
+  tenderNeedsPaymentAccount,
+  isPosTenderMethod as isPaymentTenderMethod,
+  type PosCheckoutPaymentLine,
+} from "@/lib/pos-payments";
 import type {
   PaymentAccount,
   PosCustomerType,
+  PosPaymentKind,
   PosPaymentMethod,
   PosSaleChannel,
   PosSaleCustomer,
@@ -55,6 +77,10 @@ export interface PosCartLine {
   promotionName?: string | null;
   /** Catalog cash before promotion (for strikethrough display). */
   baseCashPrice?: number | null;
+  /** Shop: cash vs retail for this line. */
+  priceList: PosPaymentMethod;
+  /** Split tenders covering this line's total. */
+  payments: PosCheckoutPaymentLine[];
 }
 
 export type PosCustomerDraft = {
@@ -91,40 +117,13 @@ export function customerTypeLabel(type: PosCustomerType): string {
 }
 
 export function tenderMethodLabel(method: PosTenderMethod): string {
-  switch (method) {
-    case "ewallet":
-      return "E-wallet";
-    case "home_credit":
-      return "Home Credit";
-    case "skyro":
-      return "Skyro";
-    case "salmon":
-      return "Salmon";
-    case "card_swipe":
-      return "Card/Swipe";
-    default:
-      return "Cash";
-  }
+  return paymentTenderMethodLabel(method);
 }
 
-export const POS_TENDER_METHODS: PosTenderMethod[] = [
-  "cash",
-  "ewallet",
-  "home_credit",
-  "skyro",
-  "salmon",
-  "card_swipe",
-];
+export const POS_TENDER_METHODS = PAYMENT_TENDER_METHODS;
 
 export function isPosTenderMethod(value: unknown): value is PosTenderMethod {
-  return (
-    value === "cash" ||
-    value === "ewallet" ||
-    value === "home_credit" ||
-    value === "skyro" ||
-    value === "salmon" ||
-    value === "card_swipe"
-  );
+  return isPaymentTenderMethod(value);
 }
 
 function lineLabel(line: PosCartLine): string | null {
@@ -151,24 +150,6 @@ function cartTotals(
     voucherApplied,
     amountDue: Math.max(0, subtotal - voucherApplied),
   };
-}
-
-function cashSubtotal(lines: PosCartLine[]): number {
-  return lines.reduce(
-    (sum, line) =>
-      line.isFreebie ? sum : sum + line.cashPrice * line.quantity,
-    0
-  );
-}
-
-function retailSubtotal(lines: PosCartLine[]): number | null {
-  let total = 0;
-  for (const line of lines) {
-    if (line.isFreebie) continue;
-    if (line.retailPrice == null || line.retailPrice <= 0) return null;
-    total += line.retailPrice * line.quantity;
-  }
-  return total;
 }
 
 interface PosCartPanelProps {
@@ -505,18 +486,16 @@ interface PosCheckoutDialogProps {
   lines: PosCartLine[];
   branchName: string;
   saleChannel?: PosSaleChannel;
-  paymentMethod: PosPaymentMethod;
-  tenderMethod: PosTenderMethod;
   paymentAccounts: PaymentAccount[];
-  selectedPaymentAccountId: string | null;
   customerType: PosCustomerType;
   customer: PosCustomerDraft;
   appliedVoucher: Voucher | null;
   voucherCodeInput: string;
   charging: boolean;
-  onPaymentMethodChange: (method: PosPaymentMethod) => void;
-  onTenderMethodChange: (method: PosTenderMethod) => void;
-  onPaymentAccountChange: (accountId: string | null) => void;
+  onLineChange: (
+    variantId: string,
+    patch: Partial<Pick<PosCartLine, "priceList" | "payments" | "unitPrice" | "retailPrice">>
+  ) => void;
   onCustomerTypeChange: (type: PosCustomerType) => void;
   onApplyVoucherId: (voucherId: string | null) => void;
   onVoucherCodeInputChange: (code: string) => void;
@@ -537,18 +516,13 @@ export function PosCheckoutDialog({
   lines,
   branchName,
   saleChannel = "shop",
-  paymentMethod,
-  tenderMethod,
   paymentAccounts,
-  selectedPaymentAccountId,
   customerType,
   customer,
   appliedVoucher,
   voucherCodeInput,
   charging,
-  onPaymentMethodChange,
-  onTenderMethodChange,
-  onPaymentAccountChange,
+  onLineChange,
   onCustomerTypeChange,
   onApplyVoucherId,
   onVoucherCodeInputChange,
@@ -560,31 +534,50 @@ export function PosCheckoutDialog({
 }: PosCheckoutDialogProps) {
   const isWholesale = saleChannel === "wholesale";
   const isPage = layout === "page";
+  const [paymentEditor, setPaymentEditor] = useState<{
+    variantId: string;
+    payId: string | null;
+    draft: PosCheckoutPaymentLine;
+  } | null>(null);
   const { itemCount, subtotal, voucherApplied, amountDue } = cartTotals(
     lines,
     appliedVoucher
   );
-  const cashTotal = cashSubtotal(lines);
-  const retailTotal = retailSubtotal(lines);
-  const missingRetail =
-    !isWholesale &&
-    paymentMethod === "retail" &&
-    lines.some(
-      (line) =>
-        !line.isFreebie &&
-        (line.retailPrice == null || line.retailPrice <= 0)
-    );
   const missingWholesalePrice =
     isWholesale &&
     lines.some(
       (line) => !line.isFreebie && (!(line.unitPrice > 0))
     );
-  const needsPaymentAccount = tenderMethod === "ewallet";
-  const accountsForTender = paymentAccounts.filter(
-    (a) => a.type === "ewallet" && a.isActive
+  const paidLines = lines.filter((line) => !line.isFreebie);
+  const missingPaymentAccount = paidLines.some((line) =>
+    (line.payments ?? []).some((pay) => {
+      if (!tenderNeedsPaymentAccount(pay.tenderMethod)) return false;
+      const expectedType = accountTypeForTender(pay.tenderMethod);
+      return !paymentAccounts.some(
+        (account) =>
+          account.id === pay.paymentAccountId &&
+          account.isActive &&
+          expectedType != null &&
+          account.type === expectedType
+      );
+    })
   );
-  const selectedPaymentAccount =
-    accountsForTender.find((a) => a.id === selectedPaymentAccountId) ?? null;
+  const unbalancedItemPayments = paidLines.some((line) => {
+    const lineTotal = Math.round(line.unitPrice * line.quantity * 100) / 100;
+    return !itemPaymentsCoverLineTotal(line.payments ?? [], lineTotal);
+  });
+  const invalidItemPaymentAmount = paidLines.some(
+    (line) =>
+      !(line.payments?.length > 0) ||
+      line.payments.some((pay) => !Number.isFinite(pay.amount) || pay.amount <= 0)
+  );
+  const missingRetail =
+    !isWholesale &&
+    paidLines.some(
+      (line) =>
+        line.priceList === "retail" &&
+        (line.retailPrice == null || line.retailPrice <= 0)
+    );
   const showCustomerForm =
     customerType === "reservation" || customerType === "delivery";
   const customerSummary = showCustomerForm
@@ -592,12 +585,12 @@ export function PosCheckoutDialog({
     : null;
   const missingCustomerName =
     showCustomerForm && !customer.name.trim();
-  const missingPaymentAccount =
-    needsPaymentAccount && !selectedPaymentAccount;
 
   const goToReview = () => {
     if (missingRetail || missingWholesalePrice) return;
-    if (missingPaymentAccount) return;
+    if (amountDue > 0.01 && paidLines.length === 0) return;
+    if (missingPaymentAccount || unbalancedItemPayments || invalidItemPaymentAmount)
+      return;
     if (missingCustomerName) return;
     onStepChange("review");
   };
@@ -612,17 +605,27 @@ export function PosCheckoutDialog({
   };
 
   const header = (
-    <div className="border-b px-4 py-3 text-left">
-      <h2 className="text-lg font-semibold">
-        {step === "details" ? "Checkout details" : "Review invoice"}
-      </h2>
-      <p className="text-sm text-muted-foreground">
-        {step === "details"
-          ? "Step 1 of 2 — payment, customer, and voucher"
-          : "Step 2 of 2 — confirm before charging"}
-        {branchName ? ` · ${branchName}` : ""}
-      </p>
-      <div className="flex gap-2 pt-2">
+    <div
+      className={
+        isPage
+          ? "border-b px-4 py-4 text-left sm:px-6 lg:flex lg:items-end lg:justify-between lg:gap-6"
+          : "border-b px-4 py-3 text-left"
+      }
+    >
+      <div>
+        <h2 className="text-lg font-semibold lg:text-xl">
+          {step === "details" ? "Checkout details" : "Review invoice"}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {step === "details"
+            ? "Step 1 of 2 — payment, customer, and voucher"
+            : "Step 2 of 2 — confirm before charging"}
+          {branchName ? ` · ${branchName}` : ""}
+        </p>
+      </div>
+      <div
+        className={`mt-3 flex gap-2 ${isPage ? "lg:mt-0 lg:w-56" : "pt-2"}`}
+      >
         <div
           className={`h-1.5 flex-1 rounded-full ${
             step === "details" || step === "review"
@@ -640,13 +643,19 @@ export function PosCheckoutDialog({
   );
 
   const footer = (
-    <div className="flex gap-2 border-t p-4">
+    <div
+      className={
+        isPage
+          ? "flex flex-col-reverse gap-2 border-t p-4 sm:flex-row sm:justify-end sm:px-6"
+          : "flex gap-2 border-t p-4"
+      }
+    >
       {step === "details" ? (
         <>
           <Button
             type="button"
             variant="outline"
-            className="flex-1"
+            className={isPage ? "sm:min-w-36" : "flex-1"}
             disabled={charging}
             onClick={handleBackToCart}
           >
@@ -654,12 +663,14 @@ export function PosCheckoutDialog({
           </Button>
           <Button
             type="button"
-            className="flex-1"
+            className={isPage ? "sm:min-w-44" : "flex-1"}
             disabled={
               charging ||
               missingRetail ||
               missingWholesalePrice ||
               missingPaymentAccount ||
+              unbalancedItemPayments ||
+              invalidItemPaymentAmount ||
               missingCustomerName ||
               lines.length === 0
             }
@@ -673,7 +684,7 @@ export function PosCheckoutDialog({
           <Button
             type="button"
             variant="outline"
-            className="flex-1"
+            className={isPage ? "sm:min-w-36" : "flex-1"}
             disabled={charging}
             onClick={() => onStepChange("details")}
           >
@@ -681,12 +692,14 @@ export function PosCheckoutDialog({
           </Button>
           <Button
             type="button"
-            className="flex-1"
+            className={isPage ? "sm:min-w-52" : "flex-1"}
             disabled={
               charging ||
               missingRetail ||
               missingWholesalePrice ||
               missingPaymentAccount ||
+              unbalancedItemPayments ||
+              invalidItemPaymentAmount ||
               missingCustomerName ||
               lines.length === 0
             }
@@ -703,9 +716,22 @@ export function PosCheckoutDialog({
   );
 
   const scrollBody = (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+    <div
+      className={
+        isPage
+          ? "min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"
+          : "min-h-0 flex-1 overflow-y-auto px-4 py-4"
+      }
+    >
           {step === "details" ? (
-            <div className="space-y-5">
+            <div
+              className={
+                isPage
+                  ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] lg:items-start"
+                  : "space-y-5"
+              }
+            >
+              <div className="space-y-5">
               {isWholesale ? (
                 <div className="space-y-3">
                   <div>
@@ -715,7 +741,13 @@ export function PosCheckoutDialog({
                       wholesale unit price charged for each line.
                     </p>
                   </div>
-                  <div className="space-y-2 rounded-lg border p-3">
+                  <div
+                    className={
+                      isPage
+                        ? "grid gap-3 sm:grid-cols-2 rounded-lg border p-3"
+                        : "space-y-2 rounded-lg border p-3"
+                    }
+                  >
                     {lines
                       .filter((line) => !line.isFreebie)
                       .map((line) => {
@@ -727,7 +759,11 @@ export function PosCheckoutDialog({
                         return (
                           <div
                             key={line.variantId}
-                            className="space-y-2 border-b pb-3 last:border-b-0 last:pb-0"
+                            className={
+                              isPage
+                                ? "space-y-2 rounded-md border p-3"
+                                : "space-y-2 border-b pb-3 last:border-b-0 last:pb-0"
+                            }
                           >
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium">
@@ -819,11 +855,17 @@ export function PosCheckoutDialog({
                 <div>
                   <Label>Price list</Label>
                   <p className="text-xs text-muted-foreground">
-                    Compare cash and retail, then choose which price to charge
+                    Compare cash and retail, then tap a price to charge per item
                   </p>
                 </div>
 
-                <div className="space-y-2 rounded-lg border p-3">
+                <div
+                  className={
+                    isPage
+                      ? "grid gap-3 sm:grid-cols-2 rounded-lg border p-3"
+                      : "space-y-2 rounded-lg border p-3"
+                  }
+                >
                   {lines
                     .filter((line) => !line.isFreebie)
                     .map((line) => {
@@ -833,7 +875,11 @@ export function PosCheckoutDialog({
                     return (
                       <div
                         key={line.variantId}
-                        className="space-y-2 border-b pb-3 last:border-b-0 last:pb-0"
+                        className={
+                          isPage
+                            ? "space-y-2 rounded-md border p-3"
+                            : "space-y-2 border-b pb-3 last:border-b-0 last:pb-0"
+                        }
                       >
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">
@@ -846,11 +892,18 @@ export function PosCheckoutDialog({
                           ) : null}
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div
-                            className={`rounded-md border px-2.5 py-2 ${
-                              paymentMethod === "cash"
+                          <button
+                            type="button"
+                            disabled={charging}
+                            onClick={() =>
+                              onLineChange(line.variantId, {
+                                priceList: "cash",
+                              })
+                            }
+                            className={`rounded-md border px-2.5 py-2 text-left transition-colors ${
+                              line.priceList === "cash"
                                 ? "border-primary bg-primary/5"
-                                : "bg-muted/30"
+                                : "bg-muted/30 hover:bg-muted/50"
                             }`}
                           >
                             <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
@@ -861,21 +914,31 @@ export function PosCheckoutDialog({
                             </p>
                             {line.quantity > 1 ? (
                               <p className="text-xs tabular-nums text-muted-foreground">
-                                Line {formatCurrency(line.cashPrice * line.quantity)}
+                                Line{" "}
+                                {formatCurrency(
+                                  line.cashPrice * line.quantity
+                                )}
                               </p>
                             ) : null}
-                          </div>
-                          <div
-                            className={`rounded-md border px-2.5 py-2 ${
-                              paymentMethod === "retail"
+                          </button>
+                          <button
+                            type="button"
+                            disabled={charging}
+                            onClick={() =>
+                              onLineChange(line.variantId, {
+                                priceList: "retail",
+                              })
+                            }
+                            className={`rounded-md border px-2.5 py-2 text-left transition-colors ${
+                              line.priceList === "retail"
                                 ? "border-primary bg-primary/5"
-                                : "bg-muted/30"
+                                : "bg-muted/30 hover:bg-muted/50"
                             }`}
                           >
                             <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                               Retail
                             </p>
-                            {paymentMethod === "retail" &&
+                            {line.priceList === "retail" &&
                             (!line.retailFromCatalog || needsRetailInput) ? (
                               <Input
                                 id={`checkout-retail-${line.variantId}`}
@@ -886,6 +949,7 @@ export function PosCheckoutDialog({
                                 disabled={charging}
                                 className="mt-1 h-8"
                                 value={line.retailPrice ?? ""}
+                                onClick={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                   const raw = e.target.value;
                                   onRetailPriceChange(
@@ -896,17 +960,13 @@ export function PosCheckoutDialog({
                               />
                             ) : (
                               <p className="tabular-nums font-medium">
-                                {line.retailPrice != null && line.retailPrice > 0
+                                {line.retailPrice != null &&
+                                line.retailPrice > 0
                                   ? formatCurrency(line.retailPrice)
                                   : "—"}
                               </p>
                             )}
-                            {!needsRetailInput &&
-                            line.quantity > 1 &&
-                            !(
-                              paymentMethod === "retail" &&
-                              (!line.retailFromCatalog || needsRetailInput)
-                            ) ? (
+                            {!needsRetailInput && line.quantity > 1 ? (
                               <p className="text-xs tabular-nums text-muted-foreground">
                                 Line{" "}
                                 {formatCurrency(
@@ -914,9 +974,9 @@ export function PosCheckoutDialog({
                                 )}
                               </p>
                             ) : null}
-                          </div>
+                          </button>
                         </div>
-                        {needsRetailInput && paymentMethod !== "retail" ? (
+                        {needsRetailInput && line.priceList !== "retail" ? (
                           <p className="text-xs text-muted-foreground">
                             No retail price set — choose Retail to enter one.
                           </p>
@@ -924,57 +984,6 @@ export function PosCheckoutDialog({
                       </div>
                     );
                   })}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={paymentMethod === "cash" ? "default" : "outline"}
-                    className="h-auto flex-col items-start gap-0.5 px-3 py-2.5"
-                    disabled={charging}
-                    onClick={() => onPaymentMethodChange("cash")}
-                  >
-                    <span className="text-sm font-medium">
-                      Use cash{" "}
-                      {lines.filter((l) => !l.isFreebie).length === 1
-                        ? "price"
-                        : "prices"}
-                    </span>
-                    <span
-                      className={`text-xs tabular-nums ${
-                        paymentMethod === "cash"
-                          ? "text-primary-foreground/80"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      Total {formatCurrency(cashTotal)}
-                    </span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={paymentMethod === "retail" ? "default" : "outline"}
-                    className="h-auto flex-col items-start gap-0.5 px-3 py-2.5"
-                    disabled={charging}
-                    onClick={() => onPaymentMethodChange("retail")}
-                  >
-                    <span className="text-sm font-medium">
-                      Use retail{" "}
-                      {lines.filter((l) => !l.isFreebie).length === 1
-                        ? "price"
-                        : "prices"}
-                    </span>
-                    <span
-                      className={`text-xs tabular-nums ${
-                        paymentMethod === "retail"
-                          ? "text-primary-foreground/80"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {retailTotal != null
-                        ? `Total ${formatCurrency(retailTotal)}`
-                        : "Enter missing retail"}
-                    </span>
-                  </Button>
                 </div>
 
                 {missingRetail ? (
@@ -985,83 +994,318 @@ export function PosCheckoutDialog({
               </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="pos-tender-method">Payment method</Label>
-                <Select
-                  value={tenderMethod}
-                  onValueChange={(value) =>
-                    onTenderMethodChange(
-                      (value as PosTenderMethod) ?? "cash"
-                    )
+              <div className="space-y-3">
+                <div>
+                  <Label>Payments by item</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Set cash/retail and split payments per item. Amount due{" "}
+                    <span className="font-medium tabular-nums">
+                      {formatCurrency(amountDue)}
+                    </span>
+                    .
+                  </p>
+                </div>
+
+                <div
+                  className={
+                    isPage ? "grid gap-3 md:grid-cols-2" : "space-y-3"
                   }
-                  disabled={charging}
                 >
-                  <SelectTrigger id="pos-tender-method">
-                    <SelectValue>
-                      {(value) =>
-                        value
-                          ? tenderMethodLabel(value as PosTenderMethod)
-                          : null
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POS_TENDER_METHODS.map((method) => (
-                      <SelectItem key={method} value={method}>
-                        {tenderMethodLabel(method)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {paidLines.length === 0 ? (
+                    <p className="text-sm text-muted-foreground md:col-span-2">
+                      No paid items — voucher or freebies cover this sale.
+                    </p>
+                  ) : (
+                    paidLines.map((line) => {
+                      const label = lineLabel(line);
+                      const lineTotal =
+                        Math.round(line.unitPrice * line.quantity * 100) / 100;
+                      const payments = line.payments ?? [];
+                      const paidSum = sumCheckoutPaymentAmounts(payments);
+                      const remaining = paymentRemaining(lineTotal, payments);
+                      const balanced = itemPaymentsCoverLineTotal(
+                        payments,
+                        lineTotal
+                      );
+
+                      const updatePayments = (
+                        next: PosCheckoutPaymentLine[]
+                      ) => {
+                        onLineChange(line.variantId, { payments: next });
+                      };
+
+                      return (
+                        <div
+                          key={line.variantId}
+                          className="space-y-3 rounded-lg border p-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {line.quantity}× {line.productName}
+                              </p>
+                              {label ? (
+                                <p className="text-xs text-muted-foreground">
+                                  {label}
+                                </p>
+                              ) : null}
+                            </div>
+                            <p className="shrink-0 text-sm font-semibold tabular-nums">
+                              {formatCurrency(lineTotal)}
+                            </p>
+                          </div>
+
+                          {!isWholesale ? (
+                            <div className="space-y-1.5">
+                              <Label>Price list</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={
+                                    line.priceList === "cash"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  disabled={charging}
+                                  onClick={() =>
+                                    onLineChange(line.variantId, {
+                                      priceList: "cash",
+                                    })
+                                  }
+                                >
+                                  Cash {formatCurrency(line.cashPrice)}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={
+                                    line.priceList === "retail"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  disabled={charging}
+                                  onClick={() =>
+                                    onLineChange(line.variantId, {
+                                      priceList: "retail",
+                                    })
+                                  }
+                                >
+                                  Retail{" "}
+                                  {line.retailPrice != null &&
+                                  line.retailPrice > 0
+                                    ? formatCurrency(line.retailPrice)
+                                    : "—"}
+                                </Button>
+                              </div>
+                              {line.priceList === "retail" &&
+                              (line.retailPrice == null ||
+                                line.retailPrice <= 0) ? (
+                                <div className="space-y-1">
+                                  <Label
+                                    htmlFor={`item-retail-${line.variantId}`}
+                                    className="text-xs"
+                                  >
+                                    Enter retail unit price
+                                  </Label>
+                                  <Input
+                                    id={`item-retail-${line.variantId}`}
+                                    type="number"
+                                    step="0.01"
+                                    min={0}
+                                    disabled={charging}
+                                    className="h-8"
+                                    value={line.retailPrice ?? ""}
+                                    onChange={(e) => {
+                                      const raw = e.target.value;
+                                      onRetailPriceChange(
+                                        line.variantId,
+                                        raw === "" ? null : Number(raw)
+                                      );
+                                    }}
+                                  />
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <div className="grid grid-cols-3 gap-2 rounded-md border bg-muted/20 p-2 text-[11px]">
+                            <div>
+                              <p className="text-muted-foreground">Line</p>
+                              <p className="font-semibold tabular-nums">
+                                {formatCurrency(lineTotal)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Paid</p>
+                              <p className="font-semibold tabular-nums">
+                                {formatCurrency(paidSum)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Left</p>
+                              <p
+                                className={`font-semibold tabular-nums ${
+                                  remaining > 0.01
+                                    ? "text-amber-700"
+                                    : remaining < -0.01
+                                      ? "text-destructive"
+                                      : "text-emerald-700"
+                                }`}
+                              >
+                                {formatCurrency(remaining)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                Payments
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={charging}
+                                onClick={() => {
+                                  const addAmount =
+                                    remaining > 0 ? remaining : 0;
+                                  setPaymentEditor({
+                                    variantId: line.variantId,
+                                    payId: null,
+                                    draft: createItemPaymentLine(addAmount),
+                                  });
+                                }}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                Add
+                              </Button>
+                            </div>
+
+                            {payments.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                No payments yet — click Add.
+                              </p>
+                            ) : (
+                              <ul className="space-y-1.5">
+                                {payments.map((pay) => {
+                                  const account =
+                                    tenderNeedsPaymentAccount(
+                                      pay.tenderMethod
+                                    ) && pay.paymentAccountId
+                                      ? paymentAccounts.find(
+                                          (a) => a.id === pay.paymentAccountId
+                                        )
+                                      : null;
+                                  return (
+                                    <li
+                                      key={pay.id}
+                                      className="flex items-stretch gap-1"
+                                    >
+                                      <button
+                                        type="button"
+                                        disabled={charging}
+                                        onClick={() =>
+                                          setPaymentEditor({
+                                            variantId: line.variantId,
+                                            payId: pay.id,
+                                            draft: { ...pay },
+                                          })
+                                        }
+                                        className="min-w-0 flex-1 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-muted/40 disabled:opacity-50"
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0">
+                                            <p className="truncate text-sm font-medium">
+                                              {tenderMethodLabel(
+                                                pay.tenderMethod
+                                              )}
+                                              {account
+                                                ? ` · ${account.provider}`
+                                                : ""}
+                                            </p>
+                                            <p className="truncate text-xs text-muted-foreground">
+                                              {formatPaymentLineNote(pay) ??
+                                                paymentKindLabel(pay.kind)}
+                                            </p>
+                                          </div>
+                                          <p className="shrink-0 text-sm font-semibold tabular-nums">
+                                            {formatCurrency(pay.amount)}
+                                          </p>
+                                        </div>
+                                      </button>
+                                      {payments.length > 1 ? (
+                                        <Button
+                                          type="button"
+                                          size="icon-sm"
+                                          variant="ghost"
+                                          disabled={charging}
+                                          className="shrink-0 self-center"
+                                          aria-label="Remove payment"
+                                          onClick={() =>
+                                            updatePayments(
+                                              payments.filter(
+                                                (p) => p.id !== pay.id
+                                              )
+                                            )
+                                          }
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      ) : null}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </div>
+
+                          {!balanced ? (
+                            <p className="text-xs text-destructive">
+                              Payments must equal this item&apos;s line total.
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {missingPaymentAccount ? (
+                  <p className="text-sm text-destructive">
+                    Select a receiving account for every e-wallet or bank
+                    transfer payment.
+                  </p>
+                ) : null}
+                {unbalancedItemPayments || invalidItemPaymentAmount ? (
+                  <p className="text-sm text-destructive">
+                    Fix payment splits so each item is fully covered.
+                  </p>
+                ) : null}
               </div>
 
-              {needsPaymentAccount ? (
-                <div className="space-y-2">
-                  <Label htmlFor="pos-payment-account">E-wallet account</Label>
-                  <Select
-                    value={selectedPaymentAccountId ?? ""}
-                    onValueChange={(value) =>
-                      onPaymentAccountChange(value || null)
-                    }
-                    disabled={charging}
-                  >
-                    <SelectTrigger id="pos-payment-account">
-                      <SelectValue placeholder="Select account">
-                        {(value) => {
-                          if (!value) return null;
-                          const account = accountsForTender.find(
-                            (a) => a.id === value
-                          );
-                          return account
-                            ? `${account.provider} · ${account.accountName}`
-                            : null;
-                        }}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accountsForTender.length === 0 ? (
-                        <SelectItem value="__none" disabled>
-                          No accounts in Settings
-                        </SelectItem>
-                      ) : (
-                        accountsForTender.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.provider} · {account.accountName} ·{" "}
-                            {account.accountNumber}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                  {missingPaymentAccount ? (
-                    <p className="text-sm text-destructive">
-                      {accountsForTender.length === 0
-                        ? "Add an account under Settings → Payment accounts."
-                        : "Select a receiving account to continue."}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
+              </div>
+
+              <aside
+                className={
+                  isPage
+                    ? "space-y-5 lg:sticky lg:top-4"
+                    : "space-y-5"
+                }
+              >
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">Amount due</p>
+                <p className="text-2xl font-semibold tabular-nums">
+                  {formatCurrency(amountDue)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {itemCount} item{itemCount === 1 ? "" : "s"}
+                  {voucherApplied > 0
+                    ? ` · voucher −${formatCurrency(voucherApplied)}`
+                    : ""}
+                </p>
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="pos-voucher-code">Voucher code</Label>
@@ -1235,9 +1479,17 @@ export function PosCheckoutDialog({
                   </div>
                 ) : null}
               </div>
+              </aside>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div
+              className={
+                isPage
+                  ? "grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,24rem)] lg:items-start"
+                  : "space-y-4"
+              }
+            >
+              <div className="space-y-4">
               <div className="rounded-lg border p-3 text-sm">
                 <p className="text-muted-foreground">Branch</p>
                 <p className="font-medium">{branchName}</p>
@@ -1275,6 +1527,13 @@ export function PosCheckoutDialog({
                 </ul>
               </div>
 
+              </div>
+
+              <aside
+                className={
+                  isPage ? "space-y-4 lg:sticky lg:top-4" : "space-y-4"
+                }
+              >
               <div className="grid gap-2 rounded-lg border p-3 text-sm">
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground">Channel</span>
@@ -1285,31 +1544,69 @@ export function PosCheckoutDialog({
                 {!isWholesale ? (
                   <div className="flex justify-between gap-2">
                     <span className="text-muted-foreground">Price list</span>
-                    <span className="font-medium capitalize">{paymentMethod}</span>
+                    <span className="font-medium capitalize">
+                      {(() => {
+                        const lists = paidLines.map((l) => l.priceList);
+                        if (lists.length === 0) return "—";
+                        const allSame = lists.every((p) => p === lists[0]);
+                        return allSame ? lists[0] : "Mixed";
+                      })()}
+                    </span>
                   </div>
                 ) : null}
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Payment</span>
-                  <span className="font-medium text-right">
-                    {tenderMethodLabel(tenderMethod)}
-                  </span>
+                <div className="space-y-2 border-t pt-2">
+                  <p className="text-muted-foreground">Payments by item</p>
+                  {paidLines.map((line) => (
+                    <div key={line.variantId} className="space-y-1">
+                      <div className="flex justify-between gap-2">
+                        <span className="min-w-0 font-medium">
+                          {line.quantity}× {line.productName}
+                          {!isWholesale ? (
+                            <span className="ml-1.5 text-xs font-normal capitalize text-muted-foreground">
+                              ({line.priceList})
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums">
+                          {formatCurrency(line.unitPrice * line.quantity)}
+                        </span>
+                      </div>
+                      {(line.payments ?? []).map((pay) => {
+                        const account = pay.paymentAccountId
+                          ? paymentAccounts.find(
+                              (a) => a.id === pay.paymentAccountId
+                            )
+                          : null;
+                        return (
+                          <div
+                            key={pay.id}
+                            className="flex justify-between gap-2 pl-2 text-xs"
+                          >
+                            <span className="min-w-0">
+                              <span className="font-medium">
+                                {tenderMethodLabel(pay.tenderMethod)}
+                              </span>
+                              {formatPaymentLineNote(pay) ? (
+                                <span className="ml-1 font-medium text-red-700">
+                                  {formatPaymentLineNote(pay)}
+                                </span>
+                              ) : null}
+                              {account ? (
+                                <span className="block text-muted-foreground">
+                                  {paymentAccountTypeLabel(account.type)} ·{" "}
+                                  {account.provider}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="shrink-0 tabular-nums">
+                              {formatCurrency(pay.amount)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
-                {selectedPaymentAccount ? (
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">
-                      {paymentAccountTypeLabel(selectedPaymentAccount.type)}
-                    </span>
-                    <span className="text-right">
-                      <span className="font-medium">
-                        {selectedPaymentAccount.provider}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        {selectedPaymentAccount.accountName} ·{" "}
-                        {selectedPaymentAccount.accountNumber}
-                      </span>
-                    </span>
-                  </div>
-                ) : null}
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground">Customer type</span>
                   <span className="font-medium">
@@ -1384,37 +1681,321 @@ export function PosCheckoutDialog({
                   </span>
                 </div>
               </div>
+              </aside>
             </div>
           )}
     </div>
   );
 
+  const editorDraft = paymentEditor?.draft ?? null;
+  const editorExpectedType = editorDraft
+    ? accountTypeForTender(editorDraft.tenderMethod)
+    : null;
+  const editorNeedsAccount = editorDraft
+    ? tenderNeedsPaymentAccount(editorDraft.tenderMethod)
+    : false;
+  const editorAccounts = editorNeedsAccount
+    ? paymentAccounts.filter(
+        (account) =>
+          account.isActive &&
+          editorExpectedType != null &&
+          account.type === editorExpectedType
+      )
+    : [];
+  const editorAmountValid =
+    editorDraft != null &&
+    Number.isFinite(editorDraft.amount) &&
+    editorDraft.amount > 0;
+  const editorAccountValid =
+    !editorNeedsAccount ||
+    editorAccounts.some(
+      (account) => account.id === editorDraft?.paymentAccountId
+    );
+  const editorCanSave = editorAmountValid && editorAccountValid;
+
+  const patchEditorDraft = (patch: Partial<PosCheckoutPaymentLine>) => {
+    setPaymentEditor((prev) =>
+      prev ? { ...prev, draft: { ...prev.draft, ...patch } } : prev
+    );
+  };
+
+  const savePaymentEditor = () => {
+    if (!paymentEditor || !editorCanSave) return;
+    const { variantId, payId, draft } = paymentEditor;
+    const line = lines.find((l) => l.variantId === variantId);
+    if (!line || line.isFreebie) return;
+    const payments = line.payments ?? [];
+    const parsed = parseMoneyInput(draft.amountText);
+    const amount = parsed ?? draft.amount;
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const nextPay: PosCheckoutPaymentLine = {
+      ...draft,
+      amount,
+      amountText: moneyInputText(amount),
+      note: draft.note.trim(),
+    };
+    const next = payId
+      ? payments.map((p) => (p.id === payId ? nextPay : p))
+      : [...payments, nextPay];
+    onLineChange(variantId, { payments: next });
+    setPaymentEditor(null);
+  };
+
+  const paymentEditorDialog = (
+    <Dialog
+      open={paymentEditor != null}
+      onOpenChange={(next) => {
+        if (!next) setPaymentEditor(null);
+      }}
+    >
+      <DialogContent className="sm:max-w-md" showCloseButton>
+        <DialogHeader>
+          <DialogTitle>
+            {paymentEditor?.payId ? "Edit payment" : "Add payment"}
+          </DialogTitle>
+          <DialogDescription>
+            {paymentEditor
+              ? (() => {
+                  const line = lines.find(
+                    (l) => l.variantId === paymentEditor.variantId
+                  );
+                  if (!line) return "Enter payment details.";
+                  return `${line.quantity}× ${line.productName}`;
+                })()
+              : "Enter payment details."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {editorDraft ? (
+          <div className="space-y-3 py-1">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-editor-method">Method</Label>
+                <Select
+                  value={editorDraft.tenderMethod}
+                  onValueChange={(value) => {
+                    const nextMethod =
+                      (value as PosTenderMethod) ?? "cash";
+                    const prevType = accountTypeForTender(
+                      editorDraft.tenderMethod
+                    );
+                    const nextType = accountTypeForTender(nextMethod);
+                    patchEditorDraft({
+                      tenderMethod: nextMethod,
+                      paymentAccountId:
+                        tenderNeedsPaymentAccount(nextMethod) &&
+                        prevType === nextType
+                          ? editorDraft.paymentAccountId
+                          : null,
+                    });
+                  }}
+                >
+                  <SelectTrigger id="pay-editor-method">
+                    <SelectValue>
+                      {(value) =>
+                        value
+                          ? tenderMethodLabel(value as PosTenderMethod)
+                          : null
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {POS_TENDER_METHODS.map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {tenderMethodLabel(method)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-editor-amount">Amount</Label>
+                <Input
+                  id="pay-editor-amount"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={editorDraft.amountText}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+                    const parsed = parseMoneyInput(raw);
+                    patchEditorDraft({
+                      amountText: raw,
+                      amount: parsed ?? 0,
+                    });
+                  }}
+                  onBlur={() => {
+                    const parsed = parseMoneyInput(editorDraft.amountText);
+                    if (parsed == null) {
+                      patchEditorDraft({ amountText: "", amount: 0 });
+                      return;
+                    }
+                    patchEditorDraft({
+                      amount: parsed,
+                      amountText: moneyInputText(parsed),
+                    });
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-editor-kind">Type</Label>
+                <Select
+                  value={editorDraft.kind}
+                  onValueChange={(value) =>
+                    patchEditorDraft({
+                      kind: (value as PosPaymentKind) ?? "full",
+                    })
+                  }
+                >
+                  <SelectTrigger id="pay-editor-kind">
+                    <SelectValue>
+                      {(value) =>
+                        value
+                          ? paymentKindLabel(value as PosPaymentKind)
+                          : null
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {POS_PAYMENT_KINDS.map((kind) => (
+                      <SelectItem key={kind} value={kind}>
+                        {paymentKindLabel(kind)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-editor-note">Note</Label>
+                <Input
+                  id="pay-editor-note"
+                  placeholder={
+                    editorDraft.kind === "down_payment"
+                      ? "e.g. PAID"
+                      : "Optional"
+                  }
+                  value={editorDraft.note}
+                  onChange={(e) =>
+                    patchEditorDraft({ note: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            {editorNeedsAccount ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-editor-account">
+                  {editorExpectedType === "bank_transfer"
+                    ? "Bank account"
+                    : "E-wallet account"}
+                </Label>
+                <Select
+                  value={editorDraft.paymentAccountId ?? ""}
+                  onValueChange={(value) =>
+                    patchEditorDraft({
+                      paymentAccountId: value || null,
+                    })
+                  }
+                >
+                  <SelectTrigger id="pay-editor-account">
+                    <SelectValue placeholder="Select account">
+                      {(value) => {
+                        if (!value) return null;
+                        const account = editorAccounts.find(
+                          (a) => a.id === value
+                        );
+                        return account
+                          ? `${account.provider} · ${account.accountName}`
+                          : null;
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {editorAccounts.length === 0 ? (
+                      <SelectItem value="__none" disabled>
+                        No accounts in Settings
+                      </SelectItem>
+                    ) : (
+                      editorAccounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.provider} · {account.accountName} ·{" "}
+                          {account.accountNumber}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {!editorAccountValid ? (
+                  <p className="text-xs text-destructive">
+                    Select a receiving account.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!editorAmountValid ? (
+              <p className="text-xs text-destructive">
+                Enter an amount greater than zero.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setPaymentEditor(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!editorCanSave}
+            onClick={savePaymentEditor}
+          >
+            Save payment
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (isPage) {
     return (
-      <div className="mx-auto flex w-full max-w-lg flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
-        {header}
-        {scrollBody}
-        {footer}
-      </div>
+      <>
+        <div className="flex w-full flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
+          {header}
+          {scrollBody}
+          {footer}
+        </div>
+        {paymentEditorDialog}
+      </>
     );
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (charging) return;
-        onOpenChange?.(next);
-      }}
-    >
-      <DialogContent
-        className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
-        showCloseButton={!charging}
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (charging) return;
+          onOpenChange?.(next);
+        }}
       >
-        {header}
-        {scrollBody}
-        {footer}
-      </DialogContent>
-    </Dialog>
+        <DialogContent
+          className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+          showCloseButton={!charging}
+        >
+          {header}
+          {scrollBody}
+          {footer}
+        </DialogContent>
+      </Dialog>
+      {paymentEditorDialog}
+    </>
   );
 }

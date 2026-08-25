@@ -14,14 +14,21 @@ export async function syncAuthClaims(targetUid?: string): Promise<void> {
     body: JSON.stringify(targetUid ? { uid: targetUid } : {}),
   });
 
+  const data = (await response.json().catch(() => null)) as {
+    error?: string;
+    skipped?: boolean;
+    reason?: string;
+  } | null;
+
   if (!response.ok) {
-    const data = (await response.json().catch(() => null)) as {
-      error?: string;
-    } | null;
     throw new Error(
       data?.error ??
         `Failed to sync auth claims (${response.status} ${response.statusText})`
     );
+  }
+
+  if (data?.skipped) {
+    return;
   }
 
   if (!targetUid || targetUid === user.uid) {

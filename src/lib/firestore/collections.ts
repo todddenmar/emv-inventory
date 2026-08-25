@@ -10,6 +10,7 @@ export const COLLECTIONS = {
   productPriceLogs: "physicalProductPriceLogs",
   branchTransfers: "physicalBranchTransfers",
   posSales: "physicalPosSales",
+  dailyExpenses: "physicalDailyExpenses",
   supplierStockIns: "physicalSupplierStockIns",
   resellers: "physicalResellers",
   vouchers: "physicalVouchers",

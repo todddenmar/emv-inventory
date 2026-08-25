@@ -33,6 +33,7 @@ import {
 import { getPosSale } from "@/lib/firestore/pos-sales";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { tenderMethodLabel, formatPaymentLineNote, paymentKindLabel } from "@/lib/pos-payments";
 import { cn } from "@/lib/utils";
 import type { PosSale } from "@/types";
 
@@ -45,23 +46,6 @@ interface SaleInvoiceDialogProps {
 
 function priceListLabel(method: PosSale["paymentMethod"]): string {
   return method === "retail" ? "Retail" : "Cash";
-}
-
-function tenderMethodLabel(method: PosSale["tenderMethod"]): string {
-  switch (method) {
-    case "ewallet":
-      return "E-wallet";
-    case "home_credit":
-      return "Home Credit";
-    case "skyro":
-      return "Skyro";
-    case "salmon":
-      return "Salmon";
-    case "card_swipe":
-      return "Card/Swipe";
-    default:
-      return "Cash";
-  }
 }
 
 function customerTypeLabel(type: PosSale["customerType"]): string {
@@ -104,7 +88,22 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
   const hasVoucher = Boolean(
     sale.voucherCode || (sale.voucherAmountApplied ?? 0) > 0
   );
-  const paymentAccount = sale.paymentAccount;
+  const paymentLines =
+    sale.payments?.length > 0
+      ? sale.payments
+      : [
+          {
+            tenderMethod: sale.tenderMethod,
+            amount: amountDue,
+            paymentAccount: sale.paymentAccount,
+            kind: "full" as const,
+            note: null,
+          },
+        ];
+  const paymentSummary =
+    paymentLines.length === 1
+      ? tenderMethodLabel(paymentLines[0].tenderMethod)
+      : `${paymentLines.length} methods`;
 
   return (
     <div className="space-y-5">
@@ -112,9 +111,7 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
         {sale.saleChannel === "wholesale" ? (
           <Badge variant="default">Wholesale</Badge>
         ) : null}
-        <Badge variant="secondary">
-          {tenderMethodLabel(sale.tenderMethod)}
-        </Badge>
+        <Badge variant="secondary">{paymentSummary}</Badge>
         <Badge variant="outline">{customerTypeLabel(sale.customerType)}</Badge>
         <Badge variant="outline" className="font-mono text-[10px]">
           {sale.id.slice(0, 8)}…
@@ -137,8 +134,8 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
         />
         <MetaChip
           icon={Banknote}
-          label="Payment method"
-          value={tenderMethodLabel(sale.tenderMethod)}
+          label="Payment"
+          value={paymentSummary}
         />
         <MetaChip
           icon={Receipt}
@@ -164,9 +161,45 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                 className="rounded-lg border px-3 py-2.5"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <p className="min-w-0 flex-1 text-sm font-medium leading-snug">
-                    {item.productName}
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium leading-snug">
+                      {item.productName}
+                    </p>
+                    {item.tenderMethod || (item.payments?.length ?? 0) > 0 ? (
+                      <p className="mt-0.5 text-xs">
+                        {item.priceList ? (
+                          <span className="mr-1.5 capitalize text-muted-foreground">
+                            {item.priceList}
+                          </span>
+                        ) : null}
+                        {(item.payments?.length
+                          ? item.payments
+                          : [
+                              {
+                                tenderMethod: item.tenderMethod!,
+                                amount: item.lineTotal,
+                                kind: item.kind,
+                                note: item.note,
+                              },
+                            ]
+                        ).map((pay, idx) => (
+                          <span key={idx} className="mr-2">
+                            <span className="font-medium">
+                              {tenderMethodLabel(pay.tenderMethod)}
+                            </span>
+                            {formatPaymentLineNote(pay) ? (
+                              <span className="ml-1 font-medium text-red-700">
+                                {formatPaymentLineNote(pay)}
+                              </span>
+                            ) : null}
+                            <span className="ml-1 tabular-nums text-muted-foreground">
+                              {formatCurrency(pay.amount)}
+                            </span>
+                          </span>
+                        ))}
+                      </p>
+                    ) : null}
+                  </div>
                   <p className="shrink-0 text-sm font-semibold tabular-nums">
                     {formatCurrency(item.lineTotal)}
                   </p>
@@ -193,7 +226,44 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                 {sale.items.map((item) => (
                   <TableRow key={`${item.variantId}-${item.productId}`}>
                     <TableCell className="font-medium">
-                      {item.productName}
+                      <div>
+                        <p>{item.productName}</p>
+                        {item.tenderMethod ||
+                        (item.payments?.length ?? 0) > 0 ? (
+                          <p className="text-xs font-normal">
+                            {item.priceList ? (
+                              <span className="mr-1.5 capitalize text-muted-foreground">
+                                {item.priceList}
+                              </span>
+                            ) : null}
+                            {(item.payments?.length
+                              ? item.payments
+                              : [
+                                  {
+                                    tenderMethod: item.tenderMethod!,
+                                    amount: item.lineTotal,
+                                    kind: item.kind,
+                                    note: item.note,
+                                  },
+                                ]
+                            ).map((pay, idx) => (
+                              <span key={idx} className="mr-2">
+                                <span className="font-medium">
+                                  {tenderMethodLabel(pay.tenderMethod)}
+                                </span>
+                                {formatPaymentLineNote(pay) ? (
+                                  <span className="ml-1 font-medium text-red-700">
+                                    {formatPaymentLineNote(pay)}
+                                  </span>
+                                ) : null}
+                                <span className="ml-1 tabular-nums text-muted-foreground">
+                                  {formatCurrency(pay.amount)}
+                                </span>
+                              </span>
+                            ))}
+                          </p>
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {item.quantity}
@@ -229,35 +299,42 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                   </dd>
                 </div>
               ) : null}
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted-foreground">Payment</dt>
-                <dd className="font-medium">
-                  {tenderMethodLabel(sale.tenderMethod)}
-                </dd>
+              <div className="space-y-2 border-t pt-2">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  Payments
+                </p>
+                {paymentLines.map((line, index) => (
+                  <div
+                    key={`${line.tenderMethod}-${index}`}
+                    className="flex items-start justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium">
+                        {tenderMethodLabel(line.tenderMethod)}
+                        {formatPaymentLineNote(line) ? (
+                          <span className="ml-1.5 text-xs font-medium text-red-700">
+                            {formatPaymentLineNote(line)}
+                          </span>
+                        ) : line.kind && line.kind !== "full" ? (
+                          <span className="ml-1.5 text-xs text-muted-foreground">
+                            {paymentKindLabel(line.kind)}
+                          </span>
+                        ) : null}
+                      </p>
+                      {line.paymentAccount ? (
+                        <p className="text-xs text-muted-foreground">
+                          {paymentAccountTypeLabel(line.paymentAccount.type)} ·{" "}
+                          {line.paymentAccount.provider} ·{" "}
+                          {line.paymentAccount.accountName}
+                        </p>
+                      ) : null}
+                    </div>
+                    <p className="shrink-0 font-medium tabular-nums">
+                      {formatCurrency(line.amount)}
+                    </p>
+                  </div>
+                ))}
               </div>
-              {paymentAccount ? (
-                <>
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="text-muted-foreground">
-                      {paymentAccountTypeLabel(paymentAccount.type)}
-                    </dt>
-                    <dd className="text-right font-medium">
-                      {paymentAccount.provider}
-                    </dd>
-                  </div>
-                  <div className="flex items-start justify-between gap-3">
-                    <dt className="text-muted-foreground">Account</dt>
-                    <dd className="max-w-[60%] text-right text-xs">
-                      <span className="block font-medium">
-                        {paymentAccount.accountName}
-                      </span>
-                      <span className="font-mono text-muted-foreground">
-                        {paymentAccount.accountNumber}
-                      </span>
-                    </dd>
-                  </div>
-                </>
-              ) : null}
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted-foreground">Customer type</dt>
                 <dd className="font-medium">
