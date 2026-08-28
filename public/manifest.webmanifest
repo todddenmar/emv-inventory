@@ -1,7 +1,7 @@
 {
-  "name": "El Mio Vicente",
-  "short_name": "El Mio Vicente",
-  "description": "Quality products delivered to your door.",
+  "name": "LP Marketing",
+  "short_name": "LP Marketing",
+  "description": "Physical store inventory management",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

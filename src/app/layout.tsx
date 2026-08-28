@@ -14,8 +14,12 @@ const figtree = Figtree({
 
 export const metadata: Metadata = {
   title: BRAND_NAME,
+  applicationName: BRAND_NAME,
   description: "Physical store inventory management",
   manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    title: BRAND_NAME,
+  },
   icons: {
     icon: [
       { url: "/images/favicon-16x16.png", sizes: "16x16", type: "image/png" },
