@@ -24,11 +24,18 @@ function branchesRef(): CollectionReference<Branch> {
 
 export async function getBranches(activeOnly = false): Promise<Branch[]> {
   const ref = branchesRef();
-  const q = activeOnly
-    ? query(ref, where("isActive", "==", true), orderBy("name"))
-    : query(ref, orderBy("name"));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => d.data());
+  try {
+    const q = activeOnly
+      ? query(ref, where("isActive", "==", true), orderBy("name"))
+      : query(ref, orderBy("name"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => d.data());
+  } catch (error) {
+    console.warn("getBranches indexed query failed, using fallback", error);
+    const snapshot = await getDocs(query(ref, orderBy("name")));
+    const rows = snapshot.docs.map((d) => d.data());
+    return activeOnly ? rows.filter((b) => b.isActive) : rows;
+  }
 }
 
 export async function getBranch(id: string): Promise<Branch | null> {

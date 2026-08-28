@@ -10,6 +10,7 @@ import type {
   Branch,
   BranchInventory,
   BranchTransfer,
+  TransferRequest,
   Category,
   CategoryGroup,
   DailyExpense,
@@ -546,6 +547,77 @@ export const branchTransferConverter: FirestoreDataConverter<BranchTransfer> = {
     };
   },
 };
+
+export const transferRequestConverter: FirestoreDataConverter<TransferRequest> =
+  {
+    toFirestore(request: TransferRequest): DocumentData {
+      return {
+        productId: request.productId,
+        productName: request.productName,
+        variantId: request.variantId,
+        variantLabel: request.variantLabel,
+        quantity: request.quantity,
+        fromBranchId: request.fromBranchId,
+        fromBranchName: request.fromBranchName,
+        toBranchId: request.toBranchId,
+        toBranchName: request.toBranchName,
+        status: request.status,
+        notes: request.notes,
+        requestedBy: request.requestedBy,
+        requestedByName: request.requestedByName,
+        requestedAt: request.requestedAt,
+        releasedBy: request.releasedBy,
+        releasedByName: request.releasedByName,
+        releasedAt: request.releasedAt,
+        receivedBy: request.receivedBy,
+        receivedByName: request.receivedByName,
+        receivedAt: request.receivedAt,
+        completedTransferId: request.completedTransferId,
+        cancelledBy: request.cancelledBy,
+        cancelledByName: request.cancelledByName,
+        cancelledAt: request.cancelledAt,
+        declinedBy: request.declinedBy,
+        declinedByName: request.declinedByName,
+        declinedAt: request.declinedAt,
+      };
+    },
+    fromFirestore(
+      snapshot: QueryDocumentSnapshot,
+      options: SnapshotOptions
+    ): TransferRequest {
+      const data = snapshot.data(options);
+      return {
+        id: snapshot.id,
+        productId: data.productId,
+        productName: data.productName,
+        variantId: data.variantId,
+        variantLabel: data.variantLabel ?? "",
+        quantity: data.quantity ?? 0,
+        fromBranchId: data.fromBranchId,
+        fromBranchName: data.fromBranchName,
+        toBranchId: data.toBranchId,
+        toBranchName: data.toBranchName,
+        status: data.status,
+        notes: data.notes ?? null,
+        requestedBy: data.requestedBy,
+        requestedByName: data.requestedByName ?? null,
+        requestedAt: toDate(data.requestedAt),
+        releasedBy: data.releasedBy ?? null,
+        releasedByName: data.releasedByName ?? null,
+        releasedAt: data.releasedAt ? toDate(data.releasedAt) : null,
+        receivedBy: data.receivedBy ?? null,
+        receivedByName: data.receivedByName ?? null,
+        receivedAt: data.receivedAt ? toDate(data.receivedAt) : null,
+        completedTransferId: data.completedTransferId ?? null,
+        cancelledBy: data.cancelledBy ?? null,
+        cancelledByName: data.cancelledByName ?? null,
+        cancelledAt: data.cancelledAt ? toDate(data.cancelledAt) : null,
+        declinedBy: data.declinedBy ?? null,
+        declinedByName: data.declinedByName ?? null,
+        declinedAt: data.declinedAt ? toDate(data.declinedAt) : null,
+      };
+    },
+  };
 
 export const posSaleConverter: FirestoreDataConverter<PosSale> = {
   toFirestore(sale: PosSale): DocumentData {

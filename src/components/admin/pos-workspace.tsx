@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -1035,13 +1036,27 @@ export function PosWorkspace({
                         ?.quantity ?? 0;
 
                     return (
-                      <button
+                      <div
                         key={row.id}
-                        type="button"
-                        disabled={outOfStock}
-                        onClick={() => addVariant(row)}
-                        className="flex min-h-0 flex-row items-stretch gap-3 overflow-hidden rounded-xl border bg-card p-3 text-left transition hover:border-primary/40 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[140px] sm:flex-col sm:gap-0 sm:p-0"
+                        className="relative flex min-h-0 flex-row items-stretch gap-3 overflow-hidden rounded-xl border bg-card p-3 sm:min-h-[140px] sm:flex-col sm:gap-0 sm:p-0"
                       >
+                        {isCashier ? (
+                          <Link
+                            href={`/admin/cashier/find-stock?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(row.productId)}`}
+                            title="Check other branches"
+                            aria-label={`Check other branches for ${displayName}`}
+                            className="absolute top-2 right-2 z-10 inline-flex size-8 items-center justify-center rounded-md border bg-background/95 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Search className="size-3.5" />
+                          </Link>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={outOfStock}
+                          onClick={() => addVariant(row)}
+                          className="flex min-h-0 min-w-0 flex-1 flex-row items-stretch gap-3 text-left transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-col sm:gap-0"
+                        >
                         {showCatalogImages(catalogImageSource) ? (
                           <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted sm:aspect-[4/3] sm:h-auto sm:w-full sm:rounded-none">
                             {thumb ? (
@@ -1060,7 +1075,11 @@ export function PosWorkspace({
                         ) : null}
                         <div className="flex min-w-0 flex-1 flex-col gap-1 sm:p-3">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="min-w-0 text-sm font-medium leading-snug break-words">
+                            <p
+                              className={`min-w-0 text-sm font-medium leading-snug break-words ${
+                                isCashier ? "pr-8" : ""
+                              }`}
+                            >
                               {displayName}
                             </p>
                             {effective.onSale && effective.promotionName ? (
@@ -1140,7 +1159,8 @@ export function PosWorkspace({
                             </Badge>
                           </div>
                         </div>
-                      </button>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>

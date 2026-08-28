@@ -25,6 +25,22 @@
         { "fieldPath": "date", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "physicalTransferRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fromBranchId", "order": "ASCENDING" },
+        { "fieldPath": "requestedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "physicalTransferRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "toBranchId", "order": "ASCENDING" },
+        { "fieldPath": "requestedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -195,15 +195,12 @@ service cloud.firestore {
     }
 
     match /physicalBranchInventory/{inventoryId} {
-      allow read: if resource.data.branchId != null &&
-        (canReadAllBranches() || managerBranchId() == resource.data.branchId);
-      allow read: if canReadAllBranches();
-      allow create: if isStaff() &&
-        request.resource.data.branchId != null &&
-        canAccessBranch(request.resource.data.branchId);
-      allow update: if isStaff() &&
-        resource.data.branchId != null &&
-        canAccessBranch(resource.data.branchId);
+      // Staff can read all branches (cashier cross-branch stock check).
+      allow read: if isStaff();
+      // Staff may create/update any branch row so transfer completion can
+      // adjust source and destination stock in one client transaction.
+      allow create: if isStaff() && request.resource.data.branchId != null;
+      allow update: if isStaff() && resource.data.branchId != null;
       allow delete: if isElevatedAdmin();
     }
 
@@ -212,7 +209,8 @@ service cloud.firestore {
         (canReadAllBranches() || resource.data.branchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
-        canAccessBranch(request.resource.data.branchId);
+        (canAccessBranch(request.resource.data.branchId) ||
+          request.resource.data.reason in ['transfer_out', 'transfer_in']);
       allow update, delete: if false;
     }
 
@@ -229,8 +227,43 @@ service cloud.firestore {
           resource.data.toBranchId == managerBranchId());
       allow create: if isStaff() &&
         request.resource.data.fromBranchId != null &&
-        canAccessBranch(request.resource.data.fromBranchId);
+        (canAccessBranch(request.resource.data.fromBranchId) ||
+          canAccessBranch(request.resource.data.toBranchId));
       allow update, delete: if false;
+    }
+
+    match /physicalTransferRequests/{requestId} {
+      // Staff may list/read all requests so branch-scoped listeners work.
+      // Writes stay constrained to the involved branch below.
+      allow read: if isStaff();
+      allow create: if isStaff() &&
+        request.resource.data.status == 'requested' &&
+        request.resource.data.toBranchId == managerBranchId() &&
+        request.resource.data.fromBranchId != request.resource.data.toBranchId &&
+        request.resource.data.quantity is int &&
+        request.resource.data.quantity > 0;
+      allow update: if isStaff() &&
+        (resource.data.fromBranchId == managerBranchId() ||
+          resource.data.toBranchId == managerBranchId()) &&
+        (
+          // Source: release or decline while requested
+          (resource.data.fromBranchId == managerBranchId() &&
+            resource.data.status == 'requested' &&
+            request.resource.data.status in ['released', 'declined']) ||
+          // Source: undo release or undo decline → back to requested
+          (resource.data.fromBranchId == managerBranchId() &&
+            resource.data.status in ['released', 'declined'] &&
+            request.resource.data.status == 'requested') ||
+          // Requester: cancel while requested
+          (resource.data.toBranchId == managerBranchId() &&
+            resource.data.status == 'requested' &&
+            request.resource.data.status == 'cancelled') ||
+          // Requester: receive after released (stock move happens in same client tx)
+          (resource.data.toBranchId == managerBranchId() &&
+            resource.data.status == 'released' &&
+            request.resource.data.status == 'completed')
+        );
+      allow delete: if false;
     }
 
     match /physicalPosSales/{saleId} {

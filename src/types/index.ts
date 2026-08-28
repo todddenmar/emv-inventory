@@ -228,6 +228,44 @@ export interface BranchTransfer {
   createdAt: Date;
 }
 
+export type TransferRequestStatus =
+  | "requested"
+  | "released"
+  | "completed"
+  | "cancelled"
+  | "declined";
+
+export interface TransferRequest {
+  id: string;
+  productId: string;
+  productName: string;
+  variantId: string;
+  variantLabel: string;
+  quantity: number;
+  fromBranchId: string;
+  fromBranchName: string;
+  toBranchId: string;
+  toBranchName: string;
+  status: TransferRequestStatus;
+  notes: string | null;
+  requestedBy: string;
+  requestedByName: string | null;
+  requestedAt: Date;
+  releasedBy: string | null;
+  releasedByName: string | null;
+  releasedAt: Date | null;
+  receivedBy: string | null;
+  receivedByName: string | null;
+  receivedAt: Date | null;
+  completedTransferId: string | null;
+  cancelledBy: string | null;
+  cancelledByName: string | null;
+  cancelledAt: Date | null;
+  declinedBy: string | null;
+  declinedByName: string | null;
+  declinedAt: Date | null;
+}
+
 export type PosPaymentMethod = "cash" | "retail";
 
 export type PosSaleChannel = "shop" | "wholesale";

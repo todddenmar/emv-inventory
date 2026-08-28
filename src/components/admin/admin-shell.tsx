@@ -4,6 +4,7 @@ import { AdminBottomNav } from "@/components/admin/admin-bottom-nav";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { CashierBottomNav } from "@/components/admin/cashier-bottom-nav";
 import { CashierRouteGuard } from "@/components/admin/cashier-route-guard";
+import { CashierTransferRequestBanner } from "@/components/admin/cashier-transfer-request-banner";
 import { OwnerRouteGuard } from "@/components/admin/owner-route-guard";
 import { AdminHeader } from "@/components/layout/admin-header";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -44,6 +45,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <CashierRouteGuard>
         <div className="flex min-h-screen w-full flex-col">
           <CashierHeader />
+          <CashierTransferRequestBanner />
           <div className="min-w-0 w-full flex-1 overflow-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-6">
             {children}
           </div>
