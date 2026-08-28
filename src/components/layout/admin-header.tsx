@@ -14,7 +14,7 @@ export function AdminHeader() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 w-full items-center justify-between gap-3 px-4 lg:px-6">
         <div className="flex min-w-0 items-center gap-2">
-          <BrandLogo href="/admin" size="sm" priority />
+          <BrandLogo href="/admin" size="sm" showImage={false} priority />
           <Badge variant="secondary" className="hidden sm:inline-flex">
             Inventory
           </Badge>

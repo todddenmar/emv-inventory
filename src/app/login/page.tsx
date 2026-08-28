@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -92,11 +91,11 @@ function LoginContent() {
     <div className="container mx-auto flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Staff sign in</CardTitle>
+          <CardTitle className="text-2xl">LP Marketing</CardTitle>
           <CardDescription>
             {inviteToken
               ? "Accept your staff invite by signing in with Google"
-              : "Sign in to manage physical store inventory"}
+              : "Staff sign in — manage physical store inventory"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -128,13 +127,6 @@ function LoginContent() {
               Continue with Google
             </Button>
           )}
-
-          <p className="text-center text-sm text-muted-foreground">
-            New to the system?{" "}
-            <Link href="/docs" className="font-medium text-foreground underline">
-              Read the staff guide
-            </Link>
-          </p>
         </CardContent>
       </Card>
     </div>

@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import {
+  Check,
+  CircleDot,
+  Loader2,
+  PackageCheck,
+  Send,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -13,7 +20,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -24,6 +30,7 @@ import {
 } from "@/components/ui/card";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
+import { cn } from "@/lib/utils";
 import {
   cancelTransferRequest,
   declineTransferRequest,
@@ -42,10 +49,20 @@ type ConfirmAction =
   | "undo_release"
   | "undo_decline";
 
+type TimelineTone = "done" | "current" | "pending" | "failed";
+
+type TimelineStep = {
+  key: string;
+  label: string;
+  at: Date | null;
+  by: string | null;
+  tone: TimelineTone;
+};
+
 function statusLabel(status: TransferRequestStatus): string {
   switch (status) {
     case "requested":
-      return "Requested";
+      return "Pending";
     case "released":
       return "Released";
     case "completed":
@@ -59,36 +76,230 @@ function statusLabel(status: TransferRequestStatus): string {
   }
 }
 
-function statusVariant(
-  status: TransferRequestStatus
-): "default" | "secondary" | "outline" | "destructive" {
+function statusToneClass(status: TransferRequestStatus): string {
   switch (status) {
     case "requested":
-      return "default";
+      return "bg-amber-100 text-amber-900 ring-amber-200";
     case "released":
-      return "secondary";
+      return "bg-sky-100 text-sky-900 ring-sky-200";
     case "completed":
-      return "outline";
+      return "bg-emerald-100 text-emerald-900 ring-emerald-200";
     case "cancelled":
     case "declined":
-      return "destructive";
+      return "bg-red-100 text-red-900 ring-red-200";
     default:
-      return "outline";
+      return "bg-muted text-muted-foreground ring-border";
   }
 }
 
-function formatWhen(date: Date | null): string {
-  if (!date) return "—";
-  return date.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
+function formatDatePart(date: Date): string {
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
+}
+
+function formatTimePart(date: Date): string {
+  return date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatRelative(date: Date): string {
+  const diffMs = date.getTime() - Date.now();
+  const absMs = Math.abs(diffMs);
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (absMs < minute) return "just now";
+  if (absMs < hour) return rtf.format(Math.round(diffMs / minute), "minute");
+  if (absMs < day) return rtf.format(Math.round(diffMs / hour), "hour");
+  if (absMs < 7 * day) return rtf.format(Math.round(diffMs / day), "day");
+  return formatDatePart(date);
 }
 
 function itemLabel(row: TransferRequest): string {
   return row.variantLabel && row.variantLabel !== "Default"
     ? `${row.productName} — ${row.variantLabel}`
     : row.productName;
+}
+
+function buildTimeline(row: TransferRequest): TimelineStep[] {
+  if (row.status === "declined") {
+    return [
+      {
+        key: "requested",
+        label: "Requested",
+        at: row.requestedAt,
+        by: row.requestedByName,
+        tone: "done",
+      },
+      {
+        key: "declined",
+        label: "Declined",
+        at: row.declinedAt,
+        by: row.declinedByName,
+        tone: "failed",
+      },
+    ];
+  }
+
+  if (row.status === "cancelled") {
+    return [
+      {
+        key: "requested",
+        label: "Requested",
+        at: row.requestedAt,
+        by: row.requestedByName,
+        tone: "done",
+      },
+      {
+        key: "cancelled",
+        label: "Cancelled",
+        at: row.cancelledAt,
+        by: row.cancelledByName,
+        tone: "failed",
+      },
+    ];
+  }
+
+  return [
+    {
+      key: "requested",
+      label: "Requested",
+      at: row.requestedAt,
+      by: row.requestedByName,
+      tone: row.status === "requested" ? "current" : "done",
+    },
+    {
+      key: "released",
+      label: "Released",
+      at: row.releasedAt,
+      by: row.releasedByName,
+      tone:
+        row.status === "released"
+          ? "current"
+          : row.status === "completed"
+            ? "done"
+            : "pending",
+    },
+    {
+      key: "received",
+      label: "Received",
+      at: row.receivedAt,
+      by: row.receivedByName,
+      tone: row.status === "completed" ? "done" : "pending",
+    },
+  ];
+}
+
+function TimelineIcon({
+  tone,
+  stepKey,
+}: {
+  tone: TimelineTone;
+  stepKey: string;
+}) {
+  const iconClass = "size-3.5";
+  if (tone === "failed") return <X className={iconClass} />;
+  if (tone === "done" && stepKey === "received") {
+    return <PackageCheck className={iconClass} />;
+  }
+  if (tone === "done") return <Check className={iconClass} />;
+  if (tone === "current") {
+    if (stepKey === "released") return <Send className={iconClass} />;
+    return <CircleDot className={iconClass} />;
+  }
+  return <span className="size-1.5 rounded-full bg-current opacity-40" />;
+}
+
+function RequestTimeline({ row }: { row: TransferRequest }) {
+  const steps = buildTimeline(row);
+
+  return (
+    <div className="rounded-lg border bg-muted/20 px-3 py-3">
+      <ol className="space-y-0">
+        {steps.map((step, index) => {
+          const isLast = index === steps.length - 1;
+          return (
+            <li key={step.key} className="flex gap-3">
+              <div className="flex w-5 flex-col items-center">
+                <span
+                  className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-full ring-2 ring-background",
+                    step.tone === "done" && "bg-emerald-600 text-white",
+                    step.tone === "current" &&
+                      "bg-primary text-primary-foreground",
+                    step.tone === "pending" &&
+                      "bg-muted text-muted-foreground ring-border",
+                    step.tone === "failed" && "bg-red-600 text-white"
+                  )}
+                >
+                  <TimelineIcon tone={step.tone} stepKey={step.key} />
+                </span>
+                {!isLast ? (
+                  <span
+                    className={cn(
+                      "my-1 min-h-4 w-px flex-1",
+                      step.tone === "done"
+                        ? "bg-emerald-600/40"
+                        : step.tone === "current"
+                          ? "bg-primary/35"
+                          : step.tone === "failed"
+                            ? "bg-red-600/30"
+                            : "bg-border"
+                    )}
+                  />
+                ) : null}
+              </div>
+              <div className={cn("min-w-0 flex-1", !isLast && "pb-3")}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <p
+                    className={cn(
+                      "text-sm font-medium",
+                      step.tone === "pending" && "text-muted-foreground",
+                      step.tone === "failed" && "text-red-700"
+                    )}
+                  >
+                    {step.label}
+                  </p>
+                  {step.at ? (
+                    <p
+                      className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+                      title={`${formatDatePart(step.at)} ${formatTimePart(step.at)}`}
+                    >
+                      {formatRelative(step.at)}
+                    </p>
+                  ) : (
+                    <p className="shrink-0 text-[11px] text-muted-foreground/70">
+                      Waiting
+                    </p>
+                  )}
+                </div>
+                {step.at ? (
+                  <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                    {formatDatePart(step.at)}
+                    <span className="mx-1 text-muted-foreground/50">·</span>
+                    {formatTimePart(step.at)}
+                    {step.by ? (
+                      <>
+                        <span className="mx-1 text-muted-foreground/50">·</span>
+                        {step.by}
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
 }
 
 function confirmCopy(
@@ -310,9 +521,14 @@ export default function CashierTransferRequestsPage() {
                       <CardTitle className="text-base leading-snug">
                         {itemLabel(row)}
                       </CardTitle>
-                      <Badge variant={statusVariant(row.status)}>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase ring-1 ring-inset",
+                          statusToneClass(row.status)
+                        )}
+                      >
                         {statusLabel(row.status)}
-                      </Badge>
+                      </span>
                     </div>
                     <CardDescription>
                       Qty {row.quantity}
@@ -322,21 +538,7 @@ export default function CashierTransferRequestsPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <div className="space-y-1 text-muted-foreground">
-                      <p>Requested {formatWhen(row.requestedAt)}</p>
-                      {row.releasedAt ? (
-                        <p>Released {formatWhen(row.releasedAt)}</p>
-                      ) : null}
-                      {row.receivedAt ? (
-                        <p>Received {formatWhen(row.receivedAt)}</p>
-                      ) : null}
-                      {row.cancelledAt ? (
-                        <p>Cancelled {formatWhen(row.cancelledAt)}</p>
-                      ) : null}
-                      {row.declinedAt ? (
-                        <p>Declined {formatWhen(row.declinedAt)}</p>
-                      ) : null}
-                    </div>
+                    <RequestTimeline row={row} />
 
                     {tab === "incoming" && row.status === "requested" && user ? (
                       <div className="flex flex-wrap gap-2">

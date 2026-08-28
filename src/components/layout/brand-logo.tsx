@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export const BRAND_NAME = "El Mio Vicente";
+export const BRAND_NAME = "LP Marketing";
 export const BRAND_LOGO_SRC = "/images/logo.png";
 
 const sizeMap = {
@@ -22,6 +22,8 @@ const sizeMap = {
 interface BrandLogoProps {
   size?: keyof typeof sizeMap;
   showName?: boolean;
+  /** When false, only the text name is shown (no logo image). */
+  showImage?: boolean;
   href?: string;
   className?: string;
   nameClassName?: string;
@@ -31,6 +33,7 @@ interface BrandLogoProps {
 export function BrandLogo({
   size = "sm",
   showName = true,
+  showImage = true,
   href,
   className,
   nameClassName,
@@ -40,14 +43,16 @@ export function BrandLogo({
 
   const content = (
     <>
-      <Image
-        src={BRAND_LOGO_SRC}
-        alt={BRAND_NAME}
-        width={dimension}
-        height={dimension}
-        className={cn("shrink-0 rounded-full object-cover", imageClassName)}
-        priority={priority}
-      />
+      {showImage ? (
+        <Image
+          src={BRAND_LOGO_SRC}
+          alt={BRAND_NAME}
+          width={dimension}
+          height={dimension}
+          className={cn("shrink-0 rounded-full object-cover", imageClassName)}
+          priority={priority}
+        />
+      ) : null}
       {showName && (
         <span className={cn("truncate font-semibold", nameClassName)}>
           {BRAND_NAME}

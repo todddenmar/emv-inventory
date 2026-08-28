@@ -10,7 +10,6 @@ import { AdminHeader } from "@/components/layout/admin-header";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { CASHIER_HOME } from "@/lib/post-login-redirect";
 import { BrandLogo } from "@/components/layout/brand-logo";
-import { DocsHelpButton } from "@/components/docs/docs-help-button";
 import { Badge } from "@/components/ui/badge";
 import { UserMenu } from "@/components/layout/user-menu";
 import { useAuthStore } from "@/stores/auth-store";
@@ -23,13 +22,12 @@ function CashierHeader() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:h-16">
         <div className="flex min-w-0 items-center gap-2">
-          <BrandLogo href={CASHIER_HOME} size="sm" priority />
+          <BrandLogo href={CASHIER_HOME} size="sm" showImage={false} priority />
           <Badge variant="secondary" className="hidden sm:inline-flex">
             Cashier
           </Badge>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
-          <DocsHelpButton />
           {!loading && user && <UserMenu showAdminLink={false} />}
         </div>
       </div>
