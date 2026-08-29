@@ -22,7 +22,7 @@ export const DOC_TOC = [
     id: "roles",
     label: "Roles & access",
     keywords:
-      "roles master admin owner manager cashier access permissions branch",
+      "roles master admin owner manager cashier access permissions scopes matrix branch who can",
   },
   {
     id: "selling",
@@ -129,6 +129,186 @@ function RoleCard({
   );
 }
 
+type ScopeMark = "yes" | "no" | "view" | "partial";
+
+const ROLE_SCOPE_COLUMNS = [
+  "Master",
+  "Admin",
+  "Owner",
+  "Manager",
+  "Cashier",
+] as const;
+
+const ROLE_SCOPE_ROWS: {
+  scope: string;
+  note?: string;
+  marks: ScopeMark[];
+}[] = [
+  {
+    scope: "See all branches",
+    marks: ["yes", "yes", "yes", "no", "no"],
+  },
+  {
+    scope: "Dashboard / overview",
+    note: "Cashiers get a cashier overview instead of the full dashboard.",
+    marks: ["yes", "yes", "no", "yes", "partial"],
+  },
+  {
+    scope: "Shop & wholesale POS",
+    marks: ["yes", "yes", "no", "yes", "yes"],
+  },
+  {
+    scope: "Stock levels",
+    note: "Owners can view only; they cannot edit quantities.",
+    marks: ["yes", "yes", "view", "yes", "no"],
+  },
+  {
+    scope: "Inventory tools",
+    note: "Daily stock, supplier stock in, adjustments, transfers.",
+    marks: ["yes", "yes", "no", "yes", "no"],
+  },
+  {
+    scope: "Find stock & transfer requests",
+    note: "Cashier flow to request stock from another branch.",
+    marks: ["no", "no", "no", "no", "yes"],
+  },
+  {
+    scope: "Sales reports",
+    note: "Cashiers see their sales list, not full report tools.",
+    marks: ["yes", "yes", "yes", "yes", "partial"],
+  },
+  {
+    scope: "Price changes",
+    marks: ["yes", "yes", "no", "yes", "no"],
+  },
+  {
+    scope: "Price promotions",
+    marks: ["yes", "yes", "no", "no", "no"],
+  },
+  {
+    scope: "Products, categories, branches",
+    marks: ["yes", "yes", "no", "no", "no"],
+  },
+  {
+    scope: "Settings (ops)",
+    note: "Assortment, resellers, vouchers, payment accounts. Managers: branch-scoped where applicable.",
+    marks: ["yes", "yes", "no", "partial", "no"],
+  },
+  {
+    scope: "Users & invites",
+    marks: ["yes", "yes", "no", "no", "no"],
+  },
+  {
+    scope: "Product JSON import",
+    marks: ["yes", "no", "no", "no", "no"],
+  },
+];
+
+function ScopeMarkCell({ mark }: { mark: ScopeMark }) {
+  if (mark === "yes") {
+    return (
+      <span
+        className="inline-flex size-6 items-center justify-center rounded-md bg-[var(--brand-yellow)]/35 text-sm font-bold text-[#12141a]"
+        title="Full access"
+        aria-label="Full access"
+      >
+        ✓
+      </span>
+    );
+  }
+  if (mark === "view") {
+    return (
+      <span
+        className="text-xs font-semibold tracking-wide text-[#2a3140] uppercase"
+        title="View only"
+      >
+        View
+      </span>
+    );
+  }
+  if (mark === "partial") {
+    return (
+      <span
+        className="text-xs font-semibold tracking-wide text-[#5a6478] uppercase"
+        title="Limited access"
+      >
+        Limited
+      </span>
+    );
+  }
+  return (
+    <span className="text-[#9aa3b2]" title="No access" aria-label="No access">
+      —
+    </span>
+  );
+}
+
+function RoleScopeMatrix({ compact }: { compact?: boolean }) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-[#12141a]/10 bg-white">
+      <table className="w-full min-w-[36rem] text-left text-sm">
+        <caption className="sr-only">
+          Role access scopes for master admin, admin, owner, manager, and cashier
+        </caption>
+        <thead className="bg-[#12141a] text-[#f7f4ea]">
+          <tr>
+            <th
+              className={cn(
+                "sticky left-0 bg-[#12141a] px-3 font-medium sm:px-4",
+                compact ? "py-2.5" : "py-3"
+              )}
+            >
+              Scope
+            </th>
+            {ROLE_SCOPE_COLUMNS.map((role) => (
+              <th
+                key={role}
+                className={cn(
+                  "px-2 text-center font-medium sm:px-3",
+                  compact ? "py-2.5" : "py-3"
+                )}
+              >
+                {role}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#12141a]/8">
+          {ROLE_SCOPE_ROWS.map((row) => (
+            <tr key={row.scope} className="align-middle">
+              <th
+                scope="row"
+                className={cn(
+                  "sticky left-0 bg-white px-3 text-left font-medium text-[#12141a] sm:px-4",
+                  compact ? "py-2.5" : "py-3"
+                )}
+              >
+                <span>{row.scope}</span>
+                {row.note ? (
+                  <span className="mt-0.5 block text-xs font-normal text-[#5a6478]">
+                    {row.note}
+                  </span>
+                ) : null}
+              </th>
+              {row.marks.map((mark, i) => (
+                <td
+                  key={`${row.scope}-${ROLE_SCOPE_COLUMNS[i]}`}
+                  className={cn(
+                    "px-2 text-center sm:px-3",
+                    compact ? "py-2.5" : "py-3"
+                  )}
+                >
+                  <ScopeMarkCell mark={mark} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function DocsSections({
   idPrefix,
   visibleIds,
@@ -203,7 +383,7 @@ function DocsSections({
         <Section id={sid("roles")} title="Roles & access" compact={compact}>
           <p>
             Your role decides which menus you see and which branches’ data you
-            can touch.
+            can touch. Use the matrix below to compare scopes at a glance.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <RoleCard
@@ -229,9 +409,39 @@ function DocsSections({
             <RoleCard
               role="Cashier"
               home="/admin/cashier"
-              sees="Branch overview, sales history, shop POS, and wholesale POS when the branch supports it."
+              sees="Branch overview, sales history, find stock, transfer requests, shop POS, and wholesale when enabled."
             />
           </div>
+          <div className="space-y-2">
+            <h3
+              className={cn(
+                "docs-display font-semibold tracking-tight text-[#12141a]",
+                compact ? "text-base" : "text-xl"
+              )}
+            >
+              Scope by role
+            </h3>
+            <p className="text-sm text-[#5a6478]">
+              <span className="mr-3">
+                <strong className="text-[#12141a]">✓</strong> full access
+              </span>
+              <span className="mr-3">
+                <strong className="text-[#12141a]">View</strong> read-only
+              </span>
+              <span className="mr-3">
+                <strong className="text-[#12141a]">Limited</strong> subset
+              </span>
+              <span>
+                <strong className="text-[#12141a]">—</strong> no access
+              </span>
+            </p>
+            <RoleScopeMatrix compact={compact} />
+          </div>
+          <Callout>
+            Managers and cashiers only work with their <strong>assigned
+            branch</strong>. Master admin, admin, and owner can see data across
+            all branches.
+          </Callout>
         </Section>
       ) : null}
 
