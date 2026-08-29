@@ -65,6 +65,11 @@ export interface Category {
   freebieVariants: CategoryFreebieVariant[];
   isArchived: boolean;
   archivedAt: Date | null;
+  /** When locked, permanent delete is blocked until unlocked by locker or master-admin. */
+  isLocked: boolean;
+  lockedBy: string | null;
+  lockedByName: string | null;
+  lockedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

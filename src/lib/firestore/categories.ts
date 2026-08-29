@@ -17,6 +17,11 @@ import {
 import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { categoryConverter } from "@/lib/firestore/converters";
+import {
+  getCategoryGroups,
+  updateCategoryGroup,
+} from "@/lib/firestore/category-groups";
+import { getProductsByCategoryId } from "@/lib/firestore/products";
 import { ensureUniqueSlug, slugify } from "@/lib/slug";
 import type { Category } from "@/types";
 
@@ -102,6 +107,10 @@ export async function createCategory(
       : [],
     isArchived: false,
     archivedAt: null,
+    isLocked: false,
+    lockedBy: null,
+    lockedByName: null,
+    lockedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -151,6 +160,27 @@ export async function updateCategory(
 }
 
 export async function archiveCategory(id: string): Promise<void> {
+  const existingSnap = await getDoc(
+    doc(getClientDb(), COLLECTIONS.categories, id).withConverter(
+      categoryConverter
+    )
+  );
+  if (!existingSnap.exists()) {
+    throw new Error("Category not found");
+  }
+
+  const category = existingSnap.data();
+  if (category.isLocked) {
+    throw new Error("Unlock the category before archiving it");
+  }
+
+  const productsUsing = await getProductsByCategoryId(id, true);
+  if (productsUsing.length > 0) {
+    throw new Error(
+      `Cannot archive: ${productsUsing.length} product${productsUsing.length === 1 ? "" : "s"} still assigned to this category`
+    );
+  }
+
   await updateDoc(doc(getClientDb(), COLLECTIONS.categories, id), {
     isArchived: true,
     archivedAt: serverTimestamp(),
@@ -166,9 +196,74 @@ export async function restoreCategory(id: string): Promise<void> {
   });
 }
 
+export async function setCategoryLocked(
+  id: string,
+  input: {
+    locked: boolean;
+    uid: string;
+    displayName: string | null;
+    /** When unlocking, pass true if actor is master-admin. */
+    isMasterAdmin?: boolean;
+  }
+): Promise<void> {
+  const existingSnap = await getDoc(
+    doc(getClientDb(), COLLECTIONS.categories, id).withConverter(
+      categoryConverter
+    )
+  );
+  if (!existingSnap.exists()) {
+    throw new Error("Category not found");
+  }
+
+  const category = existingSnap.data();
+
+  if (input.locked) {
+    if (category.isLocked) return;
+    await updateDoc(doc(getClientDb(), COLLECTIONS.categories, id), {
+      isLocked: true,
+      lockedBy: input.uid,
+      lockedByName: input.displayName?.trim() || null,
+      lockedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
+
+  if (!category.isLocked) return;
+
+  const canUnlock =
+    input.isMasterAdmin === true || category.lockedBy === input.uid;
+  if (!canUnlock) {
+    throw new Error("Only the admin who locked this category or a master admin can unlock it");
+  }
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.categories, id), {
+    isLocked: false,
+    lockedBy: null,
+    lockedByName: null,
+    lockedAt: null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function stripCategoryFromGroups(categoryId: string): Promise<void> {
+  const groups = await getCategoryGroups(true);
+  await Promise.all(
+    groups
+      .filter((group) => group.categoryIds.includes(categoryId))
+      .map((group) =>
+        updateCategoryGroup(group.id, {
+          categoryIds: group.categoryIds.filter((id) => id !== categoryId),
+        })
+      )
+  );
+}
+
 export async function deleteCategory(id: string): Promise<void> {
   const existingSnap = await getDoc(
-    doc(getClientDb(), COLLECTIONS.categories, id).withConverter(categoryConverter)
+    doc(getClientDb(), COLLECTIONS.categories, id).withConverter(
+      categoryConverter
+    )
   );
   if (!existingSnap.exists()) return;
 
@@ -176,6 +271,17 @@ export async function deleteCategory(id: string): Promise<void> {
   if (!category.isArchived) {
     throw new Error("Archive the category before deleting it permanently");
   }
+  if (category.isLocked) {
+    throw new Error("Unlock the category before deleting it permanently");
+  }
 
+  const productsUsing = await getProductsByCategoryId(id, true);
+  if (productsUsing.length > 0) {
+    throw new Error(
+      `Cannot delete: ${productsUsing.length} product${productsUsing.length === 1 ? "" : "s"} still assigned to this category`
+    );
+  }
+
+  await stripCategoryFromGroups(id);
   await deleteDoc(doc(getClientDb(), COLLECTIONS.categories, id));
 }

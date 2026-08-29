@@ -51,6 +51,10 @@ export const categoryConverter: FirestoreDataConverter<Category> = {
       freebieVariants: category.freebieVariants,
       isArchived: category.isArchived,
       archivedAt: category.archivedAt,
+      isLocked: category.isLocked,
+      lockedBy: category.lockedBy,
+      lockedByName: category.lockedByName,
+      lockedAt: category.lockedAt,
       createdAt: category.createdAt,
       updatedAt: category.updatedAt,
     };
@@ -96,6 +100,11 @@ export const categoryConverter: FirestoreDataConverter<Category> = {
         ),
       isArchived: data.isArchived ?? false,
       archivedAt: data.archivedAt ? toDate(data.archivedAt) : null,
+      isLocked: data.isLocked === true,
+      lockedBy: typeof data.lockedBy === "string" ? data.lockedBy : null,
+      lockedByName:
+        typeof data.lockedByName === "string" ? data.lockedByName : null,
+      lockedAt: data.lockedAt ? toDate(data.lockedAt) : null,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
     };

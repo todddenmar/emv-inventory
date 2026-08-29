@@ -10,6 +10,8 @@ import {
   Loader2,
   Search,
   Trash2,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,8 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -58,11 +62,13 @@ import {
   getCategories,
   resolveCategorySlug,
   restoreCategory,
+  setCategoryLocked,
 } from "@/lib/firestore/categories";
 import { getProducts } from "@/lib/firestore/products";
 import { slugify } from "@/lib/slug";
 import { useSlugField } from "@/hooks/use-slug-field";
 import { paginateItems } from "@/lib/pagination";
+import { useAuthStore, useIsMasterAdmin } from "@/stores/auth-store";
 import type { Category, CategoryFreebieVariant, Product } from "@/types";
 
 function matchesQuery(value: string, query: string): boolean {
@@ -72,11 +78,18 @@ function matchesQuery(value: string, query: string): boolean {
 
 export default function AdminCategoriesPage() {
   const { isElevatedAdmin } = useBranchAccess();
+  const user = useAuthStore((s) => s.user);
+  const isMasterAdmin = useIsMasterAdmin();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(
+    null
+  );
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [lockingId, setLockingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -86,8 +99,7 @@ export default function AdminCategoriesPage() {
       resolveCategorySlug(categoryName, preferredSlug),
     []
   );
-  const { slug, syncSlugFromName, resetSlugField } =
-    useSlugField(resolveSlug);
+  const { slug, syncSlugFromName, resetSlugField } = useSlugField(resolveSlug);
   const [tags, setTags] = useState<string[]>([]);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [freebieVariants, setFreebieVariants] = useState<
@@ -130,7 +142,7 @@ export default function AdminCategoriesPage() {
 
   useEffect(() => {
     loadCategories();
-    getProducts(false)
+    getProducts(false, true)
       .then(setCatalogProducts)
       .catch(console.error);
   }, []);
@@ -147,6 +159,13 @@ export default function AdminCategoriesPage() {
     }
     return map;
   }, [catalogProducts]);
+
+  const permanentDeleteCategory = useMemo(
+    () => categories.find((c) => c.id === permanentDeleteId) ?? null,
+    [categories, permanentDeleteId]
+  );
+
+  const canConfirmDelete = deleteConfirmText === "delete";
 
   useEffect(() => {
     setPage(1);
@@ -209,25 +228,36 @@ export default function AdminCategoriesPage() {
       await archiveCategory(deleteId);
       toast.success("Category archived");
       loadCategories();
-    } catch {
-      toast.error("Failed to archive category");
-    } finally {
       setDeleteId(null);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to archive category"
+      );
     }
   };
 
+  const closePermanentDelete = () => {
+    setPermanentDeleteId(null);
+    setDeleteConfirmText("");
+  };
+
   const handlePermanentDelete = async () => {
-    if (!permanentDeleteId) return;
+    if (!permanentDeleteId || !canConfirmDelete) return;
+    setDeleting(true);
     try {
       await deleteCategory(permanentDeleteId);
       toast.success("Category permanently deleted");
+      closePermanentDelete();
       loadCategories();
+      getProducts(false, true)
+        .then(setCatalogProducts)
+        .catch(console.error);
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to delete category"
       );
     } finally {
-      setPermanentDeleteId(null);
+      setDeleting(false);
     }
   };
 
@@ -239,6 +269,68 @@ export default function AdminCategoriesPage() {
     } catch {
       toast.error("Failed to restore category");
     }
+  };
+
+  const canUnlockCategory = (category: Category) =>
+    isMasterAdmin || category.lockedBy === user?.uid;
+
+  const handleToggleLock = async (category: Category) => {
+    if (!user) return;
+    if (category.isLocked && !canUnlockCategory(category)) {
+      toast.error(
+        "Only the admin who locked this category or a master admin can unlock it"
+      );
+      return;
+    }
+
+    setLockingId(category.id);
+    try {
+      await setCategoryLocked(category.id, {
+        locked: !category.isLocked,
+        uid: user.uid,
+        displayName: user.displayName || user.email || null,
+        isMasterAdmin,
+      });
+      toast.success(category.isLocked ? "Category unlocked" : "Category locked");
+      loadCategories();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update lock"
+      );
+    } finally {
+      setLockingId(null);
+    }
+  };
+
+  const openArchive = (category: Category) => {
+    const productCount = categoryCounts.get(category.id)?.products ?? 0;
+    if (category.isLocked) {
+      toast.error("Unlock the category before archiving it");
+      return;
+    }
+    if (productCount > 0) {
+      toast.error(
+        `Cannot archive: ${productCount} product${productCount === 1 ? "" : "s"} still assigned to this category`
+      );
+      return;
+    }
+    setDeleteId(category.id);
+  };
+
+  const openPermanentDelete = (category: Category) => {
+    const productCount = categoryCounts.get(category.id)?.products ?? 0;
+    if (category.isLocked) {
+      toast.error("Unlock the category before deleting it");
+      return;
+    }
+    if (productCount > 0) {
+      toast.error(
+        `Cannot delete: ${productCount} product${productCount === 1 ? "" : "s"} still assigned to this category`
+      );
+      return;
+    }
+    setDeleteConfirmText("");
+    setPermanentDeleteId(category.id);
   };
 
   return (
@@ -305,7 +397,7 @@ export default function AdminCategoriesPage() {
             <CategoryFreebiesEditor
               freebies={freebieVariants}
               onChange={setFreebieVariants}
-              products={catalogProducts}
+              products={catalogProducts.filter((p) => !p.isArchived)}
               disabled={submitting}
             />
             <Button type="submit" className="w-full" disabled={submitting}>
@@ -376,79 +468,154 @@ export default function AdminCategoriesPage() {
                       products: 0,
                       variants: 0,
                     };
-                    return (
-                    <TableRow key={category.id}>
-                      <TableCell className="font-medium">
-                        <Link
-                          href={`/admin/categories/${category.id}`}
-                          className="hover:underline"
-                        >
-                          {category.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {category.tags.length === 0 ? (
-                            <span className="text-muted-foreground text-sm">
-                              —
-                            </span>
-                          ) : (
-                            category.tags.map((tag) => (
-                              <Badge key={tag} variant="outline">
-                                {tag}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="tabular-nums text-right text-muted-foreground">
-                        {counts.products}
-                      </TableCell>
-                      <TableCell className="tabular-nums text-right text-muted-foreground">
-                        {counts.variants}
-                      </TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">
-                        {category.lowStockThreshold}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {!category.isArchived && (
-                          <LinkButton
-                            href={`/admin/categories/${category.id}`}
-                            variant="ghost"
-                            size="icon"
-                          >
-                            <Pencil className="h-4 w-4" />
-                            <span className="sr-only">Edit category</span>
-                          </LinkButton>
-                        )}
-                        {category.isArchived ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRestore(category.id)}
-                            >
-                              <ArchiveRestore className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setPermanentDeleteId(category.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </>
+                    const inUseOrLocked =
+                      category.isLocked || counts.products > 0;
+                    const unlockAllowed = canUnlockCategory(category);
+                    const lockButton = (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={
+                          lockingId === category.id ||
+                          (category.isLocked && !unlockAllowed)
+                        }
+                        onClick={() => handleToggleLock(category)}
+                        title={
+                          category.isLocked
+                            ? unlockAllowed
+                              ? "Unlock"
+                              : "Locked by another admin"
+                            : category.isArchived
+                              ? "Lock (blocks permanent delete)"
+                              : "Lock (blocks archive)"
+                        }
+                      >
+                        {lockingId === category.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : category.isLocked ? (
+                          <Unlock className="h-4 w-4" />
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteId(category.id)}
-                          >
-                            <Archive className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <Lock className="h-4 w-4" />
                         )}
-                      </TableCell>
-                    </TableRow>
+                        <span className="sr-only">
+                          {category.isLocked ? "Unlock" : "Lock"}
+                        </span>
+                      </Button>
+                    );
+
+                    return (
+                      <TableRow key={category.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={`/admin/categories/${category.id}`}
+                              className="hover:underline"
+                            >
+                              {category.name}
+                            </Link>
+                            {category.isLocked ? (
+                              <Badge
+                                variant="secondary"
+                                className="gap-1"
+                                title={
+                                  category.lockedByName
+                                    ? `Locked by ${category.lockedByName}`
+                                    : "Locked"
+                                }
+                              >
+                                <Lock className="h-3 w-3" />
+                                Locked
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {category.tags.length === 0 ? (
+                              <span className="text-muted-foreground text-sm">
+                                —
+                              </span>
+                            ) : (
+                              category.tags.map((tag) => (
+                                <Badge key={tag} variant="outline">
+                                  {tag}
+                                </Badge>
+                              ))
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="tabular-nums text-right text-muted-foreground">
+                          {counts.products}
+                        </TableCell>
+                        <TableCell className="tabular-nums text-right text-muted-foreground">
+                          {counts.variants}
+                        </TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {category.lowStockThreshold}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {!category.isArchived && (
+                            <LinkButton
+                              href={`/admin/categories/${category.id}`}
+                              variant="ghost"
+                              size="icon"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              <span className="sr-only">Edit category</span>
+                            </LinkButton>
+                          )}
+                          {category.isArchived ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRestore(category.id)}
+                                title="Restore"
+                              >
+                                <ArchiveRestore className="h-4 w-4" />
+                                <span className="sr-only">Restore</span>
+                              </Button>
+                              {lockButton}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={inUseOrLocked}
+                                onClick={() => openPermanentDelete(category)}
+                                title={
+                                  category.isLocked
+                                    ? "Unlock before deleting"
+                                    : counts.products > 0
+                                      ? "Remove from all products before deleting"
+                                      : "Delete permanently"
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                                <span className="sr-only">Delete</span>
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              {lockButton}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={inUseOrLocked}
+                                onClick={() => openArchive(category)}
+                                title={
+                                  category.isLocked
+                                    ? "Unlock before archiving"
+                                    : counts.products > 0
+                                      ? "Remove from all products before archiving"
+                                      : "Archive"
+                                }
+                              >
+                                <Archive className="h-4 w-4 text-destructive" />
+                                <span className="sr-only">Archive</span>
+                              </Button>
+                            </>
+                          )}
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
                 </TableBody>
@@ -470,8 +637,8 @@ export default function AdminCategoriesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive category?</AlertDialogTitle>
             <AlertDialogDescription>
-              Archived categories are hidden from product assignment. Existing
-              product links are kept until you update them.
+              Archived categories are hidden from product assignment. The
+              category must be unlocked and not assigned to any products.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -481,29 +648,59 @@ export default function AdminCategoriesPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog
+      <Dialog
         open={!!permanentDeleteId}
-        onOpenChange={() => setPermanentDeleteId(null)}
+        onOpenChange={(open) => {
+          if (!open) closePermanentDelete();
+        }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete category permanently?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This cannot be undone. Products may still reference this category
-              until you update them.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete category permanently?</DialogTitle>
+            <DialogDescription>
+              This cannot be undone
+              {permanentDeleteCategory
+                ? ` for “${permanentDeleteCategory.name}”`
+                : ""}
+              . The category must be archived, unlocked, and not assigned to any
+              products.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-delete">
+              Type <span className="font-mono font-semibold">delete</span> to
+              confirm
+            </Label>
+            <Input
+              id="confirm-delete"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="delete"
+              autoComplete="off"
+              disabled={deleting}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closePermanentDelete}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!canConfirmDelete || deleting}
               onClick={handlePermanentDelete}
             >
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete permanently
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
