@@ -3,11 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, Expand } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -158,6 +164,10 @@ export function PosWorkspace({
   const [promoMap, setPromoMap] = useState<Map<string, EffectiveSalePrices>>(
     () => new Map()
   );
+  const [imagePreview, setImagePreview] = useState<{
+    url: string;
+    title: string;
+  } | null>(null);
 
   const activeBranchId = isElevatedAdmin
     ? selectedBranchId
@@ -1011,7 +1021,15 @@ export function PosWorkspace({
                     );
                     const thumb =
                       product && showCatalogImages(catalogImageSource)
-                        ? getCatalogImageUrl(product, row, catalogImageSource)
+                        ? getCatalogImageUrl(
+                            product,
+                            row,
+                            catalogImageSource === "none"
+                              ? "none"
+                              : row.imageId
+                                ? "variant"
+                                : catalogImageSource
+                          )
                         : null;
                     const variantLabel = formatVariantLabel(
                       row,
@@ -1051,6 +1069,23 @@ export function PosWorkspace({
                             <Search className="size-3.5" />
                           </Link>
                         ) : null}
+                        {thumb ? (
+                          <button
+                            type="button"
+                            title="View full image"
+                            aria-label={`View full image for ${displayName}`}
+                            className="absolute top-2 left-2 z-10 inline-flex size-8 items-center justify-center rounded-md border bg-background/95 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground sm:top-2 sm:left-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setImagePreview({
+                                url: thumb,
+                                title: displayName,
+                              });
+                            }}
+                          >
+                            <Expand className="size-3.5" />
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           disabled={outOfStock}
@@ -1064,7 +1099,7 @@ export function PosWorkspace({
                               <img
                                 src={thumb}
                                 alt=""
-                                className="h-full w-full object-cover"
+                                className="h-full w-full object-cover object-center"
                               />
                             ) : (
                               <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
@@ -1249,6 +1284,31 @@ export function PosWorkspace({
         stockLabel={(stock) => `Stock ${stock}`}
         onSelect={handleSelectAlternateFreebie}
       />
+
+      <Dialog
+        open={Boolean(imagePreview)}
+        onOpenChange={(open) => {
+          if (!open) setImagePreview(null);
+        }}
+      >
+        <DialogContent className="gap-3 sm:max-w-3xl">
+          <DialogHeader className="pr-8 text-left">
+            <DialogTitle className="truncate text-base sm:text-lg">
+              {imagePreview?.title ?? "Product image"}
+            </DialogTitle>
+          </DialogHeader>
+          {imagePreview ? (
+            <div className="flex max-h-[min(80vh,40rem)] items-center justify-center overflow-hidden rounded-lg bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imagePreview.url}
+                alt={imagePreview.title}
+                className="max-h-[min(80vh,40rem)] w-full object-contain"
+              />
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

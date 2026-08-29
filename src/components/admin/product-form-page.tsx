@@ -53,7 +53,7 @@ import { normalizeImageOrder } from "@/lib/products";
 import { canPublishProduct, productStatusLabel } from "@/lib/products-catalog";
 import { formatProductTags, parseProductTags } from "@/lib/product-tags";
 import { slugify } from "@/lib/slug";
-import { mergeVariantsOnOptionChange } from "@/lib/product-variants";
+import { mergeVariantsOnOptionChange, formatVariantLabel } from "@/lib/product-variants";
 import { parseSpecsText } from "@/lib/specs";
 import { useSlugField } from "@/hooks/use-slug-field";
 import { useAuthStore } from "@/stores/auth-store";
@@ -380,6 +380,16 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     );
     removed.forEach(trackRemovedItem);
     setGalleryItems(items);
+    if (removed.length > 0) {
+      const removedIds = new Set(removed.map((item) => item.id));
+      setVariants((prev) =>
+        prev.map((variant) =>
+          variant.imageId && removedIds.has(variant.imageId)
+            ? { ...variant, imageId: null }
+            : variant
+        )
+      );
+    }
   };
 
   if (loading || !product) {
@@ -398,6 +408,14 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
     storagePath: item.storagePath,
     order: index,
   }));
+  const variantLabelsByImageId: Record<string, string[]> = {};
+  for (const variant of variants) {
+    if (!variant.imageId) continue;
+    const label = formatVariantLabel(variant, options);
+    const list = variantLabelsByImageId[variant.imageId] ?? [];
+    list.push(label);
+    variantLabelsByImageId[variant.imageId] = list;
+  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -551,6 +569,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           thumbnailId={thumbnailId}
           onChange={handleGalleryChange}
           onThumbnailChange={setThumbnailId}
+          variantLabelsByImageId={variantLabelsByImageId}
         />
 
         <div className="flex flex-col gap-2 border-t pt-6 sm:flex-row sm:justify-end">

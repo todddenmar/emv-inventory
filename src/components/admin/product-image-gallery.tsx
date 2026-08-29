@@ -37,16 +37,20 @@ interface ProductImageGalleryProps {
   thumbnailId: string | null;
   onChange: (items: GalleryItem[]) => void;
   onThumbnailChange: (id: string | null) => void;
+  /** Variant labels keyed by gallery image id. */
+  variantLabelsByImageId?: Record<string, string[]>;
 }
 
 function SortableImage({
   item,
   isThumbnail,
+  variantLabels,
   onSetThumbnail,
   onRemove,
 }: {
   item: GalleryItem;
   isThumbnail: boolean;
+  variantLabels: string[];
   onSetThumbnail: () => void;
   onRemove: () => void;
 }) {
@@ -77,14 +81,26 @@ function SortableImage({
       <img
         src={item.url}
         alt=""
-        className="h-full w-full object-cover"
+        className="h-full w-full object-cover object-center"
       />
-      {isThumbnail && (
-        <Badge className="absolute left-2 top-2 gap-1 text-xs">
-          <Star className="h-3 w-3 fill-current" />
-          Thumbnail
-        </Badge>
-      )}
+      <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-col items-start gap-1">
+        {isThumbnail && (
+          <Badge className="gap-1 text-xs">
+            <Star className="h-3 w-3 fill-current" />
+            Thumbnail
+          </Badge>
+        )}
+        {variantLabels.map((label) => (
+          <Badge
+            key={label}
+            variant="secondary"
+            className="max-w-full truncate text-xs shadow-sm"
+            title={`Used by variant: ${label}`}
+          >
+            {label}
+          </Badge>
+        ))}
+      </div>
       {item.isPending && (
         <Badge
           variant="secondary"
@@ -134,6 +150,7 @@ export function ProductImageGallery({
   thumbnailId,
   onChange,
   onThumbnailChange,
+  variantLabelsByImageId = {},
 }: ProductImageGalleryProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const sensors = useSensors(
@@ -227,6 +244,7 @@ export function ProductImageGallery({
                   key={item.id}
                   item={item}
                   isThumbnail={thumbnailId === item.id}
+                  variantLabels={variantLabelsByImageId[item.id] ?? []}
                   onSetThumbnail={() => onThumbnailChange(item.id)}
                   onRemove={() => removeItem(item.id)}
                 />
@@ -236,7 +254,8 @@ export function ProductImageGallery({
         </DndContext>
       )}
       <p className="text-xs text-muted-foreground">
-        Drag to reorder. Click the star to set the thumbnail shown in the shop.
+        Drag to reorder. Click the star to set the thumbnail. Variant labels
+        appear on images assigned to a variant.
       </p>
     </div>
   );
