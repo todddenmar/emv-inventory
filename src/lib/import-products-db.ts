@@ -308,6 +308,10 @@ export async function importProductToDatabase(
     ...payload,
     isArchived: false,
     archivedAt: null,
+    isLocked: false,
+    lockedBy: null,
+    lockedByName: null,
+    lockedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

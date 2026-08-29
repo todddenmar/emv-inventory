@@ -23,7 +23,7 @@ import {
 import { deleteProductImage } from "@/lib/storage/products";
 import { ensureUniqueSlug, slugify } from "@/lib/slug";
 import { isProductPublished } from "@/lib/products-catalog";
-import type { Product } from "@/types";
+import type { Category, Product } from "@/types";
 
 function productsRef(): CollectionReference<Product> {
   return collection(getClientDb(), COLLECTIONS.products).withConverter(
@@ -212,7 +212,15 @@ export async function unpublishProduct(id: string): Promise<void> {
 export async function createProduct(
   data: Omit<
     Product,
-    "id" | "createdAt" | "updatedAt" | "isArchived" | "archivedAt"
+    | "id"
+    | "createdAt"
+    | "updatedAt"
+    | "isArchived"
+    | "archivedAt"
+    | "isLocked"
+    | "lockedBy"
+    | "lockedByName"
+    | "lockedAt"
   > & { slug?: string }
 ): Promise<string> {
   const slug = await resolveProductSlug(data.name, data.slug);
@@ -223,6 +231,10 @@ export async function createProduct(
     isActive: data.isActive ?? data.status === "published",
     isArchived: false,
     archivedAt: null,
+    isLocked: false,
+    lockedBy: null,
+    lockedByName: null,
+    lockedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -302,6 +314,21 @@ export async function setVariantRetailPrices(
 }
 
 export async function archiveProduct(id: string): Promise<void> {
+  const product = await getProduct(id);
+  if (!product) {
+    throw new Error("Product not found");
+  }
+  if (product.isLocked) {
+    throw new Error("Unlock the product before archiving it");
+  }
+
+  const stockUnits = await getProductStockTotal(id);
+  if (stockUnits > 0) {
+    throw new Error(
+      `Cannot archive: ${stockUnits} unit${stockUnits === 1 ? "" : "s"} still in stock across branches`
+    );
+  }
+
   await updateDoc(doc(getClientDb(), COLLECTIONS.products, id), {
     isArchived: true,
     isActive: false,
@@ -319,11 +346,100 @@ export async function restoreProduct(id: string): Promise<void> {
   });
 }
 
+export async function setProductLocked(
+  id: string,
+  input: {
+    locked: boolean;
+    uid: string;
+    displayName: string | null;
+    isMasterAdmin?: boolean;
+  }
+): Promise<void> {
+  const product = await getProduct(id);
+  if (!product) {
+    throw new Error("Product not found");
+  }
+
+  if (input.locked) {
+    if (product.isLocked) return;
+    await updateDoc(doc(getClientDb(), COLLECTIONS.products, id), {
+      isLocked: true,
+      lockedBy: input.uid,
+      lockedByName: input.displayName?.trim() || null,
+      lockedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
+
+  if (!product.isLocked) return;
+
+  const canUnlock =
+    input.isMasterAdmin === true || product.lockedBy === input.uid;
+  if (!canUnlock) {
+    throw new Error(
+      "Only the admin who locked this product or a master admin can unlock it"
+    );
+  }
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.products, id), {
+    isLocked: false,
+    lockedBy: null,
+    lockedByName: null,
+    lockedAt: null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function getProductStockTotal(productId: string): Promise<number> {
+  const snapshot = await getDocs(
+    query(
+      collection(getClientDb(), COLLECTIONS.branchInventory),
+      where("productId", "==", productId)
+    )
+  );
+  return snapshot.docs.reduce((sum, d) => {
+    const stock = Number(d.data().stock ?? 0);
+    return sum + (Number.isFinite(stock) ? stock : 0);
+  }, 0);
+}
+
+async function stripProductFromCategoryFreebies(
+  productId: string
+): Promise<void> {
+  const snapshot = await getDocs(
+    collection(getClientDb(), COLLECTIONS.categories)
+  );
+  await Promise.all(
+    snapshot.docs.map(async (categoryDoc) => {
+      const data = categoryDoc.data();
+      const freebies = Array.isArray(data.freebieVariants)
+        ? (data.freebieVariants as Category["freebieVariants"])
+        : [];
+      if (!freebies.some((f) => f.productId === productId)) return;
+      await updateDoc(categoryDoc.ref, {
+        freebieVariants: freebies.filter((f) => f.productId !== productId),
+        updatedAt: serverTimestamp(),
+      });
+    })
+  );
+}
+
 export async function deleteProduct(id: string): Promise<void> {
   const product = await getProduct(id);
   if (!product) return;
   if (!product.isArchived) {
     throw new Error("Archive the product before deleting it permanently");
+  }
+  if (product.isLocked) {
+    throw new Error("Unlock the product before deleting it permanently");
+  }
+
+  const stockUnits = await getProductStockTotal(id);
+  if (stockUnits > 0) {
+    throw new Error(
+      `Cannot delete: ${stockUnits} unit${stockUnits === 1 ? "" : "s"} still in stock across branches`
+    );
   }
 
   for (const image of product.images) {
@@ -332,5 +448,6 @@ export async function deleteProduct(id: string): Promise<void> {
     }
   }
 
+  await stripProductFromCategoryFreebies(id);
   await deleteDoc(doc(getClientDb(), COLLECTIONS.products, id));
 }

@@ -263,6 +263,10 @@ export const productConverter: FirestoreDataConverter<Product> = {
       isActive: product.isActive,
       isArchived: product.isArchived,
       archivedAt: product.archivedAt,
+      isLocked: product.isLocked,
+      lockedBy: product.lockedBy,
+      lockedByName: product.lockedByName,
+      lockedAt: product.lockedAt,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
     };
@@ -313,6 +317,11 @@ export const productConverter: FirestoreDataConverter<Product> = {
       isActive: data.isActive ?? true,
       isArchived: data.isArchived ?? false,
       archivedAt: data.archivedAt ? toDate(data.archivedAt) : null,
+      isLocked: data.isLocked === true,
+      lockedBy: typeof data.lockedBy === "string" ? data.lockedBy : null,
+      lockedByName:
+        typeof data.lockedByName === "string" ? data.lockedByName : null,
+      lockedAt: data.lockedAt ? toDate(data.lockedAt) : null,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
     };

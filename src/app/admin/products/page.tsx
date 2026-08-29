@@ -14,6 +14,8 @@ import {
   Loader2,
   Tags,
   Search,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -59,6 +61,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CategoryMultiSelect } from "@/components/admin/category-multi-select";
 import { TablePagination } from "@/components/admin/table-pagination";
@@ -69,6 +72,7 @@ import {
   getProducts,
   publishProduct,
   restoreProduct,
+  setProductLocked,
   unpublishProduct,
   updateProduct,
 } from "@/lib/firestore/products";
@@ -81,6 +85,7 @@ import {
 import { getProductPriceRange, getDefaultVariant } from "@/lib/product-variants";
 import { formatCurrency } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
+import { useAuthStore } from "@/stores/auth-store";
 import type { Category, Product } from "@/types";
 
 function matchesQuery(value: string, query: string): boolean {
@@ -90,11 +95,17 @@ function matchesQuery(value: string, query: string): boolean {
 
 export default function AdminProductsPage() {
   const { isMasterAdmin, isElevatedAdmin } = useBranchAccess();
+  const user = useAuthStore((s) => s.user);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
+  const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(
+    null
+  );
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [lockingId, setLockingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -203,10 +214,11 @@ export default function AdminProductsPage() {
       await archiveProduct(deleteId);
       toast.success("Product archived");
       loadData();
-    } catch {
-      toast.error("Failed to archive product");
-    } finally {
       setDeleteId(null);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to archive product"
+      );
     }
   };
 
@@ -220,19 +232,81 @@ export default function AdminProductsPage() {
     }
   };
 
+  const closePermanentDelete = () => {
+    setPermanentDeleteId(null);
+    setDeleteConfirmText("");
+  };
+
+  const canConfirmDelete = deleteConfirmText === "delete";
+
+  const permanentDeleteProduct = useMemo(
+    () => products.find((p) => p.id === permanentDeleteId) ?? null,
+    [products, permanentDeleteId]
+  );
+
   const handlePermanentDelete = async () => {
-    if (!permanentDeleteId) return;
+    if (!permanentDeleteId || !canConfirmDelete) return;
+    setDeleting(true);
     try {
       await deleteProduct(permanentDeleteId);
       toast.success("Product permanently deleted");
+      closePermanentDelete();
       loadData();
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to delete product"
       );
     } finally {
-      setPermanentDeleteId(null);
+      setDeleting(false);
     }
+  };
+
+  const canUnlockProduct = (product: Product) =>
+    isMasterAdmin || product.lockedBy === user?.uid;
+
+  const handleToggleLock = async (product: Product) => {
+    if (!user) return;
+    if (product.isLocked && !canUnlockProduct(product)) {
+      toast.error(
+        "Only the admin who locked this product or a master admin can unlock it"
+      );
+      return;
+    }
+
+    setLockingId(product.id);
+    try {
+      await setProductLocked(product.id, {
+        locked: !product.isLocked,
+        uid: user.uid,
+        displayName: user.displayName || user.email || null,
+        isMasterAdmin,
+      });
+      toast.success(product.isLocked ? "Product unlocked" : "Product locked");
+      loadData();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update lock"
+      );
+    } finally {
+      setLockingId(null);
+    }
+  };
+
+  const openArchive = (product: Product) => {
+    if (product.isLocked) {
+      toast.error("Unlock the product before archiving it");
+      return;
+    }
+    setDeleteId(product.id);
+  };
+
+  const openPermanentDelete = (product: Product) => {
+    if (product.isLocked) {
+      toast.error("Unlock the product before deleting it");
+      return;
+    }
+    setDeleteConfirmText("");
+    setPermanentDeleteId(product.id);
   };
 
   const handleStatusToggle = async (product: Product, publish: boolean) => {
@@ -365,6 +439,7 @@ export default function AdminProductsPage() {
                   {pagedProducts.map((product) => {
                   const thumb = getProductThumbnailUrl(product);
                   const published = isProductPublished(product);
+                  const unlockAllowed = canUnlockProduct(product);
 
                   return (
                     <TableRow key={product.id}>
@@ -380,12 +455,30 @@ export default function AdminProductsPage() {
                               />
                             ) : null}
                           </div>
-                          <Link
-                            href={`/admin/products/${product.id}`}
-                            className="font-medium hover:underline"
-                          >
-                            {product.name.trim() || "Untitled draft"}
-                          </Link>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Link
+                                href={`/admin/products/${product.id}`}
+                                className="font-medium hover:underline"
+                              >
+                                {product.name.trim() || "Untitled draft"}
+                              </Link>
+                              {product.isLocked ? (
+                                <Badge
+                                  variant="secondary"
+                                  className="gap-1"
+                                  title={
+                                    product.lockedByName
+                                      ? `Locked by ${product.lockedByName}`
+                                      : "Locked"
+                                  }
+                                >
+                                  <Lock className="h-3 w-3" />
+                                  Locked
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -477,6 +570,26 @@ export default function AdminProductsPage() {
                                 }
                               />
                             )}
+                            <DropdownMenuItem
+                              disabled={
+                                lockingId === product.id ||
+                                (product.isLocked && !unlockAllowed)
+                              }
+                              onClick={() => handleToggleLock(product)}
+                            >
+                              {lockingId === product.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : product.isLocked ? (
+                                <Unlock className="h-4 w-4" />
+                              ) : (
+                                <Lock className="h-4 w-4" />
+                              )}
+                              {product.isLocked
+                                ? unlockAllowed
+                                  ? "Unlock"
+                                  : "Locked by another admin"
+                                : "Lock"}
+                            </DropdownMenuItem>
                             {product.isArchived ? (
                               <>
                                 <DropdownMenuItem
@@ -488,9 +601,8 @@ export default function AdminProductsPage() {
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   variant="destructive"
-                                  onClick={() =>
-                                    setPermanentDeleteId(product.id)
-                                  }
+                                  disabled={product.isLocked}
+                                  onClick={() => openPermanentDelete(product)}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                   Delete permanently
@@ -499,7 +611,8 @@ export default function AdminProductsPage() {
                             ) : (
                               <DropdownMenuItem
                                 variant="destructive"
-                                onClick={() => setDeleteId(product.id)}
+                                disabled={product.isLocked}
+                                onClick={() => openArchive(product)}
                               >
                                 <Archive className="h-4 w-4" />
                                 Archive
@@ -575,8 +688,9 @@ export default function AdminProductsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Archive product?</AlertDialogTitle>
             <AlertDialogDescription>
-              Archived products are hidden from the shop and catalog lists. You
-              can restore them later.
+              Archived products are hidden from the shop and catalog lists. The
+              product must be unlocked and have no remaining stock across
+              branches.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -586,29 +700,61 @@ export default function AdminProductsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog
+      <Dialog
         open={!!permanentDeleteId}
-        onOpenChange={() => setPermanentDeleteId(null)}
+        onOpenChange={(open) => {
+          if (!open) closePermanentDelete();
+        }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete product permanently?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This cannot be undone. The product and its images will be removed
-              from the database.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete product permanently?</DialogTitle>
+            <DialogDescription>
+              This cannot be undone
+              {permanentDeleteProduct
+                ? ` for “${
+                    permanentDeleteProduct.name.trim() || "Untitled draft"
+                  }”`
+                : ""}
+              . The product must be archived, unlocked, and have no remaining
+              stock. Images will be removed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-delete-product">
+              Type <span className="font-mono font-semibold">delete</span> to
+              confirm
+            </Label>
+            <Input
+              id="confirm-delete-product"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="delete"
+              autoComplete="off"
+              disabled={deleting}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closePermanentDelete}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={!canConfirmDelete || deleting}
               onClick={handlePermanentDelete}
             >
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete permanently
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
