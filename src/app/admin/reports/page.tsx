@@ -59,6 +59,7 @@ import {
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
+import { EditSalePaymentButton } from "@/components/admin/edit-sale-payment-dialog";
 import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems, TABLE_PAGE_SIZE } from "@/lib/pagination";
@@ -209,7 +210,8 @@ function BarMeter({
 }
 
 export default function AdminReportsPage() {
-  const { canViewAllBranches, assignedBranchId } = useBranchAccess();
+  const { canViewAllBranches, assignedBranchId, isElevatedAdmin } =
+    useBranchAccess();
   const initial = applyPreset("today");
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -978,7 +980,7 @@ export default function AdminReportsPage() {
                         <TableHead>Staff</TableHead>
                         <TableHead>Items</TableHead>
                         <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="w-12 text-right">
+                        <TableHead className="w-20 text-right">
                           <span className="sr-only">Actions</span>
                         </TableHead>
                       </TableRow>
@@ -1022,7 +1024,21 @@ export default function AdminReportsPage() {
                             {formatCurrency(sale.total)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <SaleInvoiceButton sale={sale} />
+                            <div className="flex justify-end">
+                              <SaleInvoiceButton sale={sale} />
+                              {isElevatedAdmin ? (
+                                <EditSalePaymentButton
+                                  sale={sale}
+                                  onUpdated={(updated) => {
+                                    setSales((prev) =>
+                                      prev.map((row) =>
+                                        row.id === updated.id ? updated : row
+                                      )
+                                    );
+                                  }}
+                                />
+                              ) : null}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

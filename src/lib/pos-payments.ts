@@ -2,6 +2,8 @@ import type {
   PaymentAccount,
   PosPaymentKind,
   PosPaymentLine,
+  PosSale,
+  PosSaleItem,
   PosSalePaymentAccount,
   PosTenderMethod,
 } from "@/types";
@@ -334,7 +336,7 @@ export function syncPaymentsToLineTotal(
 }
 
 export function itemPaymentsCoverLineTotal(
-  payments: PosCheckoutPaymentLine[],
+  payments: Array<Pick<PosCheckoutPaymentLine, "amount">>,
   lineTotal: number
 ): boolean {
   return (
@@ -550,6 +552,53 @@ export function synthesizePaymentsFromLegacy(
       note: null,
     },
   ];
+}
+
+export function salePaymentLineToCheckout(
+  line: PosPaymentLine
+): PosCheckoutPaymentLine {
+  const amount = roundMoney(Math.max(0, Number(line.amount) || 0));
+  return {
+    id: createCheckoutPaymentLineId(),
+    tenderMethod: parsePosTenderMethod(line.tenderMethod),
+    amount,
+    amountText: moneyInputText(amount),
+    paymentAccountId: line.paymentAccount?.id ?? null,
+    kind: parsePosPaymentKind(line.kind),
+    note: typeof line.note === "string" ? line.note : "",
+  };
+}
+
+export function itemStoredPaymentTotal(item: PosSaleItem): number {
+  if (Array.isArray(item.payments) && item.payments.length > 0) {
+    return roundMoney(
+      item.payments.reduce(
+        (sum, pay) => sum + (Number.isFinite(pay.amount) ? pay.amount : 0),
+        0
+      )
+    );
+  }
+  if (item.tenderMethod) {
+    return roundMoney(Math.max(0, item.lineTotal));
+  }
+  return 0;
+}
+
+/** True when per-item tenders already cover amount due and should be edited in place. */
+export function shouldEditSalePaymentsByItem(sale: PosSale): boolean {
+  const paid = sale.items.filter(
+    (item) => itemStoredPaymentTotal(item) > PAYMENT_AMOUNT_TOLERANCE
+  );
+  if (paid.length === 0) return false;
+  const sum = roundMoney(
+    paid.reduce((total, item) => total + itemStoredPaymentTotal(item), 0)
+  );
+  const amountDue = roundMoney(sale.amountDue ?? sale.total);
+  return Math.abs(sum - amountDue) <= PAYMENT_AMOUNT_TOLERANCE;
+}
+
+export function saleAmountDue(sale: Pick<PosSale, "amountDue" | "total">): number {
+  return roundMoney(sale.amountDue ?? sale.total);
 }
 
 export function migrateDraftPaymentLines(raw: {

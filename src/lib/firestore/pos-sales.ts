@@ -8,6 +8,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  updateDoc,
   where,
   type QueryConstraint,
 } from "firebase/firestore";
@@ -18,6 +19,7 @@ import { inventoryDocId } from "@/lib/firestore/inventory";
 import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
 import { isVoucherRedeemable } from "@/lib/firestore/vouchers";
 import type {
+  PaymentAccount,
   PosCustomerType,
   PosPaymentLine,
   PosPaymentMethod,
@@ -31,10 +33,17 @@ import type {
 } from "@/types";
 import {
   PAYMENT_AMOUNT_TOLERANCE,
+  itemPaymentsCoverLineTotal,
+  itemStoredPaymentTotal,
   paymentsCoverAmountDue,
   roundMoney,
+  snapshotPaymentAccount,
   synthesizePaymentsFromLegacy,
   tenderNeedsPaymentAccount,
+  accountTypeForTender,
+  parsePosPaymentKind,
+  parsePosTenderMethod,
+  type PosCheckoutPaymentLine,
 } from "@/lib/pos-payments";
 
 export interface CompletePosSaleInput {
@@ -380,4 +389,202 @@ export async function completePosSale(
   });
 
   return saleId;
+}
+
+function serializePaymentLine(line: PosPaymentLine): PosPaymentLine {
+  return {
+    tenderMethod: parsePosTenderMethod(line.tenderMethod),
+    amount: roundMoney(line.amount),
+    paymentAccount: tenderNeedsPaymentAccount(line.tenderMethod)
+      ? line.paymentAccount
+      : null,
+    kind: parsePosPaymentKind(line.kind),
+    note:
+      typeof line.note === "string" && line.note.trim()
+        ? line.note.trim()
+        : null,
+  };
+}
+
+function resolveEditPaymentLine(
+  draft: PosCheckoutPaymentLine,
+  accounts: PaymentAccount[],
+  fallbackAccount: PosSalePaymentAccount | null
+): PosPaymentLine {
+  if (!Number.isFinite(draft.amount) || draft.amount <= 0) {
+    throw new Error("Each payment amount must be greater than 0");
+  }
+  const tenderMethod = parsePosTenderMethod(draft.tenderMethod);
+  const needsAccount = tenderNeedsPaymentAccount(tenderMethod);
+  const expectedType = accountTypeForTender(tenderMethod);
+  let paymentAccount: PosSalePaymentAccount | null = null;
+  if (needsAccount) {
+    const account = accounts.find(
+      (row) =>
+        row.id === draft.paymentAccountId &&
+        expectedType != null &&
+        row.type === expectedType
+    );
+    if (account) {
+      paymentAccount = snapshotPaymentAccount(account);
+    } else if (
+      fallbackAccount?.id === draft.paymentAccountId &&
+      fallbackAccount.type === expectedType
+    ) {
+      paymentAccount = fallbackAccount;
+    } else {
+      throw new Error(
+        expectedType === "bank_transfer"
+          ? "Select a bank transfer account for each bank transfer payment"
+          : "Select an e-wallet account for each e-wallet payment"
+      );
+    }
+  }
+  return serializePaymentLine({
+    tenderMethod,
+    amount: draft.amount,
+    paymentAccount,
+    kind: parsePosPaymentKind(draft.kind),
+    note: draft.note.trim() ? draft.note.trim() : null,
+  });
+}
+
+function itemsUnchangedForPaymentEdit(
+  existing: PosSaleItem[],
+  next: PosSaleItem[]
+): boolean {
+  if (existing.length !== next.length) return false;
+  return existing.every((item, index) => {
+    const row = next[index];
+    return (
+      row.productId === item.productId &&
+      row.variantId === item.variantId &&
+      row.quantity === item.quantity &&
+      roundMoney(row.unitPrice) === roundMoney(item.unitPrice) &&
+      roundMoney(row.lineTotal) === roundMoney(item.lineTotal)
+    );
+  });
+}
+
+export interface UpdatePosSalePaymentsInput {
+  payments: PosPaymentLine[];
+  items?: PosSaleItem[];
+}
+
+/** Admin-only correction of tender methods / accounts. Totals stay the same. */
+export async function updatePosSalePayments(
+  saleId: string,
+  input: UpdatePosSalePaymentsInput
+): Promise<PosSale> {
+  const existing = await getPosSale(saleId);
+  if (!existing) {
+    throw new Error("Sale not found");
+  }
+
+  const amountDue = roundMoney(existing.amountDue ?? existing.total);
+  const payments = input.payments.map(serializePaymentLine);
+  const items =
+    input.items?.map((item, index) => {
+      const current = existing.items[index];
+      if (!current) {
+        throw new Error("Sale items cannot be added or removed");
+      }
+      const itemPayments = (item.payments ?? []).map(serializePaymentLine);
+      const primary = itemPayments[0] ?? null;
+      return {
+        ...current,
+        payments: itemPayments,
+        tenderMethod: primary?.tenderMethod ?? null,
+        paymentAccount: primary?.paymentAccount ?? null,
+        kind: primary?.kind ?? null,
+        note: primary?.note ?? null,
+      };
+    }) ?? null;
+
+  if (items && !itemsUnchangedForPaymentEdit(existing.items, items)) {
+    throw new Error("Line items and totals cannot be changed");
+  }
+
+  for (const line of payments) {
+    if (!Number.isFinite(line.amount) || line.amount <= 0) {
+      throw new Error("Each payment amount must be greater than 0");
+    }
+    if (tenderNeedsPaymentAccount(line.tenderMethod)) {
+      const account = line.paymentAccount;
+      const expectedType =
+        line.tenderMethod === "bank_transfer" ? "bank_transfer" : "ewallet";
+      if (
+        !account?.id ||
+        !account.provider ||
+        !account.accountName ||
+        !account.accountNumber ||
+        account.type !== expectedType
+      ) {
+        throw new Error(
+          expectedType === "bank_transfer"
+            ? "Select a bank transfer account for each bank transfer payment"
+            : "Select an e-wallet account for each e-wallet payment"
+        );
+      }
+    }
+  }
+
+  if (amountDue > PAYMENT_AMOUNT_TOLERANCE) {
+    if (payments.length === 0) {
+      throw new Error("Add at least one payment");
+    }
+    if (!paymentsCoverAmountDue(amountDue, payments)) {
+      throw new Error("Payment amounts must equal the amount due");
+    }
+  } else if (payments.length > 0) {
+    throw new Error("This receipt has no amount due to edit");
+  }
+
+  if (items) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const target = itemStoredPaymentTotal(existing.items[i]);
+      if (target <= PAYMENT_AMOUNT_TOLERANCE) {
+        if (item.payments.length > 0) {
+          throw new Error("Free or unpaid items cannot have payments");
+        }
+        continue;
+      }
+      if (item.payments.length === 0) {
+        throw new Error("Add at least one payment for each paid item");
+      }
+      if (!itemPaymentsCoverLineTotal(item.payments, target)) {
+        throw new Error("Each item's payments must keep that item's paid amount");
+      }
+    }
+  }
+
+  const primary = payments[0] ?? null;
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.posSales, saleId), {
+    payments,
+    tenderMethod: primary?.tenderMethod ?? existing.tenderMethod,
+    paymentAccount: primary?.paymentAccount ?? null,
+    ...(items ? { items } : {}),
+  });
+
+  const updated = await getPosSale(saleId);
+  if (!updated) {
+    throw new Error("Sale not found after update");
+  }
+  return updated;
+}
+
+export function resolveSalePaymentDrafts(options: {
+  drafts: PosCheckoutPaymentLine[];
+  accounts: PaymentAccount[];
+  fallbackAccounts: Array<PosSalePaymentAccount | null>;
+}): PosPaymentLine[] {
+  return options.drafts.map((draft, index) =>
+    resolveEditPaymentLine(
+      draft,
+      options.accounts,
+      options.fallbackAccounts[index] ?? null
+    )
+  );
 }

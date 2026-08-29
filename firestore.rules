@@ -272,7 +272,9 @@ service cloud.firestore {
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
-      allow update, delete: if false;
+      // Admins may correct tender / account details after a sale is completed.
+      allow update: if isElevatedAdmin();
+      allow delete: if false;
     }
 
     match /physicalDailyExpenses/{expenseId} {
