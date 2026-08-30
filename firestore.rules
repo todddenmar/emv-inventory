@@ -290,6 +290,21 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    match /physicalDailyCashRecords/{recordId} {
+      allow read: if isStaff() &&
+        (resource == null ||
+          canReadAllBranches() ||
+          resource.data.branchId == managerBranchId());
+      allow create: if isStaff() &&
+        request.resource.data.branchId != null &&
+        (canReadAllBranches() ||
+          canAccessBranch(request.resource.data.branchId));
+      allow update: if isStaff() &&
+        (canReadAllBranches() ||
+          canAccessBranch(resource.data.branchId));
+      allow delete: if isElevatedAdmin();
+    }
+
     match /physicalSupplierStockIns/{stockInId} {
       allow read: if isStaff() &&
         (canReadAllBranches() || resource.data.branchId == managerBranchId());

@@ -63,7 +63,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CategoryMultiSelect } from "@/components/admin/category-multi-select";
+import { TableBulkBar } from "@/components/admin/table-bulk-bar";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
@@ -85,6 +87,7 @@ import {
 import { getProductPriceRange, getDefaultVariant } from "@/lib/product-variants";
 import { formatCurrency } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
+import { runBulkActions, summarizeBulkResult } from "@/lib/bulk";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Category, Product } from "@/types";
 
@@ -109,6 +112,11 @@ export default function AdminProductsPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState("");
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [categoryEditProduct, setCategoryEditProduct] =
     useState<Product | null>(null);
@@ -166,11 +174,43 @@ export default function AdminProductsPage() {
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds([]);
   }, [showArchived, search]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+
+  const pageIds = useMemo(
+    () => pagedProducts.map((product) => product.id),
+    [pagedProducts]
+  );
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.includes(id));
+
+  const toggleSelectPage = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds((prev) => [...new Set([...prev, ...pageIds])]);
+      return;
+    }
+    setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const reportBulk = (
+    result: { ok: number; failed: number; messages: string[] },
+    verb: string
+  ) => {
+    const summary = summarizeBulkResult(result, verb);
+    if (summary.success) toast.success(summary.success);
+    if (summary.error) toast.error(summary.error);
+  };
 
   const openCategoryEditor = (product: Product) => {
     setCategoryEditProduct(product);
@@ -258,6 +298,52 @@ export default function AdminProductsPage() {
       );
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const closeBulkDelete = () => {
+    setBulkDeleteOpen(false);
+    setBulkDeleteConfirm("");
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkRunning(true);
+    try {
+      const result = await runBulkActions(selectedIds, archiveProduct);
+      reportBulk(result, "archived");
+      setBulkArchiveOpen(false);
+      setSelectedIds([]);
+      loadData();
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const handleBulkRestore = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkRunning(true);
+    try {
+      const result = await runBulkActions(selectedIds, restoreProduct);
+      reportBulk(result, "restored");
+      setSelectedIds([]);
+      loadData();
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0 || bulkDeleteConfirm !== "delete") return;
+    setBulkRunning(true);
+    try {
+      const result = await runBulkActions(selectedIds, deleteProduct);
+      reportBulk(result, "deleted");
+      closeBulkDelete();
+      setSelectedIds([]);
+      loadData();
+    } finally {
+      setBulkRunning(false);
     }
   };
 
@@ -425,9 +511,68 @@ export default function AdminProductsPage() {
             </p>
           ) : (
             <>
+              <TableBulkBar
+                selectedCount={selectedIds.length}
+                visibleCount={visibleProducts.length}
+                itemLabel={showArchived ? "archived products" : "products"}
+                onSelectAllVisible={() =>
+                  setSelectedIds(visibleProducts.map((product) => product.id))
+                }
+                onClear={() => setSelectedIds([])}
+              >
+                {showArchived ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={bulkRunning}
+                      onClick={() => void handleBulkRestore()}
+                    >
+                      {bulkRunning ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ArchiveRestore className="h-4 w-4" />
+                      )}
+                      Restore
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={bulkRunning}
+                      onClick={() => {
+                        setBulkDeleteConfirm("");
+                        setBulkDeleteOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={bulkRunning}
+                    onClick={() => setBulkArchiveOpen(true)}
+                  >
+                    <Archive className="h-4 w-4" />
+                    Archive
+                  </Button>
+                )}
+              </TableBulkBar>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allPageSelected}
+                        indeterminate={somePageSelected && !allPageSelected}
+                        onCheckedChange={(checked) =>
+                          toggleSelectPage(checked === true)
+                        }
+                        aria-label="Select all on this page"
+                      />
+                    </TableHead>
                     <TableHead>Product</TableHead>
                     <TableHead>Categories</TableHead>
                     <TableHead>Price</TableHead>
@@ -443,6 +588,13 @@ export default function AdminProductsPage() {
 
                   return (
                     <TableRow key={product.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.includes(product.id)}
+                          onCheckedChange={() => toggleSelected(product.id)}
+                          aria-label={`Select ${product.name.trim() || "product"}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
@@ -750,6 +902,89 @@ export default function AdminProductsPage() {
               onClick={handlePermanentDelete}
             >
               {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={bulkArchiveOpen}
+        onOpenChange={setBulkArchiveOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Archive {selectedIds.length} product
+              {selectedIds.length === 1 ? "" : "s"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Archived products are hidden from the shop and catalog lists.
+              Locked products and items with remaining stock will be skipped.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkRunning}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkRunning}
+              onClick={() => void handleBulkArchive()}
+            >
+              {bulkRunning ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Archive selected
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={bulkDeleteOpen}
+        onOpenChange={(open) => {
+          if (!open) closeBulkDelete();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Delete {selectedIds.length} product
+              {selectedIds.length === 1 ? "" : "s"} permanently?
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Locked products and items with remaining
+              stock will be skipped.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-bulk-delete-product">
+              Type <span className="font-mono font-semibold">delete</span> to
+              confirm
+            </Label>
+            <Input
+              id="confirm-bulk-delete-product"
+              value={bulkDeleteConfirm}
+              onChange={(e) => setBulkDeleteConfirm(e.target.value)}
+              placeholder="delete"
+              autoComplete="off"
+              disabled={bulkRunning}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeBulkDelete}
+              disabled={bulkRunning}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={bulkDeleteConfirm !== "delete" || bulkRunning}
+              onClick={() => void handleBulkDelete()}
+            >
+              {bulkRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete permanently
             </Button>
           </DialogFooter>

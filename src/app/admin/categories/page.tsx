@@ -52,7 +52,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CategoryFreebiesEditor } from "@/components/admin/category-freebies-editor";
+import { TableBulkBar } from "@/components/admin/table-bulk-bar";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
@@ -68,6 +70,7 @@ import { getProducts } from "@/lib/firestore/products";
 import { slugify } from "@/lib/slug";
 import { useSlugField } from "@/hooks/use-slug-field";
 import { paginateItems } from "@/lib/pagination";
+import { runBulkActions, summarizeBulkResult } from "@/lib/bulk";
 import { useAuthStore, useIsMasterAdmin } from "@/stores/auth-store";
 import type { Category, CategoryFreebieVariant, Product } from "@/types";
 
@@ -93,6 +96,11 @@ export default function AdminCategoriesPage() {
   const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState("");
   const [name, setName] = useState("");
   const resolveSlug = useCallback(
     (categoryName: string, preferredSlug?: string) =>
@@ -169,11 +177,43 @@ export default function AdminCategoriesPage() {
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds([]);
   }, [showArchived, search]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+
+  const pageIds = useMemo(
+    () => pagedCategories.map((category) => category.id),
+    [pagedCategories]
+  );
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.includes(id));
+
+  const toggleSelectPage = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds((prev) => [...new Set([...prev, ...pageIds])]);
+      return;
+    }
+    setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const reportBulk = (
+    result: { ok: number; failed: number; messages: string[] },
+    verb: string
+  ) => {
+    const summary = summarizeBulkResult(result, verb);
+    if (summary.success) toast.success(summary.success);
+    if (summary.error) toast.error(summary.error);
+  };
 
   if (!isElevatedAdmin) {
     return (
@@ -258,6 +298,55 @@ export default function AdminCategoriesPage() {
       );
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const closeBulkDelete = () => {
+    setBulkDeleteOpen(false);
+    setBulkDeleteConfirm("");
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkRunning(true);
+    try {
+      const result = await runBulkActions(selectedIds, archiveCategory);
+      reportBulk(result, "archived");
+      setBulkArchiveOpen(false);
+      setSelectedIds([]);
+      loadCategories();
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const handleBulkRestore = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkRunning(true);
+    try {
+      const result = await runBulkActions(selectedIds, restoreCategory);
+      reportBulk(result, "restored");
+      setSelectedIds([]);
+      loadCategories();
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0 || bulkDeleteConfirm !== "delete") return;
+    setBulkRunning(true);
+    try {
+      const result = await runBulkActions(selectedIds, deleteCategory);
+      reportBulk(result, "deleted");
+      closeBulkDelete();
+      setSelectedIds([]);
+      loadCategories();
+      getProducts(false, true)
+        .then(setCatalogProducts)
+        .catch(console.error);
+    } finally {
+      setBulkRunning(false);
     }
   };
 
@@ -451,9 +540,68 @@ export default function AdminCategoriesPage() {
             </p>
           ) : (
             <>
+              <TableBulkBar
+                selectedCount={selectedIds.length}
+                visibleCount={visibleCategories.length}
+                itemLabel={showArchived ? "archived categories" : "categories"}
+                onSelectAllVisible={() =>
+                  setSelectedIds(visibleCategories.map((category) => category.id))
+                }
+                onClear={() => setSelectedIds([])}
+              >
+                {showArchived ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={bulkRunning}
+                      onClick={() => void handleBulkRestore()}
+                    >
+                      {bulkRunning ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ArchiveRestore className="h-4 w-4" />
+                      )}
+                      Restore
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={bulkRunning}
+                      onClick={() => {
+                        setBulkDeleteConfirm("");
+                        setBulkDeleteOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={bulkRunning}
+                    onClick={() => setBulkArchiveOpen(true)}
+                  >
+                    <Archive className="h-4 w-4" />
+                    Archive
+                  </Button>
+                )}
+              </TableBulkBar>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allPageSelected}
+                        indeterminate={somePageSelected && !allPageSelected}
+                        onCheckedChange={(checked) =>
+                          toggleSelectPage(checked === true)
+                        }
+                        aria-label="Select all on this page"
+                      />
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Tags</TableHead>
                     <TableHead className="w-24 text-right">Products</TableHead>
@@ -505,6 +653,13 @@ export default function AdminCategoriesPage() {
 
                     return (
                       <TableRow key={category.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.includes(category.id)}
+                            onCheckedChange={() => toggleSelected(category.id)}
+                            aria-label={`Select ${category.name}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">
                           <div className="flex flex-wrap items-center gap-2">
                             <Link
@@ -696,6 +851,89 @@ export default function AdminCategoriesPage() {
               onClick={handlePermanentDelete}
             >
               {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={bulkArchiveOpen}
+        onOpenChange={setBulkArchiveOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Archive {selectedIds.length} categor
+              {selectedIds.length === 1 ? "y" : "ies"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Archived categories are hidden from product assignment. Locked
+              categories and those still assigned to products will be skipped.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkRunning}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkRunning}
+              onClick={() => void handleBulkArchive()}
+            >
+              {bulkRunning ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Archive selected
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={bulkDeleteOpen}
+        onOpenChange={(open) => {
+          if (!open) closeBulkDelete();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Delete {selectedIds.length} categor
+              {selectedIds.length === 1 ? "y" : "ies"} permanently?
+            </DialogTitle>
+            <DialogDescription>
+              This cannot be undone. Locked categories and those still assigned
+              to products will be skipped.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-bulk-delete-category">
+              Type <span className="font-mono font-semibold">delete</span> to
+              confirm
+            </Label>
+            <Input
+              id="confirm-bulk-delete-category"
+              value={bulkDeleteConfirm}
+              onChange={(e) => setBulkDeleteConfirm(e.target.value)}
+              placeholder="delete"
+              autoComplete="off"
+              disabled={bulkRunning}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeBulkDelete}
+              disabled={bulkRunning}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={bulkDeleteConfirm !== "delete" || bulkRunning}
+              onClick={() => void handleBulkDelete()}
+            >
+              {bulkRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete permanently
             </Button>
           </DialogFooter>

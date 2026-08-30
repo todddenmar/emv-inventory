@@ -12,6 +12,7 @@ export const COLLECTIONS = {
   transferRequests: "physicalTransferRequests",
   posSales: "physicalPosSales",
   dailyExpenses: "physicalDailyExpenses",
+  dailyCashRecords: "physicalDailyCashRecords",
   supplierStockIns: "physicalSupplierStockIns",
   resellers: "physicalResellers",
   vouchers: "physicalVouchers",

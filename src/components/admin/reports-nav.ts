@@ -22,6 +22,6 @@ export const reportsNavItems: ReportsNavItem[] = [
     href: "/admin/reports/daily-sales",
     label: "Daily sales",
     icon: ClipboardList,
-    description: "Day cash summary, expenses, and itemized sales",
+    description: "Day cash record, expenses, and itemized sales",
   },
 ];

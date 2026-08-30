@@ -14,6 +14,8 @@ import type {
   Category,
   CategoryGroup,
   DailyExpense,
+  DailyCashAdd,
+  DailyCashRecord,
   InventoryLog,
   Invite,
   PaymentAccount,
@@ -1127,6 +1129,58 @@ export const dailyExpenseConverter: FirestoreDataConverter<DailyExpense> = {
       createdBy: data.createdBy ?? "",
       createdByName: data.createdByName ?? null,
       createdAt: toDate(data.createdAt),
+    };
+  },
+};
+
+export const dailyCashRecordConverter: FirestoreDataConverter<DailyCashRecord> = {
+  toFirestore(record: DailyCashRecord): DocumentData {
+    return {
+      branchId: record.branchId,
+      branchName: record.branchName,
+      date: record.date,
+      openingCash: record.openingCash,
+      closingCash: record.closingCash,
+      additions: record.additions,
+      createdBy: record.createdBy,
+      createdByName: record.createdByName,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): DailyCashRecord {
+    const data = snapshot.data(options);
+    const rawAdds = Array.isArray(data.additions) ? data.additions : [];
+    const additions: DailyCashAdd[] = rawAdds.map(
+      (row: Record<string, unknown>) => ({
+        id: String(row.id ?? ""),
+        note: String(row.note ?? "").trim(),
+        amount: Number(row.amount ?? 0),
+        createdBy: String(row.createdBy ?? ""),
+        createdByName:
+          typeof row.createdByName === "string" ? row.createdByName : null,
+        createdAt: toDate(
+          (row.createdAt as Timestamp | Date | null | undefined) ?? null
+        ),
+      })
+    );
+    const closingRaw = data.closingCash;
+    return {
+      id: snapshot.id,
+      branchId: data.branchId,
+      branchName: data.branchName ?? "",
+      date: String(data.date ?? ""),
+      openingCash: Number(data.openingCash ?? 0),
+      closingCash:
+        closingRaw == null || closingRaw === "" ? null : Number(closingRaw),
+      additions,
+      createdBy: data.createdBy ?? "",
+      createdByName: data.createdByName ?? null,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
     };
   },
 };

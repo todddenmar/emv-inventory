@@ -411,6 +411,33 @@ export interface DailyExpense {
   createdAt: Date;
 }
 
+/** Extra cash put in the till (float, change, etc.) for a day. */
+export interface DailyCashAdd {
+  id: string;
+  note: string;
+  amount: number;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+}
+
+/** Opening / closing cash and cash-in notes for one branch day. */
+export interface DailyCashRecord {
+  id: string;
+  branchId: string;
+  branchName: string;
+  /** Local calendar day as YYYY-MM-DD. */
+  date: string;
+  openingCash: number;
+  /** Counted drawer at close. Null if not recorded yet. */
+  closingCash: number | null;
+  additions: DailyCashAdd[];
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Reseller {
   id: string;
   name: string;

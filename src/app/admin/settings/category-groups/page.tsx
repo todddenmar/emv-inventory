@@ -47,7 +47,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CategoryMultiSelect } from "@/components/admin/category-multi-select";
+import { TableBulkBar } from "@/components/admin/table-bulk-bar";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getCategories } from "@/lib/firestore/categories";
 import {
@@ -59,6 +61,7 @@ import {
   updateCategoryGroup,
 } from "@/lib/firestore/category-groups";
 import { paginateItems } from "@/lib/pagination";
+import { runBulkActions, summarizeBulkResult } from "@/lib/bulk";
 import type { Category, CategoryGroup } from "@/types";
 
 export default function AdminCategoryGroupsPage() {
@@ -77,6 +80,10 @@ export default function AdminCategoryGroupsPage() {
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const categoryMap = useMemo(() => {
     const map: Record<string, Category> = {};
@@ -125,11 +132,43 @@ export default function AdminCategoryGroupsPage() {
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds([]);
   }, [showArchived]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+
+  const pageIds = useMemo(
+    () => pagedItems.map((group) => group.id),
+    [pagedItems]
+  );
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.includes(id));
+
+  const toggleSelectPage = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds((prev) => [...new Set([...prev, ...pageIds])]);
+      return;
+    }
+    setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const reportBulk = (
+    result: { ok: number; failed: number; messages: string[] },
+    verb: string
+  ) => {
+    const summary = summarizeBulkResult(result, verb);
+    if (summary.success) toast.success(summary.success);
+    if (summary.error) toast.error(summary.error);
+  };
 
   if (!isElevatedAdmin) {
     return (
@@ -234,6 +273,47 @@ export default function AdminCategoryGroupsPage() {
     }
   };
 
+  const handleBulkArchive = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkRunning(true);
+    try {
+      const result = await runBulkActions(selectedIds, archiveCategoryGroup);
+      reportBulk(result, "archived");
+      setBulkArchiveOpen(false);
+      setSelectedIds([]);
+      load();
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const handleBulkRestore = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkRunning(true);
+    try {
+      const result = await runBulkActions(selectedIds, restoreCategoryGroup);
+      reportBulk(result, "restored");
+      setSelectedIds([]);
+      load();
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkRunning(true);
+    try {
+      const result = await runBulkActions(selectedIds, deleteCategoryGroup);
+      reportBulk(result, "deleted");
+      setBulkDeleteOpen(false);
+      setSelectedIds([]);
+      load();
+    } finally {
+      setBulkRunning(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -320,9 +400,65 @@ export default function AdminCategoryGroupsPage() {
             </p>
           ) : (
             <>
+              <TableBulkBar
+                selectedCount={selectedIds.length}
+                visibleCount={visibleGroups.length}
+                itemLabel={showArchived ? "archived groups" : "groups"}
+                onSelectAllVisible={() =>
+                  setSelectedIds(visibleGroups.map((group) => group.id))
+                }
+                onClear={() => setSelectedIds([])}
+              >
+                {showArchived ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={bulkRunning}
+                      onClick={() => void handleBulkRestore()}
+                    >
+                      {bulkRunning ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ArchiveRestore className="h-4 w-4" />
+                      )}
+                      Restore
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={bulkRunning}
+                      onClick={() => setBulkDeleteOpen(true)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={bulkRunning}
+                    onClick={() => setBulkArchiveOpen(true)}
+                  >
+                    <Archive className="h-4 w-4" />
+                    Archive
+                  </Button>
+                )}
+              </TableBulkBar>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allPageSelected}
+                        indeterminate={somePageSelected && !allPageSelected}
+                        onCheckedChange={(checked) =>
+                          toggleSelectPage(checked === true)
+                        }
+                        aria-label="Select all on this page"
+                      />
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Categories</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -331,6 +467,13 @@ export default function AdminCategoryGroupsPage() {
                 <TableBody>
                   {pagedItems.map((group) => (
                     <TableRow key={group.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.includes(group.id)}
+                          onCheckedChange={() => toggleSelected(group.id)}
+                          aria-label={`Select ${group.name}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{group.name}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -435,6 +578,59 @@ export default function AdminCategoryGroupsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handlePermanentDelete()}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={bulkArchiveOpen}
+        onOpenChange={setBulkArchiveOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Archive {selectedIds.length} group
+              {selectedIds.length === 1 ? "" : "s"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Archived groups are hidden from report filters. Categories
+              themselves are unchanged.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkRunning}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkRunning}
+              onClick={() => void handleBulkArchive()}
+            >
+              Archive selected
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {selectedIds.length} group
+              {selectedIds.length === 1 ? "" : "s"} permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkRunning}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={bulkRunning}
+              onClick={() => void handleBulkDelete()}
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

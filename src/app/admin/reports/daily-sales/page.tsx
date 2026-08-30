@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,12 +39,19 @@ import {
 } from "@/components/ui/table";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
-import { formatDateInputLabel, toDateInputValue } from "@/lib/dates";
+import { formatDateInputLabel, shiftDateInput, toDateInputValue } from "@/lib/dates";
 import {
   flattenDailySalesRows,
+  sumDailyCashAdds,
   summarizeDailySalesReport,
 } from "@/lib/daily-sales-report";
 import { getBranches } from "@/lib/firestore/branches";
+import {
+  addDailyCashAdd,
+  deleteDailyCashAdd,
+  getDailyCashRecord,
+  saveDailyCashAmounts,
+} from "@/lib/firestore/daily-cash";
 import {
   addDailyExpense,
   deleteDailyExpense,
@@ -44,8 +59,8 @@ import {
 } from "@/lib/firestore/daily-expenses";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { formatCurrency } from "@/lib/format";
-import { parseMoneyInput } from "@/lib/pos-payments";
-import type { Branch, DailyExpense, PosSale } from "@/types";
+import { parseMoneyInput, moneyInputText } from "@/lib/pos-payments";
+import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
 export default function DailySalesReportPage() {
   const user = useAuthStore((s) => s.user);
@@ -56,13 +71,23 @@ export default function DailySalesReportPage() {
   const [date, setDate] = useState(() => toDateInputValue());
   const [sales, setSales] = useState<PosSale[]>([]);
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
+  const [cashRecord, setCashRecord] = useState<DailyCashRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingExpense, setSavingExpense] = useState(false);
+  const [savingCashAmounts, setSavingCashAmounts] = useState(false);
+  const [savingCashAdd, setSavingCashAdd] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingCashAddId, setDeletingCashAddId] = useState<string | null>(
+    null
+  );
 
   const [expenseDescription, setExpenseDescription] = useState("");
   const [expenseAmountText, setExpenseAmountText] = useState("");
-  const [priorCashText, setPriorCashText] = useState("");
+  const [openingCashText, setOpeningCashText] = useState("");
+  const [cashAddNote, setCashAddNote] = useState("");
+  const [cashAddAmountText, setCashAddAmountText] = useState("");
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [cashDialogOpen, setCashDialogOpen] = useState(false);
 
   useEffect(() => {
     getBranches(true)
@@ -98,13 +123,15 @@ export default function DailySalesReportPage() {
     if (!scopeBranchId) {
       setSales([]);
       setExpenses([]);
+      setCashRecord(null);
+      setOpeningCashText("");
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      const [saleRows, expenseRows] = await Promise.all([
+      const [saleRows, expenseRows, cashRow] = await Promise.all([
         getPosSales({
           branchId: scopeBranchId,
           fromDate: date,
@@ -112,9 +139,12 @@ export default function DailySalesReportPage() {
           max: 2000,
         }),
         getDailyExpenses({ branchId: scopeBranchId, date }),
+        getDailyCashRecord(scopeBranchId, date),
       ]);
       setSales(saleRows);
       setExpenses(expenseRows);
+      setCashRecord(cashRow);
+      setOpeningCashText(cashRow ? moneyInputText(cashRow.openingCash) : "");
     } catch (error) {
       console.error(error);
       toast.error("Failed to load daily sales report");
@@ -128,15 +158,17 @@ export default function DailySalesReportPage() {
   }, [load]);
 
   const rows = useMemo(() => flattenDailySalesRows(sales), [sales]);
-  const priorCash = parseMoneyInput(priorCashText) ?? 0;
+  const openingCash = parseMoneyInput(openingCashText) ?? 0;
+  const cashAddsTotal = sumDailyCashAdds(cashRecord?.additions ?? []);
   const summary = useMemo(
     () =>
       summarizeDailySalesReport({
         sales,
         expenses,
-        priorCash,
+        openingCash,
+        cashAddsTotal,
       }),
-    [sales, expenses, priorCash]
+    [sales, expenses, openingCash, cashAddsTotal]
   );
 
   const handleAddExpense = async () => {
@@ -190,6 +222,92 @@ export default function DailySalesReportPage() {
     }
   };
 
+  const handleSaveCashAmounts = async () => {
+    if (!scopeBranchId || !selectedBranch || !user) return;
+    const opening = parseMoneyInput(openingCashText);
+    if (openingCashText.trim() !== "" && (opening == null || opening < 0)) {
+      toast.error("Enter a valid opening cash amount");
+      return;
+    }
+
+    setSavingCashAmounts(true);
+    try {
+      await saveDailyCashAmounts({
+        branchId: scopeBranchId,
+        branchName: selectedBranch.name,
+        date,
+        openingCash: opening ?? 0,
+        createdBy: user.uid,
+        createdByName: user.displayName,
+      });
+      toast.success("Opening cash saved");
+      await load();
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save opening cash"
+      );
+    } finally {
+      setSavingCashAmounts(false);
+    }
+  };
+
+  const handleAddCash = async () => {
+    if (!scopeBranchId || !selectedBranch || !user) return;
+    const amount = parseMoneyInput(cashAddAmountText);
+    if (!cashAddNote.trim()) {
+      toast.error("Enter a note for this cash");
+      return;
+    }
+    if (amount == null || amount <= 0) {
+      toast.error("Enter a cash amount greater than 0");
+      return;
+    }
+
+    setSavingCashAdd(true);
+    try {
+      await addDailyCashAdd({
+        branchId: scopeBranchId,
+        branchName: selectedBranch.name,
+        date,
+        note: cashAddNote,
+        amount,
+        createdBy: user.uid,
+        createdByName: user.displayName,
+      });
+      setCashAddNote("");
+      setCashAddAmountText("");
+      toast.success("Cash added");
+      await load();
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to add cash"
+      );
+    } finally {
+      setSavingCashAdd(false);
+    }
+  };
+
+  const handleDeleteCashAdd = async (addId: string) => {
+    if (!scopeBranchId) return;
+    setDeletingCashAddId(addId);
+    try {
+      await deleteDailyCashAdd({
+        branchId: scopeBranchId,
+        date,
+        addId,
+      });
+      toast.success("Cash entry removed");
+      await load();
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to remove cash entry");
+    } finally {
+      setDeletingCashAddId(null);
+    }
+  };
+
   if (!canViewAllBranches && !assignedBranchId) {
     return (
       <div className="space-y-2">
@@ -216,19 +334,41 @@ export default function DailySalesReportPage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap">
-          <div className="space-y-1.5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex min-w-0 flex-col gap-2">
             <Label htmlFor="daily-sales-date">Date</Label>
-            <Input
-              id="daily-sales-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="h-9 w-full sm:w-[11.5rem]"
-            />
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Previous date"
+                onClick={() => setDate(shiftDateInput(date, -1))}
+              >
+                <ChevronLeft />
+              </Button>
+              <Input
+                id="daily-sales-date"
+                type="date"
+                value={date}
+                max={toDateInputValue()}
+                onChange={(e) => setDate(e.target.value || date)}
+                className="h-8 w-full sm:w-44"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Next date"
+                disabled={date >= toDateInputValue()}
+                onClick={() => setDate(shiftDateInput(date, 1))}
+              >
+                <ChevronRight />
+              </Button>
+            </div>
           </div>
           {canViewAllBranches ? (
-            <div className="space-y-1.5">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label>Branch</Label>
               <Select
                 value={selectedBranchId}
@@ -236,7 +376,7 @@ export default function DailySalesReportPage() {
                   if (value) setSelectedBranchId(value);
                 }}
               >
-                <SelectTrigger className="h-9 w-full sm:w-[14rem]">
+                <SelectTrigger size="sm" className="w-full sm:w-56">
                   <SelectValue placeholder="Select branch">
                     {(value) => {
                       if (!value) return null;
@@ -255,14 +395,34 @@ export default function DailySalesReportPage() {
               </Select>
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="flex min-w-0 flex-col gap-2">
               <Label>Branch</Label>
-              <div className="flex h-9 w-full items-center rounded-lg border border-input px-2.5 text-sm sm:w-[14rem]">
+              <div className="flex h-8 w-full items-center rounded-lg border border-input px-2.5 text-sm sm:w-56">
                 {selectedBranch?.name ?? "—"}
               </div>
             </div>
           )}
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          onClick={() => setExpenseDialogOpen(true)}
+          disabled={!scopeBranchId}
+        >
+          <Plus className="size-4" />
+          Set expenses
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setCashDialogOpen(true)}
+          disabled={!scopeBranchId}
+        >
+          <Plus className="size-4" />
+          Set daily cash record
+        </Button>
       </div>
 
       {loading ? (
@@ -339,77 +499,15 @@ export default function DailySalesReportPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <ul className="space-y-2">
-                  {expenses.length === 0 ? (
-                    <li className="text-sm text-muted-foreground">
-                      No expenses yet
-                    </li>
-                  ) : (
-                    expenses.map((expense) => (
-                      <li
-                        key={expense.id}
-                        className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-medium uppercase tracking-wide">
-                            {expense.description}
-                          </p>
-                          <p className="tabular-nums text-muted-foreground">
-                            {formatCurrency(expense.amount)}
-                          </p>
-                        </div>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="shrink-0"
-                          disabled={deletingId === expense.id}
-                          onClick={() => void handleDeleteExpense(expense.id)}
-                          aria-label={`Delete ${expense.description}`}
-                        >
-                          {deletingId === expense.id ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="size-4" />
-                          )}
-                        </Button>
-                      </li>
-                    ))
-                  )}
-                </ul>
-
-                <div className="grid gap-2 sm:grid-cols-[1fr_7rem_auto]">
-                  <Input
-                    placeholder="Description (e.g. FUEL)"
-                    value={expenseDescription}
-                    onChange={(e) => setExpenseDescription(e.target.value)}
-                    disabled={savingExpense || !scopeBranchId}
-                  />
-                  <Input
-                    placeholder="0.00"
-                    inputMode="decimal"
-                    value={expenseAmountText}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
-                      setExpenseAmountText(raw);
-                    }}
-                    disabled={savingExpense || !scopeBranchId}
-                  />
-                  <Button
-                    type="button"
-                    onClick={() => void handleAddExpense()}
-                    disabled={savingExpense || !scopeBranchId}
-                  >
-                    {savingExpense ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Plus className="size-4" />
-                    )}
-                    Add
-                  </Button>
-                </div>
-
+                <NamedAmountList
+                  items={expenses.map((expense) => ({
+                    id: expense.id,
+                    label: expense.description,
+                    amount: expense.amount,
+                  }))}
+                  emptyLabel="No expenses yet"
+                  amountClassName="text-muted-foreground"
+                />
                 <div className="flex justify-end text-sm font-medium">
                   Expenses total: {formatCurrency(summary.expensesTotal)}
                 </div>
@@ -421,7 +519,8 @@ export default function DailySalesReportPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Cash summary</CardTitle>
               <CardDescription>
-                Prior cash is for this view only and is not saved
+                Closing cash is opening + added cash + net cash from the day
+                (sales minus bank transfer, home credit, and expenses).
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -451,27 +550,18 @@ export default function DailySalesReportPage() {
                   strong
                 />
               </div>
-              <div className="flex items-center justify-between gap-3 border-t pt-3">
-                <Label htmlFor="prior-cash" className="shrink-0 font-medium">
-                  + Prior cash
-                </Label>
-                <Input
-                  id="prior-cash"
-                  className="max-w-[10rem] text-right tabular-nums"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  value={priorCashText}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
-                    setPriorCashText(raw);
-                  }}
-                />
-              </div>
+              <SummaryRow
+                label="+ Opening cash"
+                value={formatCurrency(summary.openingCash)}
+              />
+              <SummaryRow
+                label="+ Cash added"
+                value={formatCurrency(summary.cashAddsTotal)}
+              />
               <div className="rounded-md bg-muted/50 px-3 py-3">
                 <SummaryRow
-                  label="Cash on hand"
-                  value={formatCurrency(summary.cashOnHand)}
+                  label="Closing cash"
+                  value={formatCurrency(summary.closingCash)}
                   strong
                 />
               </div>
@@ -479,6 +569,152 @@ export default function DailySalesReportPage() {
           </Card>
         </div>
       )}
+
+      <Dialog open={expenseDialogOpen} onOpenChange={setExpenseDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Set expenses</DialogTitle>
+            <DialogDescription>
+              List and add costs for this branch and day.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <NamedAmountList
+              items={expenses.map((expense) => ({
+                id: expense.id,
+                label: expense.description,
+                amount: expense.amount,
+              }))}
+              emptyLabel="No expenses yet"
+              deletingId={deletingId}
+              amountClassName="text-muted-foreground"
+              onDelete={(id) => void handleDeleteExpense(id)}
+            />
+            <div className="flex justify-end text-sm font-medium">
+              Expenses total: {formatCurrency(summary.expensesTotal)}
+            </div>
+            <ExpenseFields
+              description={expenseDescription}
+              amountText={expenseAmountText}
+              disabled={savingExpense || !scopeBranchId}
+              onDescriptionChange={setExpenseDescription}
+              onAmountChange={setExpenseAmountText}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setExpenseDialogOpen(false)}
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleAddExpense()}
+              disabled={savingExpense || !scopeBranchId}
+            >
+              {savingExpense ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cashDialogOpen} onOpenChange={setCashDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Set daily cash record</DialogTitle>
+            <DialogDescription>
+              Set opening cash and add extra cash for this branch and day.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="opening-cash">Opening cash</Label>
+                <Input
+                  id="opening-cash"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  className="tabular-nums"
+                  value={openingCashText}
+                  onChange={(e) =>
+                    setMoneyText(e.target.value, setOpeningCashText)
+                  }
+                  disabled={savingCashAmounts || !scopeBranchId}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Closing cash</Label>
+                <div className="flex h-9 items-center rounded-lg border border-input bg-muted/40 px-2.5 text-sm font-medium tabular-nums">
+                  {formatCurrency(summary.closingCash)}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleSaveCashAmounts()}
+                disabled={savingCashAmounts || !scopeBranchId}
+              >
+                {savingCashAmounts ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : null}
+                Save opening cash
+              </Button>
+            </div>
+            <div className="space-y-2 border-t pt-4">
+              <p className="text-sm font-medium">Cash added</p>
+              <NamedAmountList
+                items={(cashRecord?.additions ?? []).map((add) => ({
+                  id: add.id,
+                  label: add.note,
+                  amount: add.amount,
+                }))}
+                emptyLabel="No extra cash yet"
+                deletingId={deletingCashAddId}
+                amountClassName="text-emerald-700"
+                onDelete={(id) => void handleDeleteCashAdd(id)}
+              />
+              <CashAddFields
+                note={cashAddNote}
+                amountText={cashAddAmountText}
+                disabled={savingCashAdd || !scopeBranchId}
+                onNoteChange={setCashAddNote}
+                onAmountChange={setCashAddAmountText}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCashDialogOpen(false)}
+            >
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleAddCash()}
+              disabled={savingCashAdd || !scopeBranchId}
+            >
+              {savingCashAdd ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -516,6 +752,130 @@ function SummaryRow({
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+function setMoneyText(raw: string, setValue: (value: string) => void) {
+  if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+  setValue(raw);
+}
+
+function NamedAmountList({
+  items,
+  emptyLabel,
+  deletingId,
+  amountClassName,
+  onDelete,
+}: {
+  items: Array<{ id: string; label: string; amount: number }>;
+  emptyLabel: string;
+  deletingId?: string | null;
+  amountClassName?: string;
+  onDelete?: (id: string) => void;
+}) {
+  if (items.length === 0) {
+    return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
+  }
+
+  return (
+    <ul className="max-h-64 space-y-2 overflow-y-auto">
+      {items.map((item) => (
+        <li
+          key={item.id}
+          className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+        >
+          <div className="min-w-0">
+            <p className="truncate font-medium uppercase tracking-wide">
+              {item.label}
+            </p>
+            <p className={`tabular-nums ${amountClassName ?? ""}`}>
+              {formatCurrency(item.amount)}
+            </p>
+          </div>
+          {onDelete ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="shrink-0"
+              disabled={deletingId === item.id}
+              onClick={() => onDelete(item.id)}
+              aria-label={`Delete ${item.label}`}
+            >
+              {deletingId === item.id ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+            </Button>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ExpenseFields({
+  description,
+  amountText,
+  disabled,
+  onDescriptionChange,
+  onAmountChange,
+}: {
+  description: string;
+  amountText: string;
+  disabled: boolean;
+  onDescriptionChange: (value: string) => void;
+  onAmountChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-[1fr_7rem]">
+      <Input
+        placeholder="Description (e.g. FUEL)"
+        value={description}
+        onChange={(e) => onDescriptionChange(e.target.value)}
+        disabled={disabled}
+      />
+      <Input
+        placeholder="0.00"
+        inputMode="decimal"
+        value={amountText}
+        onChange={(e) => setMoneyText(e.target.value, onAmountChange)}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+function CashAddFields({
+  note,
+  amountText,
+  disabled,
+  onNoteChange,
+  onAmountChange,
+}: {
+  note: string;
+  amountText: string;
+  disabled: boolean;
+  onNoteChange: (value: string) => void;
+  onAmountChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-[1fr_7rem]">
+      <Input
+        placeholder="Note (e.g. CHANGE FROM BANK)"
+        value={note}
+        onChange={(e) => onNoteChange(e.target.value)}
+        disabled={disabled}
+      />
+      <Input
+        placeholder="0.00"
+        inputMode="decimal"
+        value={amountText}
+        onChange={(e) => setMoneyText(e.target.value, onAmountChange)}
+        disabled={disabled}
+      />
     </div>
   );
 }
