@@ -5,6 +5,7 @@ import {
   SnapshotOptions,
   Timestamp,
 } from "firebase/firestore";
+import { parseUserRole } from "@/lib/roles";
 import type {
   AppUser,
   Branch,
@@ -375,7 +376,7 @@ export const userConverter: FirestoreDataConverter<AppUser> = {
       email: data.email ?? null,
       displayName: data.displayName ?? null,
       photoURL: data.photoURL ?? null,
-      role: data.role,
+      role: parseUserRole(data.role),
       branchId: data.branchId ?? null,
       isAnonymous: data.isAnonymous ?? false,
       createdAt: toDate(data.createdAt),
@@ -414,9 +415,7 @@ export const inviteConverter: FirestoreDataConverter<Invite> = {
           ? "admin"
           : data.role === "owner"
             ? "owner"
-            : data.role === "cashier"
-              ? "cashier"
-              : "manager",
+            : "cashier",
       branchId: data.branchId ?? null,
       branchName: data.branchName ?? null,
       createdBy: data.createdBy,

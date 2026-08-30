@@ -491,7 +491,7 @@ export default function AdminReportsPage() {
       <div>
         <h1 className="text-2xl font-bold">Reports</h1>
         <p className="text-muted-foreground">
-          Sales performance, peak hours, and stock movement for managers
+          Sales performance, peak hours, and stock movement
         </p>
       </div>
 

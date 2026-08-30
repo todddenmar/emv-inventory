@@ -472,6 +472,8 @@ export default function AdminCategoriesPage() {
                 id="cat-low-at"
                 type="number"
                 min={0}
+                inputMode="numeric"
+                className="h-9 min-w-[8rem] tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 value={lowStockThreshold}
                 onChange={(e) =>
                   setLowStockThreshold(Number(e.target.value) || 0)

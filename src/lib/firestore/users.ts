@@ -2,16 +2,13 @@ import {
   doc,
   getDoc,
   getDocs,
-  query,
   serverTimestamp,
   setDoc,
   updateDoc,
-  where,
   collection,
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 import { userConverter } from "@/lib/firestore/converters";
-import { assignBranchManager, getBranch } from "@/lib/firestore/branches";
 import {
   isElevatedAdminRole,
   isMasterAdminRole,
@@ -30,12 +27,8 @@ export async function getUser(uid: string): Promise<AppUser | null> {
 }
 
 export async function getManagers(): Promise<AppUser[]> {
-  const q = query(
-    collection(getClientDb(), "users").withConverter(userConverter),
-    where("role", "==", "manager")
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => d.data());
+  const users = await getAllUsers();
+  return users.filter((u) => u.role === "cashier");
 }
 
 export async function getAllUsers(): Promise<AppUser[]> {
@@ -161,15 +154,8 @@ export async function updateUserAccess(
   data: UpdateUserAccessInput,
   actorUid: string
 ): Promise<void> {
-  if (
-    (data.role === "manager" || data.role === "cashier") &&
-    !data.branchId
-  ) {
-    throw new Error(
-      data.role === "cashier"
-        ? "Cashiers must be assigned to a branch"
-        : "Managers must be assigned to a branch"
-    );
+  if (data.role === "cashier" && !data.branchId) {
+    throw new Error("Cashiers must be assigned to a branch");
   }
 
   const [user, actor] = await Promise.all([getUser(uid), getUser(actorUid)]);
@@ -213,33 +199,13 @@ export async function updateUserAccess(
     }
   }
 
-  if (
-    user.role === "manager" &&
-    user.branchId &&
-    (data.role !== "manager" || data.branchId !== user.branchId)
-  ) {
-    const branch = await getBranch(user.branchId);
-    if (branch?.managerId === uid) {
-      await assignBranchManager(user.branchId, null, null);
-    }
-  }
-
-  const branchId =
-    data.role === "manager" || data.role === "cashier" ? data.branchId : null;
+  const branchId = data.role === "cashier" ? data.branchId : null;
 
   await updateDoc(doc(getClientDb(), "users", uid), {
     role: data.role,
     branchId,
     updatedAt: serverTimestamp(),
   });
-
-  if (data.role === "manager" && branchId) {
-    await assignBranchManager(
-      branchId,
-      uid,
-      user.displayName || user.email || "Manager"
-    );
-  }
 
   if (isMasterAdminRole(data.role)) {
     await updateDoc(doc(getClientDb(), "settings", "bootstrap"), {

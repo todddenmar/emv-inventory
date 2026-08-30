@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 
 export function BranchSetupGuard({ children }: { children: React.ReactNode }) {
-  const { isBranchStaff, hasBranchAssignment, isCashier } = useBranchAccess();
+  const { isBranchStaff, hasBranchAssignment } = useBranchAccess();
 
   if (isBranchStaff && !hasBranchAssignment) {
     return (
@@ -19,7 +19,7 @@ export function BranchSetupGuard({ children }: { children: React.ReactNode }) {
           <CardHeader>
             <CardTitle>Branch not assigned</CardTitle>
             <CardDescription>
-              Your {isCashier ? "cashier" : "manager"} account does not have a
+              Your cashier account does not have a
               branch yet. Ask an admin to assign you to a branch or send you a
               new invite linked to a branch.
             </CardDescription>

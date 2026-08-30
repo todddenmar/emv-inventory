@@ -59,8 +59,6 @@ const roleBadgeVariant = (
       return "default";
     case "owner":
       return "secondary";
-    case "manager":
-      return "secondary";
     case "cashier":
       return "secondary";
     case "customer":
@@ -90,7 +88,6 @@ export default function AdminUsersPage() {
     const all: UserRole[] = [
       "customer",
       "cashier",
-      "manager",
       "owner",
       "admin",
       "master-admin",
@@ -169,12 +166,8 @@ export default function AdminUsersPage() {
   const handleSave = async () => {
     if (!editingUser || !currentUser) return;
 
-    if ((role === "manager" || role === "cashier") && !branchId) {
-      toast.error(
-        role === "cashier"
-          ? "Select a branch for cashiers"
-          : "Select a branch for managers"
-      );
+    if (role === "cashier" && !branchId) {
+      toast.error("Select a branch for cashiers");
       return;
     }
 
@@ -184,8 +177,7 @@ export default function AdminUsersPage() {
         editingUser.uid,
         {
           role,
-          branchId:
-            role === "manager" || role === "cashier" ? branchId : null,
+          branchId: role === "cashier" ? branchId : null,
         },
         currentUser.uid
       );
@@ -218,9 +210,9 @@ export default function AdminUsersPage() {
         <div>
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-muted-foreground">
-            Assign admin, owner, manager, and cashier roles. Managers and
-            cashiers must be linked to a branch. Owners can view sales reports
-            and inventory across all branches.
+            Assign admin, owner, and cashier roles. Cashiers must be linked to a
+            branch. Owners can view the dashboard, sales reports, inventory, and
+            price changes across all branches.
           </p>
         </div>
         <LinkButton href="/admin/settings/users/invites" variant="outline">
@@ -232,7 +224,7 @@ export default function AdminUsersPage() {
         <CardHeader>
           <CardTitle>All users</CardTitle>
           <CardDescription>
-            {visibleUsers.length} accounts · Managers need a branch assignment
+            {visibleUsers.length} accounts · Cashiers need a branch assignment
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -355,7 +347,7 @@ export default function AdminUsersPage() {
                   onValueChange={(v) => {
                     const nextRole = (v ?? "customer") as UserRole;
                     setRole(nextRole);
-                    if (nextRole !== "manager" && nextRole !== "cashier") {
+                    if (nextRole !== "cashier") {
                       setBranchId("");
                     }
                   }}
@@ -377,7 +369,7 @@ export default function AdminUsersPage() {
                 </Select>
               </div>
 
-              {(role === "manager" || role === "cashier") && (
+              {role === "cashier" && (
                 <div className="space-y-2">
                   <Label>Assigned branch</Label>
                   <Select
@@ -421,8 +413,9 @@ export default function AdminUsersPage() {
 
               {role === "owner" && (
                 <p className="text-sm text-muted-foreground">
-                  Owners can view sales reports and inventory across all
-                  branches. They cannot edit stock or access other admin tools.
+                  Owners can view the dashboard, sales reports, inventory, and
+                  price changes across all branches. They cannot edit stock or
+                  access other admin tools.
                 </p>
               )}
 

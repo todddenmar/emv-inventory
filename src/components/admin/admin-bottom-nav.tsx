@@ -7,6 +7,7 @@ import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { adminNavItems } from "@/components/admin/admin-sidebar";
+import { isOwnerNavHref } from "@/lib/post-login-redirect";
 import {
   Sheet,
   SheetContent,
@@ -83,10 +84,7 @@ export function AdminBottomNav() {
     const item = navByHref.get(candidate.href);
     if (!item) return false;
     if (isOwner) {
-      return (
-        candidate.href === "/admin/reports" ||
-        candidate.href === "/admin/inventory"
-      );
+      return isOwnerNavHref(candidate.href);
     }
     return isElevatedAdmin || !item.masterOnly;
   });
@@ -107,7 +105,7 @@ export function AdminBottomNav() {
   const moreItems = adminNavItems.filter((item) => {
     if (barHrefs.has(item.href)) return false;
     if (isOwner) {
-      return item.href === "/admin/reports" || item.href === "/admin/inventory";
+      return isOwnerNavHref(item.href);
     }
     return isElevatedAdmin || !item.masterOnly;
   });

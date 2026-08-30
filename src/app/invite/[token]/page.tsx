@@ -90,9 +90,7 @@ function InviteContent({ token }: { token: string }) {
                 `/login?invite=${token}&redirect=${
                   invite.role === "cashier"
                     ? "/admin/cashier"
-                    : invite.role === "owner"
-                      ? "/admin/reports"
-                      : "/admin"
+                    : "/admin"
                 }`
               )
             }

@@ -1,11 +1,18 @@
 import type { UserRole } from "@/types";
 
+export function parseUserRole(role: unknown): UserRole {
+  if (role === "master-admin") return "master-admin";
+  if (role === "admin") return "admin";
+  if (role === "owner") return "owner";
+  if (role === "cashier" || role === "manager") return "cashier";
+  return "customer";
+}
+
 export function isStaffRole(role: UserRole | null | undefined): boolean {
   return (
     role === "master-admin" ||
     role === "admin" ||
     role === "owner" ||
-    role === "manager" ||
     role === "cashier"
   );
 }
@@ -18,11 +25,11 @@ export function isOwnerRole(role: UserRole | null | undefined): boolean {
   return role === "owner";
 }
 
-/** Manager or cashier — branch-scoped staff (not elevated). */
+/** Cashier — branch-scoped staff (not elevated). */
 export function isBranchStaffRole(
   role: UserRole | null | undefined
 ): boolean {
-  return role === "manager" || role === "cashier";
+  return role === "cashier";
 }
 
 export function isMasterAdminRole(role: UserRole | null | undefined): boolean {
@@ -52,7 +59,6 @@ export function roleAssignableBy(
     return (
       targetRole === "admin" ||
       targetRole === "owner" ||
-      targetRole === "manager" ||
       targetRole === "cashier" ||
       targetRole === "customer"
     );

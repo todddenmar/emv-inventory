@@ -3,6 +3,7 @@ import {
   FileJson,
   FolderKanban,
   ListChecks,
+  RotateCcw,
   Settings2,
   Ticket,
   UserPlus,
@@ -83,6 +84,14 @@ export const settingsNavItems: SettingsNavItem[] = [
     description: "Import products from EMV JSON catalogs",
   },
   {
+    href: "/admin/settings/inventory-reset",
+    label: "Inventory reset",
+    icon: RotateCcw,
+    elevatedOnly: true,
+    masterAdminOnly: true,
+    description: "Clear stock changes, transfers, sales, and stock levels",
+  },
+  {
     href: "/admin/settings/users",
     label: "Users",
     icon: Users,
@@ -95,6 +104,6 @@ export const settingsNavItems: SettingsNavItem[] = [
     icon: UserPlus,
     elevatedOnly: true,
     underUsers: true,
-    description: "Create manager and admin invite links",
+    description: "Create cashier, owner, and admin invite links",
   },
 ];

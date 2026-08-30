@@ -156,7 +156,7 @@ function MonthlySalesChart({
 }
 
 export default function AdminDashboardPage() {
-  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
+  const { canViewAllBranches, assignedBranchId } = useBranchAccess();
   const [branch, setBranch] = useState<Branch | null>(null);
   const [branchCount, setBranchCount] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
@@ -187,7 +187,7 @@ export default function AdminDashboardPage() {
       setBranchCount(branches.length);
 
       const activeCategories = categories.filter((c) => !c.isArchived);
-      const scopeBranchId = isElevatedAdmin ? null : assignedBranchId;
+      const scopeBranchId = canViewAllBranches ? null : assignedBranchId;
 
       if (scopeBranchId) {
         const [inv, b] = await Promise.all([
@@ -201,7 +201,7 @@ export default function AdminDashboardPage() {
           activeCategories
         );
         setLowStockCount(getLowStockVariants(selling).length);
-      } else if (isElevatedAdmin && branches.length > 0) {
+      } else if (canViewAllBranches && branches.length > 0) {
         let totalLow = 0;
         const inventories = await Promise.all(
           branches.map((b) => getBranchInventory(b.id))
@@ -218,11 +218,11 @@ export default function AdminDashboardPage() {
     }
 
     load().catch(console.error).finally(() => setLoading(false));
-  }, [isElevatedAdmin, assignedBranchId]);
+  }, [canViewAllBranches, assignedBranchId]);
 
   useEffect(() => {
     async function loadSales() {
-      if (!isElevatedAdmin && !assignedBranchId) {
+      if (!canViewAllBranches && !assignedBranchId) {
         setSales([]);
         setSalesLoading(false);
         return;
@@ -233,7 +233,7 @@ export default function AdminDashboardPage() {
         const fromDate = firstDayMonthsAgo(11);
         const toDate = toDateInputValue();
         const rows = await getPosSales({
-          branchId: isElevatedAdmin ? null : assignedBranchId,
+          branchId: canViewAllBranches ? null : assignedBranchId,
           fromDate,
           toDate,
           max: 5000,
@@ -248,7 +248,7 @@ export default function AdminDashboardPage() {
     }
 
     void loadSales();
-  }, [isElevatedAdmin, assignedBranchId]);
+  }, [canViewAllBranches, assignedBranchId]);
 
   const monthOptions = useMemo(() => {
     const toMonth = toMonthKey();
@@ -304,13 +304,13 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        {!isElevatedAdmin && branch && (
+        {!canViewAllBranches && branch && (
           <p className="text-muted-foreground">{branch.name} branch overview</p>
         )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {isElevatedAdmin && (
+        {canViewAllBranches && (
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Active branches</CardDescription>
@@ -347,7 +347,7 @@ export default function AdminDashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-amber-700">
               <AlertTriangle className="h-5 w-5" />
-              {isElevatedAdmin
+              {canViewAllBranches
                 ? "Low stock across branches"
                 : `Low stock at ${branch?.name}`}
             </CardTitle>
@@ -370,7 +370,7 @@ export default function AdminDashboardPage() {
               </CardTitle>
               <CardDescription>
                 Last 12 months ·{" "}
-                {isElevatedAdmin
+                {canViewAllBranches
                   ? "all branches"
                   : (branch?.name ?? "your branch")}
               </CardDescription>
@@ -588,9 +588,9 @@ export default function AdminDashboardPage() {
 
         <div className="min-w-0">
           <InventoryActivityFeed
-            branchId={isElevatedAdmin ? null : assignedBranchId}
+            branchId={canViewAllBranches ? null : assignedBranchId}
             description={
-              isElevatedAdmin
+              canViewAllBranches
                 ? "Adjustments and transfers across all branches"
                 : "Stock changes for your branch"
             }

@@ -22,7 +22,7 @@ export const DOC_TOC = [
     id: "roles",
     label: "Roles & access",
     keywords:
-      "roles master admin owner manager cashier access permissions scopes matrix branch who can",
+      "roles master admin owner cashier access permissions scopes matrix branch who can",
   },
   {
     id: "selling",
@@ -135,7 +135,6 @@ const ROLE_SCOPE_COLUMNS = [
   "Master",
   "Admin",
   "Owner",
-  "Manager",
   "Cashier",
 ] as const;
 
@@ -146,61 +145,62 @@ const ROLE_SCOPE_ROWS: {
 }[] = [
   {
     scope: "See all branches",
-    marks: ["yes", "yes", "yes", "no", "no"],
+    marks: ["yes", "yes", "yes", "no"],
   },
   {
     scope: "Dashboard / overview",
     note: "Cashiers get a cashier overview instead of the full dashboard.",
-    marks: ["yes", "yes", "no", "yes", "partial"],
+    marks: ["yes", "yes", "yes", "partial"],
   },
   {
     scope: "Shop & wholesale POS",
-    marks: ["yes", "yes", "no", "yes", "yes"],
+    marks: ["yes", "yes", "no", "yes"],
   },
   {
     scope: "Stock levels",
     note: "Owners can view only; they cannot edit quantities.",
-    marks: ["yes", "yes", "view", "yes", "no"],
+    marks: ["yes", "yes", "view", "no"],
   },
   {
     scope: "Inventory tools",
     note: "Daily stock, supplier stock in, adjustments, transfers.",
-    marks: ["yes", "yes", "no", "yes", "no"],
+    marks: ["yes", "yes", "no", "no"],
   },
   {
     scope: "Find stock & transfer requests",
     note: "Cashier flow to request stock from another branch.",
-    marks: ["no", "no", "no", "no", "yes"],
+    marks: ["no", "no", "no", "yes"],
   },
   {
     scope: "Sales reports",
     note: "Cashiers see their sales list, not full report tools.",
-    marks: ["yes", "yes", "yes", "yes", "partial"],
+    marks: ["yes", "yes", "yes", "partial"],
   },
   {
     scope: "Price changes",
-    marks: ["yes", "yes", "no", "yes", "no"],
+    note: "Owners can view the price-change log; they cannot edit catalog prices.",
+    marks: ["yes", "yes", "view", "no"],
   },
   {
     scope: "Price promotions",
-    marks: ["yes", "yes", "no", "no", "no"],
+    marks: ["yes", "yes", "no", "no"],
   },
   {
     scope: "Products, categories, branches",
-    marks: ["yes", "yes", "no", "no", "no"],
+    marks: ["yes", "yes", "no", "no"],
   },
   {
     scope: "Settings (ops)",
-    note: "Assortment, resellers, vouchers, payment accounts. Managers: branch-scoped where applicable.",
-    marks: ["yes", "yes", "no", "partial", "no"],
+    note: "Assortment, resellers, vouchers, payment accounts.",
+    marks: ["yes", "yes", "no", "no"],
   },
   {
     scope: "Users & invites",
-    marks: ["yes", "yes", "no", "no", "no"],
+    marks: ["yes", "yes", "no", "no"],
   },
   {
     scope: "Product JSON import",
-    marks: ["yes", "no", "no", "no", "no"],
+    marks: ["yes", "no", "no", "no"],
   },
 ];
 
@@ -248,7 +248,7 @@ function RoleScopeMatrix({ compact }: { compact?: boolean }) {
     <div className="overflow-x-auto rounded-xl border border-[#12141a]/10 bg-white">
       <table className="w-full min-w-[36rem] text-left text-sm">
         <caption className="sr-only">
-          Role access scopes for master admin, admin, owner, manager, and cashier
+          Role access scopes for master admin, admin, owner, and cashier
         </caption>
         <thead className="bg-[#12141a] text-[#f7f4ea]">
           <tr>
@@ -369,11 +369,11 @@ function DocsSections({
             </li>
             <li>
               You land on the home screen for your role (cashier overview,
-              owner reports, or full admin dashboard).
+              owner dashboard, or full admin dashboard).
             </li>
           </ol>
           <Callout>
-            Managers and cashiers must be linked to a <strong>branch</strong>.
+            Cashiers must be linked to a <strong>branch</strong>.
             Until that is set, the app shows a “branch not assigned” message.
           </Callout>
         </Section>
@@ -398,13 +398,8 @@ function DocsSections({
             />
             <RoleCard
               role="Owner"
-              home="/admin/reports"
-              sees="Sales reports and stock levels across branches. View-only on inventory — no stock edits, POS, or settings."
-            />
-            <RoleCard
-              role="Manager"
               home="/admin"
-              sees="Day-to-day ops for one assigned branch: POS, inventory tools, reports for that branch."
+              sees="Dashboard, sales reports, stock levels, and price-change history across all branches. View-only on inventory — no stock edits, POS, or settings."
             />
             <RoleCard
               role="Cashier"
@@ -438,7 +433,7 @@ function DocsSections({
             <RoleScopeMatrix compact={compact} />
           </div>
           <Callout>
-            Managers and cashiers only work with their <strong>assigned
+            Cashiers only work with their <strong>assigned
             branch</strong>. Master admin, admin, and owner can see data across
             all branches.
           </Callout>
@@ -565,7 +560,7 @@ function DocsSections({
           compact={compact}
         >
           <p>
-            Elevated admins maintain the shared catalog. Managers sell from it;
+            Elevated admins maintain the shared catalog. Cashiers sell from it;
             they do not redesign the catalog.
           </p>
           <ul className="list-disc space-y-2 pl-5">

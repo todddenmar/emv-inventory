@@ -2,7 +2,6 @@ export type UserRole =
   | "master-admin"
   | "admin"
   | "owner"
-  | "manager"
   | "cashier"
   | "customer";
 
@@ -162,7 +161,7 @@ export interface Invite {
   id: string;
   token: string;
   email: string | null;
-  role: "manager" | "cashier" | "admin" | "owner";
+  role: "cashier" | "admin" | "owner";
   branchId: string | null;
   branchName: string | null;
   createdBy: string;

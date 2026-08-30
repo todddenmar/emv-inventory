@@ -57,7 +57,7 @@ export default function AdminInvitesPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<InviteRole>("manager");
+  const [role, setRole] = useState<InviteRole>("cashier");
   const [branchId, setBranchId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [lastLink, setLastLink] = useState<string | null>(null);
@@ -105,18 +105,14 @@ export default function AdminInvitesPage() {
 
   const resetForm = () => {
     setEmail("");
-    setRole("manager");
+    setRole("cashier");
     setBranchId("");
   };
 
   const handleCreateInvite = async () => {
     if (!user) return;
-    if ((role === "manager" || role === "cashier") && !branchId) {
-      toast.error(
-        role === "cashier"
-          ? "Select a branch for this cashier"
-          : "Select a branch for this manager"
-      );
+    if (role === "cashier" && !branchId) {
+      toast.error("Select a branch for this cashier");
       return;
     }
     const branch = branches.find((b) => b.id === branchId);
@@ -127,12 +123,8 @@ export default function AdminInvitesPage() {
         createdByName: user.displayName || user.email || "Admin",
         email: email || null,
         role,
-        branchId:
-          role === "manager" || role === "cashier" ? branchId : null,
-        branchName:
-          role === "manager" || role === "cashier"
-            ? (branch?.name ?? null)
-            : null,
+        branchId: role === "cashier" ? branchId : null,
+        branchName: role === "cashier" ? (branch?.name ?? null) : null,
       });
       const link = `${window.location.origin}/invite/${invite.token}`;
       setLastLink(link);
@@ -171,8 +163,8 @@ export default function AdminInvitesPage() {
         <div>
           <h1 className="text-2xl font-bold">Staff invites</h1>
           <p className="text-muted-foreground">
-            Invite managers, cashiers, owners (reports + inventory), or admins
-            (full access)
+            Invite cashiers, owners (dashboard, sales, inventory, price
+            changes), or admins (full access)
           </p>
         </div>
         <Button
@@ -201,9 +193,9 @@ export default function AdminInvitesPage() {
                 <Select
                   value={role}
                   onValueChange={(v) => {
-                    const next = (v as InviteRole) ?? "manager";
+                    const next = (v as InviteRole) ?? "cashier";
                     setRole(next);
-                    if (next !== "manager" && next !== "cashier") {
+                    if (next !== "cashier") {
                       setBranchId("");
                     }
                   }}
@@ -217,14 +209,13 @@ export default function AdminInvitesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cashier">Cashier</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
                     <SelectItem value="owner">Owner</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {role === "manager" || role === "cashier" ? (
+              {role === "cashier" ? (
                 <div className="space-y-2">
                   <Label>Branch</Label>
                   <Select
@@ -253,8 +244,8 @@ export default function AdminInvitesPage() {
                 </div>
               ) : role === "owner" ? (
                 <p className="text-sm text-muted-foreground">
-                  Owners can view sales reports and inventory across all
-                  branches. No branch assignment needed.
+                  Owners can view the dashboard, sales reports, inventory, and
+                  price changes across all branches. No branch assignment needed.
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">

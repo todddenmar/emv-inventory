@@ -10,7 +10,7 @@ Inventory management system with an online shop, built with Next.js 16, Tailwind
 - **Inventory admin** — add/edit products, track stock, low-stock alerts
 - **Order management** — real-time order list with status updates
 - **Auth** — Google sign-in and anonymous guest login
-- **Roles** — first Google sign-in becomes master-admin; master-admin can invite managers via link or email
+- **Roles** — first Google sign-in becomes master-admin; master-admin can invite cashiers, owners, and admins via link or email
 
 ## Setup
 
@@ -75,7 +75,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 1. **First setup** — sign in with Google at `/login`. You become master-admin.
 2. **Add products** — go to Admin → Products.
-3. **Invite managers** — Admin → Invites → create link or email invite.
+3. **Invite staff** — Admin → Invites → create link or email invite.
 4. **Customers** — browse `/`, add to cart, checkout with address + location share.
 
 ## Tech stack

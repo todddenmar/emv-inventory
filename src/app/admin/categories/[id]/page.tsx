@@ -267,7 +267,7 @@ export default function EditCategoryPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="w-full space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -303,38 +303,42 @@ export default function EditCategoryPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="category-name">Name</Label>
-            <Input
-              id="category-name"
-              value={name}
-              onChange={(e) => {
-                const nextName = e.target.value;
-                setName(nextName);
-                syncSlugFromName(nextName);
-              }}
-              placeholder="e.g. Beverages"
-              disabled={saving || category.isArchived}
-            />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)]">
+            <div className="space-y-2">
+              <Label htmlFor="category-name">Name</Label>
+              <Input
+                id="category-name"
+                value={name}
+                onChange={(e) => {
+                  const nextName = e.target.value;
+                  setName(nextName);
+                  syncSlugFromName(nextName);
+                }}
+                placeholder="e.g. Beverages"
+                disabled={saving || category.isArchived}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="category-low-at">Low at</Label>
+              <Input
+                id="category-low-at"
+                type="number"
+                min={0}
+                inputMode="numeric"
+                className="h-9 min-w-[8rem] tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                value={lowStockThreshold}
+                onChange={(e) =>
+                  setLowStockThreshold(Number(e.target.value) || 0)
+                }
+                disabled={saving || category.isArchived}
+              />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="category-low-at">Low at</Label>
-            <Input
-              id="category-low-at"
-              type="number"
-              min={0}
-              value={lowStockThreshold}
-              onChange={(e) =>
-                setLowStockThreshold(Number(e.target.value) || 0)
-              }
-              disabled={saving || category.isArchived}
-            />
-            <p className="text-xs text-muted-foreground">
-              Inventory alerts when stock is at or below this for products in
-              this category. Products in multiple categories use the lowest
-              threshold.
-            </p>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Inventory alerts when stock is at or below this for products in
+            this category. Products in multiple categories use the lowest
+            threshold.
+          </p>
           <CategoryFreebiesEditor
             freebies={freebieVariants}
             onChange={setFreebieVariants}

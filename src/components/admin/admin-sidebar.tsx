@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { Badge } from "@/components/ui/badge";
+import { isOwnerNavHref } from "@/lib/post-login-redirect";
 
 export const adminNavItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, masterOnly: false },
@@ -68,11 +69,7 @@ export function AdminNavLinks({
   const { isElevatedAdmin, isOwner, assignedBranchId } = useBranchAccess();
 
   const items = adminNavItems.filter((item) => {
-    if (isOwner) {
-      return (
-        item.href === "/admin/reports" || item.href === "/admin/inventory"
-      );
-    }
+    if (isOwner) return isOwnerNavHref(item.href);
     return isElevatedAdmin || !item.masterOnly;
   });
 

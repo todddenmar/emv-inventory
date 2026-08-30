@@ -10,10 +10,9 @@ export function useBranchAccess() {
   const isMasterAdmin = useIsMasterAdmin();
   const isElevatedAdmin = useIsElevatedAdmin();
   const assignedBranchId = user?.branchId ?? null;
-  const isManager = user?.role === "manager";
   const isCashier = user?.role === "cashier";
   const isOwner = isOwnerRole(user?.role);
-  const isBranchStaff = isManager || isCashier;
+  const isBranchStaff = isCashier;
   const isAdmin = user?.role === "admin";
   const canViewAllBranches = canViewAllBranchesRole(user?.role);
 
@@ -28,7 +27,6 @@ export function useBranchAccess() {
     isElevatedAdmin,
     isAdmin,
     isOwner,
-    isManager,
     isCashier,
     isBranchStaff,
     canViewAllBranches,

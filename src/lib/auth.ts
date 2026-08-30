@@ -5,7 +5,6 @@ import {
   type User,
 } from "firebase/auth";
 import { getClientAuth } from "@/lib/firebase";
-import { assignBranchManager } from "@/lib/firestore/branches";
 import {
   acceptInvite,
   getInviteByToken,
@@ -34,7 +33,7 @@ async function handlePostLogin(user: User, inviteToken?: string) {
       throw new Error("This invite was sent to a different email address");
     }
 
-    if (invite.role === "manager" || invite.role === "cashier") {
+    if (invite.role === "cashier") {
       if (!invite.branchId) {
         throw new Error("This invite is missing a branch assignment");
       }
@@ -43,13 +42,6 @@ async function handlePostLogin(user: User, inviteToken?: string) {
         role: invite.role,
         branchId: invite.branchId,
       });
-      if (invite.role === "manager") {
-        await assignBranchManager(
-          invite.branchId,
-          user.uid,
-          user.displayName || user.email || "Manager"
-        );
-      }
       await acceptInvite(invite.id, user.uid);
       return appUser;
     }

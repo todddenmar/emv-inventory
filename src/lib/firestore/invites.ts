@@ -26,8 +26,7 @@ function generateToken(): string {
 export function normalizeInviteRole(role: unknown): InviteRole {
   if (role === "admin") return "admin";
   if (role === "owner") return "owner";
-  if (role === "cashier") return "cashier";
-  return "manager";
+  return "cashier";
 }
 
 export async function createInvite(input: {
@@ -39,19 +38,15 @@ export async function createInvite(input: {
   branchName: string | null;
 }): Promise<Invite> {
   const role = normalizeInviteRole(input.role);
-  if ((role === "manager" || role === "cashier") && !input.branchId) {
-    throw new Error(
-      role === "cashier"
-        ? "Cashiers must be assigned to a branch"
-        : "Managers must be assigned to a branch"
-    );
+  if (role === "cashier" && !input.branchId) {
+    throw new Error("Cashiers must be assigned to a branch");
   }
 
   const token = generateToken();
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  const needsBranch = role === "manager" || role === "cashier";
+  const needsBranch = role === "cashier";
   const branchId = needsBranch ? input.branchId : null;
   const branchName = needsBranch ? input.branchName : null;
 
@@ -98,7 +93,7 @@ export async function getInvites(): Promise<Invite[]> {
   const snapshot = await getDocs(
     query(
       collection(getClientDb(), "invites"),
-      where("role", "in", ["manager", "admin", "cashier", "owner"])
+      where("role", "in", ["cashier", "admin", "owner", "manager"])
     )
   );
   return snapshot.docs

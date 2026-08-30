@@ -2,7 +2,7 @@ import { isCashierRole, isOwnerRole } from "@/lib/roles";
 import type { UserRole } from "@/types";
 
 export const CASHIER_HOME = "/admin/cashier";
-export const OWNER_HOME = "/admin/reports";
+export const OWNER_HOME = "/admin";
 
 /** Paths cashiers may access under /admin. */
 export function isCashierAllowedPath(pathname: string): boolean {
@@ -23,6 +23,7 @@ export function isCashierAllowedPath(pathname: string): boolean {
 
 /** Paths owners may access under /admin. */
 export function isOwnerAllowedPath(pathname: string): boolean {
+  if (pathname === "/admin") return true;
   if (pathname === "/admin/reports" || pathname.startsWith("/admin/reports/")) {
     return true;
   }
@@ -30,7 +31,22 @@ export function isOwnerAllowedPath(pathname: string): boolean {
   if (pathname === "/admin/inventory") {
     return true;
   }
+  if (
+    pathname === "/admin/price-changes" ||
+    pathname.startsWith("/admin/price-changes/")
+  ) {
+    return true;
+  }
   return false;
+}
+
+export function isOwnerNavHref(href: string): boolean {
+  return (
+    href === "/admin" ||
+    href === "/admin/reports" ||
+    href === "/admin/inventory" ||
+    href === "/admin/price-changes"
+  );
 }
 
 export function resolvePostLoginRedirect(
@@ -59,3 +75,4 @@ export function resolvePostLoginRedirect(
   const path = redirect || "/admin";
   return path.startsWith("/admin") ? path : "/admin";
 }
+
