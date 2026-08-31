@@ -27,6 +27,24 @@ export const POS_PAYMENT_KINDS: PosPaymentKind[] = [
 
 export const PAYMENT_AMOUNT_TOLERANCE = 0.01;
 
+export function cartLineMerchandiseTotal(line: {
+  unitPrice?: number;
+  quantity?: number;
+  isFreebie?: boolean;
+}): number {
+  if (line.isFreebie) return 0;
+  return roundMoney(Math.max(0, (line.unitPrice ?? 0) * (line.quantity ?? 0)));
+}
+
+/** Regular ₱0 lines (manual freebies) do not need a tender. */
+export function cartLineNeedsPayment(line: {
+  unitPrice?: number;
+  quantity?: number;
+  isFreebie?: boolean;
+}): boolean {
+  return cartLineMerchandiseTotal(line) > PAYMENT_AMOUNT_TOLERANCE;
+}
+
 /** Draft line used in checkout UI / session storage. */
 export interface PosCheckoutPaymentLine {
   id: string;
@@ -243,7 +261,9 @@ export function createItemPaymentLine(
 }
 
 export function defaultItemPayments(lineTotal: number): PosCheckoutPaymentLine[] {
-  return [createItemPaymentLine(lineTotal)];
+  const total = roundMoney(Math.max(0, lineTotal));
+  if (total <= PAYMENT_AMOUNT_TOLERANCE) return [];
+  return [createItemPaymentLine(total)];
 }
 
 /** Normalize cart line to priceList + payments[] (migrates legacy single-tender fields). */
@@ -263,15 +283,13 @@ export function ensureCartLinePaymentFields<
   priceList: "cash" | "retail";
   payments: PosCheckoutPaymentLine[];
 } {
-  const lineTotal = roundMoney(
-    Math.max(0, (line.unitPrice ?? 0) * (line.quantity ?? 0))
-  );
+  const lineTotal = cartLineMerchandiseTotal(line);
   const priceList =
     line.priceList === "retail" || line.priceList === "cash"
       ? line.priceList
       : fallbackPriceList;
 
-  if (line.isFreebie) {
+  if (!cartLineNeedsPayment(line)) {
     return {
       ...line,
       priceList,
@@ -319,6 +337,9 @@ export function syncPaymentsToLineTotal(
   lineTotal: number
 ): PosCheckoutPaymentLine[] {
   const total = Math.max(0, roundMoney(lineTotal));
+  if (total <= PAYMENT_AMOUNT_TOLERANCE) {
+    return [];
+  }
   if (payments.length === 0) {
     return defaultItemPayments(total);
   }
@@ -328,7 +349,7 @@ export function syncPaymentsToLineTotal(
       {
         ...only,
         amount: total,
-        amountText: total > 0 ? moneyInputText(total) : "",
+        amountText: moneyInputText(total),
       },
     ];
   }
@@ -362,7 +383,7 @@ export function resolvePaymentsFromCartLines(
   accounts: PaymentAccount[],
   amountDue: number
 ): PosPaymentLine[] {
-  const paid = lines.filter((line) => !line.isFreebie && line.quantity > 0);
+  const paid = lines.filter((line) => cartLineNeedsPayment(line));
   if (amountDue <= PAYMENT_AMOUNT_TOLERANCE) {
     return [];
   }
@@ -371,7 +392,7 @@ export function resolvePaymentsFromCartLines(
   }
 
   const merchandise = roundMoney(
-    paid.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0)
+    paid.reduce((sum, line) => sum + cartLineMerchandiseTotal(line), 0)
   );
   if (merchandise <= PAYMENT_AMOUNT_TOLERANCE) {
     throw new Error("Merchandise total must be greater than 0");
@@ -387,10 +408,7 @@ export function resolvePaymentsFromCartLines(
   const drafts: Draft[] = [];
 
   for (const line of paid) {
-    const lineTotal = roundMoney(line.unitPrice * line.quantity);
-    if (lineTotal <= 0) {
-      throw new Error("Each paid item must have an amount greater than 0");
-    }
+    const lineTotal = cartLineMerchandiseTotal(line);
     if (!line.payments || line.payments.length === 0) {
       throw new Error("Add at least one payment for each item");
     }

@@ -20,7 +20,6 @@ import {
   getVoucherByCode,
   isVoucherRedeemable,
 } from "@/lib/firestore/vouchers";
-import { normalizeRetailPrice } from "@/lib/product-pricing";
 import { formatCurrency } from "@/lib/format";
 import {
   clearPosCheckoutDraft,
@@ -31,8 +30,10 @@ import {
   type PosCheckoutDraft,
 } from "@/lib/pos-checkout-draft";
 import {
+  cartLineNeedsPayment,
   ensureCartLinePaymentFields,
   resolvePaymentsFromCartLines,
+  roundMoney,
   snapshotPaymentAccount,
   syncPaymentsToLineTotal,
   tenderNeedsPaymentAccount,
@@ -156,16 +157,19 @@ export function PosCheckoutWorkspace({
     variantId: string,
     retailPrice: number | null
   ) => {
-    const normalized = normalizeRetailPrice(retailPrice);
+    const nextRetail =
+      retailPrice == null || !Number.isFinite(retailPrice) || retailPrice < 0
+        ? null
+        : roundMoney(retailPrice);
     setLines((prev) => {
       const next = prev.map((line) => {
         if (line.variantId !== variantId || line.isFreebie) return line;
         const unitPrice =
-          line.priceList === "cash" ? line.cashPrice : normalized ?? 0;
+          line.priceList === "cash" ? line.cashPrice : nextRetail ?? 0;
         const lineTotal = Math.round(unitPrice * line.quantity * 100) / 100;
         return {
           ...line,
-          retailPrice: normalized,
+          retailPrice: nextRetail,
           unitPrice,
           payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal),
         };
@@ -230,19 +234,10 @@ export function PosCheckoutWorkspace({
         (line) =>
           !line.isFreebie &&
           line.priceList === "retail" &&
-          (line.retailPrice == null || line.retailPrice <= 0)
+          line.retailPrice == null
       );
     if (missingRetail) {
       toast.error("Enter retail price for every item");
-      setCheckoutStep("details");
-      return;
-    }
-
-    const missingWholesale = isWholesale
-      ? lines.some((line) => !line.isFreebie && !(line.unitPrice > 0))
-      : false;
-    if (missingWholesale) {
-      toast.error("Enter a unit price greater than 0 for every item");
       setCheckoutStep("details");
       return;
     }
@@ -338,9 +333,14 @@ export function PosCheckoutWorkspace({
             const lineTotal = unitPrice * line.quantity;
 
             const itemPayments =
-              line.isFreebie || !(line.payments?.length > 0)
+              !cartLineNeedsPayment(line) || !(line.payments?.length > 0)
                 ? []
-                : line.payments.map((pay) => {
+                : line.payments
+                    .filter(
+                      (pay) =>
+                        Number.isFinite(pay.amount) && pay.amount > 0.01
+                    )
+                    .map((pay) => {
                     const account =
                       tenderNeedsPaymentAccount(pay.tenderMethod) &&
                       pay.paymentAccountId
@@ -438,7 +438,7 @@ export function PosCheckoutWorkspace({
                 const unitPrice =
                   patch.priceList === "cash"
                     ? line.cashPrice
-                    : normalizeRetailPrice(line.retailPrice) ?? 0;
+                    : line.retailPrice ?? 0;
                 const lineTotal =
                   Math.round(unitPrice * line.quantity * 100) / 100;
                 nextLine = {

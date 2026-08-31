@@ -29,6 +29,7 @@ import {
   POS_TENDER_METHODS as PAYMENT_TENDER_METHODS,
   POS_PAYMENT_KINDS,
   accountTypeForTender,
+  cartLineNeedsPayment,
   createItemPaymentLine,
   formatPaymentLineNote,
   itemPaymentsCoverLineTotal,
@@ -543,13 +544,9 @@ export function PosCheckoutDialog({
     lines,
     appliedVoucher
   );
-  const missingWholesalePrice =
-    isWholesale &&
-    lines.some(
-      (line) => !line.isFreebie && (!(line.unitPrice > 0))
-    );
   const paidLines = lines.filter((line) => !line.isFreebie);
-  const missingPaymentAccount = paidLines.some((line) =>
+  const payableLines = lines.filter(cartLineNeedsPayment);
+  const missingPaymentAccount = payableLines.some((line) =>
     (line.payments ?? []).some((pay) => {
       if (!tenderNeedsPaymentAccount(pay.tenderMethod)) return false;
       const expectedType = accountTypeForTender(pay.tenderMethod);
@@ -562,11 +559,11 @@ export function PosCheckoutDialog({
       );
     })
   );
-  const unbalancedItemPayments = paidLines.some((line) => {
+  const unbalancedItemPayments = payableLines.some((line) => {
     const lineTotal = Math.round(line.unitPrice * line.quantity * 100) / 100;
     return !itemPaymentsCoverLineTotal(line.payments ?? [], lineTotal);
   });
-  const invalidItemPaymentAmount = paidLines.some(
+  const invalidItemPaymentAmount = payableLines.some(
     (line) =>
       !(line.payments?.length > 0) ||
       line.payments.some((pay) => !Number.isFinite(pay.amount) || pay.amount <= 0)
@@ -574,9 +571,7 @@ export function PosCheckoutDialog({
   const missingRetail =
     !isWholesale &&
     paidLines.some(
-      (line) =>
-        line.priceList === "retail" &&
-        (line.retailPrice == null || line.retailPrice <= 0)
+      (line) => line.priceList === "retail" && line.retailPrice == null
     );
   const showCustomerForm =
     customerType === "reservation" || customerType === "delivery";
@@ -587,8 +582,8 @@ export function PosCheckoutDialog({
     showCustomerForm && !customer.name.trim();
 
   const goToReview = () => {
-    if (missingRetail || missingWholesalePrice) return;
-    if (amountDue > 0.01 && paidLines.length === 0) return;
+    if (missingRetail) return;
+    if (amountDue > 0.01 && payableLines.length === 0) return;
     if (missingPaymentAccount || unbalancedItemPayments || invalidItemPaymentAmount)
       return;
     if (missingCustomerName) return;
@@ -667,7 +662,6 @@ export function PosCheckoutDialog({
             disabled={
               charging ||
               missingRetail ||
-              missingWholesalePrice ||
               missingPaymentAccount ||
               unbalancedItemPayments ||
               invalidItemPaymentAmount ||
@@ -696,7 +690,6 @@ export function PosCheckoutDialog({
             disabled={
               charging ||
               missingRetail ||
-              missingWholesalePrice ||
               missingPaymentAccount ||
               unbalancedItemPayments ||
               invalidItemPaymentAmount ||
@@ -708,7 +701,9 @@ export function PosCheckoutDialog({
             {charging ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : null}
-            Confirm charge {formatCurrency(amountDue)}
+            {amountDue <= 0.01
+              ? "Complete sale"
+              : `Confirm charge ${formatCurrency(amountDue)}`}
           </Button>
         </>
       )}
@@ -738,7 +733,8 @@ export function PosCheckoutDialog({
                     <Label>Wholesale unit prices</Label>
                     <p className="text-xs text-muted-foreground">
                       Cash and retail are shown for reference. Edit the
-                      wholesale unit price charged for each line.
+                      wholesale unit price charged for each line. Use 0 to
+                      give the item away.
                     </p>
                   </div>
                   <div
@@ -844,11 +840,6 @@ export function PosCheckoutDialog({
                         );
                       })}
                   </div>
-                  {missingWholesalePrice ? (
-                    <p className="text-sm text-destructive">
-                      Enter a unit price greater than 0 for every item.
-                    </p>
-                  ) : null}
                 </div>
               ) : (
               <div className="space-y-3">
@@ -1011,12 +1002,12 @@ export function PosCheckoutDialog({
                     isPage ? "grid gap-3 md:grid-cols-2" : "space-y-3"
                   }
                 >
-                  {paidLines.length === 0 ? (
+                  {payableLines.length === 0 ? (
                     <p className="text-sm text-muted-foreground md:col-span-2">
-                      No paid items — voucher or freebies cover this sale.
+                      No payment needed — amount due is {formatCurrency(0)}.
                     </p>
                   ) : (
-                    paidLines.map((line) => {
+                    payableLines.map((line) => {
                       const label = lineLabel(line);
                       const lineTotal =
                         Math.round(line.unitPrice * line.quantity * 100) / 100;
@@ -1092,8 +1083,7 @@ export function PosCheckoutDialog({
                                   }
                                 >
                                   Retail{" "}
-                                  {line.retailPrice != null &&
-                                  line.retailPrice > 0
+                                  {line.retailPrice != null
                                     ? formatCurrency(line.retailPrice)
                                     : "—"}
                                 </Button>
@@ -1556,7 +1546,12 @@ export function PosCheckoutDialog({
                 ) : null}
                 <div className="space-y-2 border-t pt-2">
                   <p className="text-muted-foreground">Payments by item</p>
-                  {paidLines.map((line) => (
+                  {payableLines.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No payment needed — amount due is {formatCurrency(0)}.
+                    </p>
+                  ) : (
+                    payableLines.map((line) => (
                     <div key={line.variantId} className="space-y-1">
                       <div className="flex justify-between gap-2">
                         <span className="min-w-0 font-medium">
@@ -1605,7 +1600,8 @@ export function PosCheckoutDialog({
                         );
                       })}
                     </div>
-                  ))}
+                  ))
+                  )}
                 </div>
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground">Customer type</span>
