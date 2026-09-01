@@ -23,7 +23,13 @@ import {
 import { deleteProductImage } from "@/lib/storage/products";
 import { ensureUniqueSlug, slugify } from "@/lib/slug";
 import { isProductPublished } from "@/lib/products-catalog";
-import type { Category, Product } from "@/types";
+import {
+  normalizeRetailPrice,
+  normalizeWholesalePrice,
+} from "@/lib/product-pricing";
+import { getDefaultVariant } from "@/lib/product-variants";
+import { roundMoney } from "@/lib/pos-payments";
+import type { Category, Product, ProductVariant } from "@/types";
 
 function productsRef(): CollectionReference<Product> {
   return collection(getClientDb(), COLLECTIONS.products).withConverter(
@@ -252,6 +258,17 @@ export async function updateProduct(
     updatedAt: serverTimestamp(),
   };
 
+  if (data.variants) {
+    const variants: ProductVariant[] = data.variants.map((variant) => ({
+      ...variant,
+      price: roundMoney(Math.max(0, Number(variant.price) || 0)),
+      retailPrice: normalizeRetailPrice(variant.retailPrice),
+      wholesalePrice: normalizeWholesalePrice(variant.wholesalePrice),
+    }));
+    payload.variants = variants;
+    payload.price = getDefaultVariant({ variants }).price;
+  }
+
   if (data.name !== undefined || data.slug !== undefined) {
     if (existing) {
       payload.slug = await resolveProductSlug(
@@ -267,7 +284,7 @@ export async function updateProduct(
   if (existing && actor && data.variants) {
     await logProductPriceChangesFromUpdate(
       existing,
-      data.variants,
+      payload.variants as ProductVariant[],
       data.options,
       data.name,
       actor

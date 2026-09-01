@@ -190,7 +190,10 @@ export default function CashierDailyCashPage() {
             </CardContent>
           </Card>
 
-          <CashSummaryCard summary={summary} />
+          <CashSummaryCard
+            summary={summary}
+            branchName={branch?.name}
+          />
         </>
       )}
     </div>

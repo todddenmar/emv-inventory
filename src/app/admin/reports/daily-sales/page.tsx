@@ -322,7 +322,10 @@ export default function DailySalesReportPage() {
             </Card>
           </div>
 
-          <CashSummaryCard summary={summary} />
+          <CashSummaryCard
+            summary={summary}
+            branchName={selectedBranch?.name}
+          />
         </div>
       )}
     </div>

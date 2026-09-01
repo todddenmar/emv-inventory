@@ -12,6 +12,7 @@ import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { productPriceLogConverter } from "@/lib/firestore/converters";
 import { formatVariantLabel } from "@/lib/product-variants";
+import { roundMoney } from "@/lib/pos-payments";
 import type {
   Product,
   ProductOption,
@@ -39,8 +40,8 @@ export function diffVariantPriceChanges(
     const previous = previousById.get(next.id);
     if (!previous) continue;
 
-    const previousPrice = Number(previous.price ?? 0);
-    const newPrice = Number(next.price ?? 0);
+    const previousPrice = roundMoney(Number(previous.price ?? 0));
+    const newPrice = roundMoney(Number(next.price ?? 0));
     if (previousPrice === newPrice) continue;
 
     const delta = newPrice - previousPrice;

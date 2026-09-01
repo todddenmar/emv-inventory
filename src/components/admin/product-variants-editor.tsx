@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -23,10 +24,10 @@ import {
   normalizeRetailPrice,
   normalizeWholesalePrice,
 } from "@/lib/product-pricing";
+import { moneyInputText, parseMoneyInput } from "@/lib/pos-payments";
 import type { ProductImage, ProductOption, ProductVariant } from "@/types";
 
-const moneyInputClass =
-  "h-9 min-w-[7.5rem] tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+const moneyInputClass = "h-9 min-w-[7.5rem] tabular-nums";
 
 interface ProductVariantsEditorProps {
   variants: ProductVariant[];
@@ -212,6 +213,71 @@ function SkuField({
   );
 }
 
+function isMoneyDraft(raw: string): boolean {
+  return raw === "" || /^\d*\.?\d*$/.test(raw);
+}
+
+function VariantMoneyField({
+  variantId,
+  amount,
+  optional,
+  disabled,
+  placeholder,
+  onCommit,
+}: {
+  variantId: string;
+  amount: number | null;
+  optional?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
+  onCommit: (value: number | null) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [text, setText] = useState(() =>
+    amount == null ? "" : moneyInputText(amount)
+  );
+
+  useEffect(() => {
+    if (focused) return;
+    setText(amount == null ? "" : moneyInputText(amount));
+  }, [amount, focused, variantId]);
+
+  const commit = (raw: string) => {
+    if (raw.trim() === "") {
+      onCommit(optional ? null : 0);
+      return;
+    }
+    const parsed = parseMoneyInput(raw);
+    if (parsed == null) {
+      onCommit(optional ? null : 0);
+      return;
+    }
+    onCommit(optional ? normalizeRetailPrice(parsed) : parsed);
+  };
+
+  return (
+    <Input
+      inputMode="decimal"
+      placeholder={placeholder}
+      value={text}
+      disabled={disabled}
+      className={moneyInputClass}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false);
+        commit(text);
+      }}
+      onChange={(e) => {
+        const raw = e.target.value;
+        if (!isMoneyDraft(raw)) return;
+        setText(raw);
+        if (raw.endsWith(".")) return;
+        commit(raw);
+      }}
+    />
+  );
+}
+
 function CashField({
   variant,
   disabled,
@@ -222,15 +288,11 @@ function CashField({
   onChange: (price: number) => void;
 }) {
   return (
-    <Input
-      type="number"
-      step="0.01"
-      min={0}
-      inputMode="decimal"
-      value={variant.price}
+    <VariantMoneyField
+      variantId={variant.id}
+      amount={variant.price}
       disabled={disabled}
-      className={moneyInputClass}
-      onChange={(e) => onChange(Number(e.target.value) || 0)}
+      onCommit={(value) => onChange(value ?? 0)}
     />
   );
 }
@@ -245,22 +307,13 @@ function RetailField({
   onChange: (retailPrice: number | null) => void;
 }) {
   return (
-    <Input
-      type="number"
-      step="0.01"
-      min={0}
-      inputMode="decimal"
-      placeholder="Optional"
-      value={variant.retailPrice ?? ""}
+    <VariantMoneyField
+      variantId={variant.id}
+      amount={variant.retailPrice}
+      optional
       disabled={disabled}
-      className={moneyInputClass}
-      onChange={(e) =>
-        onChange(
-          normalizeRetailPrice(
-            e.target.value === "" ? null : Number(e.target.value)
-          )
-        )
-      }
+      placeholder="Optional"
+      onCommit={(value) => onChange(normalizeRetailPrice(value))}
     />
   );
 }
@@ -275,22 +328,13 @@ function WholesaleField({
   onChange: (wholesalePrice: number | null) => void;
 }) {
   return (
-    <Input
-      type="number"
-      step="0.01"
-      min={0}
-      inputMode="decimal"
-      placeholder="Optional"
-      value={variant.wholesalePrice ?? ""}
+    <VariantMoneyField
+      variantId={variant.id}
+      amount={variant.wholesalePrice}
+      optional
       disabled={disabled}
-      className={moneyInputClass}
-      onChange={(e) =>
-        onChange(
-          normalizeWholesalePrice(
-            e.target.value === "" ? null : Number(e.target.value)
-          )
-        )
-      }
+      placeholder="Optional"
+      onCommit={(value) => onChange(normalizeWholesalePrice(value))}
     />
   );
 }

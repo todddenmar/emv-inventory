@@ -48,15 +48,21 @@ function SummaryRow({
 
 export function CashSummaryCard({
   summary,
+  branchName,
   className,
 }: {
   summary: DailySalesReportSummary;
+  branchName?: string | null;
   className?: string;
 }) {
+  const name = branchName?.trim() || null;
   return (
     <Card className={cn("h-fit", className)}>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Cash summary</CardTitle>
+        {name ? (
+          <p className="text-sm font-medium text-foreground">{name}</p>
+        ) : null}
         <CardDescription>
           Closing cash is added cash + net cash from the day (sales minus bank
           transfer, home credit, Skyro, Salmon, and expenses).

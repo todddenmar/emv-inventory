@@ -35,21 +35,33 @@ import {
   sumDailyCashAdds,
   summarizeDailySalesReport,
 } from "@/lib/daily-sales-report";
+import { getBranch } from "@/lib/firestore/branches";
 import { getDailyCashRecord } from "@/lib/firestore/daily-cash";
 import { getDailyExpenses } from "@/lib/firestore/daily-expenses";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
-import type { DailyCashRecord, DailyExpense, PosSale } from "@/types";
+import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
 export default function CashierSalesPage() {
   const { assignedBranchId } = useBranchAccess();
   const [date, setDate] = useState(() => toDateInputValue());
+  const [branch, setBranch] = useState<Branch | null>(null);
   const [sales, setSales] = useState<PosSale[]>([]);
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [cashRecord, setCashRecord] = useState<DailyCashRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (!assignedBranchId) {
+      setBranch(null);
+      return;
+    }
+    getBranch(assignedBranchId)
+      .then(setBranch)
+      .catch(console.error);
+  }, [assignedBranchId]);
 
   const load = useCallback(async () => {
     if (!assignedBranchId) {
@@ -170,7 +182,12 @@ export default function CashierSalesPage() {
           Loading…
         </div>
       ) : (
-        <CashSummaryCard summary={summary} />
+        <CashSummaryCard
+          summary={summary}
+          branchName={
+            branch?.name || cashRecord?.branchName || sales[0]?.branchName
+          }
+        />
       )}
 
       <Card>
