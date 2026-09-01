@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { History, Loader2, PackageOpen, ShoppingCart } from "lucide-react";
+import { History, Loader2, PackageOpen, ShoppingCart, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -150,6 +150,14 @@ export default function CashierOverviewPage() {
         >
           <History className="mr-2 h-4 w-4" />
           Sales history
+        </LinkButton>
+        <LinkButton
+          href="/admin/cashier/daily-cash"
+          variant="outline"
+          className="h-12 w-full"
+        >
+          <Wallet className="mr-2 h-4 w-4" />
+          Set expenses & cash
         </LinkButton>
       </div>
     </div>

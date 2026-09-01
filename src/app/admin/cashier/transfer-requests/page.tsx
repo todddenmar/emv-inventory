@@ -25,6 +25,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -40,7 +41,7 @@ import {
   undoDeclineTransferRequest,
   undoReleaseTransferRequest,
 } from "@/lib/firestore/transfer-requests";
-import type { TransferRequest, TransferRequestStatus } from "@/types";
+import type { AppUser, TransferRequest, TransferRequestStatus } from "@/types";
 
 type ConfirmAction =
   | "release"
@@ -302,6 +303,126 @@ function RequestTimeline({ row }: { row: TransferRequest }) {
   );
 }
 
+function hasRequestActions(
+  tab: "incoming" | "outgoing",
+  status: TransferRequestStatus,
+  user: AppUser | null
+): boolean {
+  if (!user) return false;
+  if (tab === "incoming") {
+    return (
+      status === "requested" ||
+      status === "released" ||
+      status === "declined"
+    );
+  }
+  return status === "requested" || status === "released";
+}
+
+function RequestActionBar({
+  tab,
+  row,
+  busy,
+  user,
+  onConfirm,
+  onCancelOutgoing,
+}: {
+  tab: "incoming" | "outgoing";
+  row: TransferRequest;
+  busy: boolean;
+  user: AppUser | null;
+  onConfirm: (action: ConfirmAction, row: TransferRequest) => void;
+  onCancelOutgoing: (row: TransferRequest) => void;
+}) {
+  if (!user) return null;
+
+  if (tab === "incoming" && row.status === "requested") {
+    return (
+      <>
+        <Button
+          type="button"
+          size="sm"
+          disabled={busy}
+          onClick={() => onConfirm("release", row)}
+        >
+          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+          Release
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => onConfirm("decline", row)}
+        >
+          Decline
+        </Button>
+      </>
+    );
+  }
+
+  if (tab === "incoming" && row.status === "released") {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => onConfirm("undo_release", row)}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+        Undo release
+      </Button>
+    );
+  }
+
+  if (tab === "incoming" && row.status === "declined") {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => onConfirm("undo_decline", row)}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+        Undo decline
+      </Button>
+    );
+  }
+
+  if (tab === "outgoing" && row.status === "requested") {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => onCancelOutgoing(row)}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+        Cancel
+      </Button>
+    );
+  }
+
+  if (tab === "outgoing" && row.status === "released") {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        disabled={busy}
+        onClick={() => onConfirm("receive", row)}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+        Mark received
+      </Button>
+    );
+  }
+
+  return null;
+}
+
 function confirmCopy(
   action: ConfirmAction,
   row: TransferRequest
@@ -476,33 +597,35 @@ export default function CashierTransferRequestsPage() {
   const dialogCopy = confirm ? confirmCopy(confirm.action, confirm.row) : null;
 
   return (
-    <div className="mx-auto w-full max-w-lg space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Requests</h1>
-        <p className="text-sm text-muted-foreground">
-          Release, receive, or cancel branch transfer requests
-        </p>
-      </div>
+    <div className="mx-auto flex h-0 min-h-0 w-full max-w-lg flex-1 flex-col gap-4">
+      <div className="shrink-0 space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Requests</h1>
+          <p className="text-sm text-muted-foreground">
+            Release, receive, or cancel branch transfer requests
+          </p>
+        </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          type="button"
-          variant={tab === "incoming" ? "default" : "outline"}
-          onClick={() => setTab("incoming")}
-        >
-          Incoming ({incoming.length})
-        </Button>
-        <Button
-          type="button"
-          variant={tab === "outgoing" ? "default" : "outline"}
-          onClick={() => setTab("outgoing")}
-        >
-          Outgoing ({outgoing.length})
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant={tab === "incoming" ? "default" : "outline"}
+            onClick={() => setTab("incoming")}
+          >
+            Incoming ({incoming.length})
+          </Button>
+          <Button
+            type="button"
+            variant={tab === "outgoing" ? "default" : "outline"}
+            onClick={() => setTab("outgoing")}
+          >
+            Outgoing ({outgoing.length})
+          </Button>
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex min-h-[30vh] items-center justify-center">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : visible.length === 0 ? (
@@ -510,13 +633,14 @@ export default function CashierTransferRequestsPage() {
           No {tab} requests
         </p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="flex h-0 min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain">
           {visible.map((row) => {
             const busy = actingId === row.id;
+            const showActions = hasRequestActions(tab, row.status, user);
             return (
-              <li key={row.id}>
-                <Card>
-                  <CardHeader className="pb-2">
+              <li key={row.id} className="max-h-full shrink-0">
+                <Card className="flex max-h-full flex-col overflow-hidden">
+                  <CardHeader className="shrink-0 pb-2">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="text-base leading-snug">
                         {itemLabel(row)}
@@ -537,118 +661,35 @@ export default function CashierTransferRequestsPage() {
                         : ` · from ${row.fromBranchName}`}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
+                  <CardContent className="min-h-0 flex-1 overflow-y-auto text-sm">
                     <RequestTimeline row={row} />
-
-                    {tab === "incoming" && row.status === "requested" && user ? (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() =>
-                            setConfirm({ action: "release", row })
-                          }
-                        >
-                          {busy ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : null}
-                          Release
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() =>
-                            setConfirm({ action: "decline", row })
-                          }
-                        >
-                          Decline
-                        </Button>
-                      </div>
-                    ) : null}
-
-                    {tab === "incoming" && row.status === "released" && user ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
-                          setConfirm({ action: "undo_release", row })
+                  </CardContent>
+                  {showActions ? (
+                    <CardFooter className="shrink-0 flex-wrap gap-2">
+                      <RequestActionBar
+                        tab={tab}
+                        row={row}
+                        busy={busy}
+                        user={user}
+                        onConfirm={(action, nextRow) =>
+                          setConfirm({ action, row: nextRow })
                         }
-                      >
-                        {busy ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : null}
-                        Undo release
-                      </Button>
-                    ) : null}
-
-                    {tab === "incoming" && row.status === "declined" && user ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
-                          setConfirm({ action: "undo_decline", row })
-                        }
-                      >
-                        {busy ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : null}
-                        Undo decline
-                      </Button>
-                    ) : null}
-
-                    {tab === "outgoing" &&
-                    row.status === "requested" &&
-                    user ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() =>
+                        onCancelOutgoing={(nextRow) => {
+                          if (!user) return;
                           void runAction(
-                            row.id,
+                            nextRow.id,
                             () =>
                               cancelTransferRequest({
-                                requestId: row.id,
+                                requestId: nextRow.id,
                                 cancelledBy: user.uid,
                                 cancelledByName: user.displayName,
                               }),
                             "Request cancelled"
-                          )
-                        }
-                      >
-                        {busy ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : null}
-                        Cancel
-                      </Button>
-                    ) : null}
-
-                    {tab === "outgoing" &&
-                    row.status === "released" &&
-                    user ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() =>
-                          setConfirm({ action: "receive", row })
-                        }
-                      >
-                        {busy ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : null}
-                        Mark received
-                      </Button>
-                    ) : null}
-                  </CardContent>
+                          );
+                        }}
+                      />
+                    </CardFooter>
+                  ) : null}
                 </Card>
               </li>
             );

@@ -24,6 +24,8 @@ export interface DailySalesReportSummary {
   totalSales: number;
   bankTransferTotal: number;
   homeCreditTotal: number;
+  skyroTotal: number;
+  salmonTotal: number;
   expensesTotal: number;
   netCashFromDay: number;
   openingCash: number;
@@ -129,16 +131,7 @@ export function flattenDailySalesRows(sales: PosSale[]): DailySalesReportRow[] {
     const items = sale.items.length > 0 ? sale.items : [];
     const hasItemPayments = items.some((item) => item.tenderMethod != null);
     const payments = salePayments(sale);
-    const bankTransferAmount = roundMoney(
-      payments
-        .filter((p) => p.tenderMethod === "bank_transfer")
-        .reduce((s, p) => s + p.amount, 0)
-    );
-    const homeCreditAmount = roundMoney(
-      payments
-        .filter((p) => p.tenderMethod === "home_credit")
-        .reduce((s, p) => s + p.amount, 0)
-    );
+    const saleTenderNotes = nonCashTenderNotes(payments);
 
     if (items.length === 0) {
       rows.push({
@@ -146,12 +139,7 @@ export function flattenDailySalesRows(sales: PosSale[]): DailySalesReportRow[] {
         saleId: sale.id,
         amount: sale.amountDue,
         itemLabel: "Sale",
-        paymentNote:
-          bankTransferAmount > 0
-            ? `BANK TRANSFER ${formatCurrencyPlain(bankTransferAmount)}`
-            : homeCreditAmount > 0
-              ? `HC ${formatCurrencyPlain(homeCreditAmount)}`
-              : null,
+        paymentNote: saleTenderNotes,
         tenderMethod: sale.tenderMethod,
       });
       continue;
@@ -167,14 +155,7 @@ export function flattenDailySalesRows(sales: PosSale[]): DailySalesReportRow[] {
       if (hasItemPayments) {
         paymentNote = itemPaymentNote(item);
       } else if (index === 0) {
-        const notes: string[] = [];
-        if (bankTransferAmount > 0) {
-          notes.push(`BANK TRANSFER ${formatCurrencyPlain(bankTransferAmount)}`);
-        }
-        if (homeCreditAmount > 0) {
-          notes.push(`HC ${formatCurrencyPlain(homeCreditAmount)}`);
-        }
-        paymentNote = notes.length > 0 ? notes.join(" · ") : null;
+        paymentNote = saleTenderNotes;
       }
 
       rows.push({
@@ -189,6 +170,25 @@ export function flattenDailySalesRows(sales: PosSale[]): DailySalesReportRow[] {
   }
 
   return rows;
+}
+
+function nonCashTenderNotes(
+  payments: Array<{ tenderMethod: PosTenderMethod; amount: number }>
+): string | null {
+  const notes: string[] = [];
+  const add = (method: PosTenderMethod, label: string) => {
+    const amount = roundMoney(
+      payments
+        .filter((p) => p.tenderMethod === method)
+        .reduce((s, p) => s + p.amount, 0)
+    );
+    if (amount > 0) notes.push(`${label} ${formatCurrencyPlain(amount)}`);
+  };
+  add("bank_transfer", "BANK TRANSFER");
+  add("home_credit", "HC");
+  add("skyro", "SKYRO");
+  add("salmon", "SALMON");
+  return notes.length > 0 ? notes.join(" · ") : null;
 }
 
 function formatCurrencyPlain(amount: number): string {
@@ -232,9 +232,16 @@ export function summarizeDailySalesReport(input: {
   );
   const bankTransferTotal = sumTenderAmount(input.sales, "bank_transfer");
   const homeCreditTotal = sumTenderAmount(input.sales, "home_credit");
+  const skyroTotal = sumTenderAmount(input.sales, "skyro");
+  const salmonTotal = sumTenderAmount(input.sales, "salmon");
   const expensesTotal = sumDailyExpenses(input.expenses);
   const netCashFromDay = roundMoney(
-    totalSales - bankTransferTotal - homeCreditTotal - expensesTotal
+    totalSales -
+      bankTransferTotal -
+      homeCreditTotal -
+      skyroTotal -
+      salmonTotal -
+      expensesTotal
   );
   const openingCash = Number.isFinite(input.openingCash)
     ? roundMoney(Math.max(0, input.openingCash))
@@ -250,6 +257,8 @@ export function summarizeDailySalesReport(input: {
     totalSales,
     bankTransferTotal,
     homeCreditTotal,
+    skyroTotal,
+    salmonTotal,
     expensesTotal,
     netCashFromDay,
     openingCash,

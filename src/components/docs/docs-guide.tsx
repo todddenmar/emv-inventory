@@ -173,7 +173,7 @@ const ROLE_SCOPE_ROWS: {
   },
   {
     scope: "Sales reports",
-    note: "Cashiers see their sales list, not full report tools.",
+    note: "Cashiers see their sales list. Daily cash and expenses are set in cashier Daily cash, not the admin report.",
     marks: ["yes", "yes", "yes", "partial"],
   },
   {
@@ -404,7 +404,7 @@ function DocsSections({
             <RoleCard
               role="Cashier"
               home="/admin/cashier"
-              sees="Branch overview, sales history, find stock, transfer requests, shop POS, and wholesale when enabled."
+              sees="Branch overview, sales history, daily cash and expenses, find stock, transfer requests, shop POS, and wholesale when enabled."
             />
           </div>
           <div className="space-y-2">

@@ -11,6 +11,7 @@ import {
   Receipt,
   Search,
   ShoppingCart,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -41,6 +42,7 @@ const moreCashierNavItems = [
     label: "Requests",
     icon: ArrowLeftRight,
   },
+  { href: "/admin/cashier/daily-cash", label: "Daily cash", icon: Wallet },
 ] as const;
 
 function isNavActive(pathname: string, href: string) {
