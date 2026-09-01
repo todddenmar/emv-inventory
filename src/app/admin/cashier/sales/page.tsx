@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -20,62 +22,66 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { CashSummaryCard } from "@/components/admin/cash-summary-card";
 import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
-import { shiftDateInput, toDateInputValue } from "@/lib/dates";
+import {
+  formatDateInputLabel,
+  shiftDateInput,
+  toDateInputValue,
+} from "@/lib/dates";
+import {
+  sumDailyCashAdds,
+  summarizeDailySalesReport,
+} from "@/lib/daily-sales-report";
+import { getDailyCashRecord } from "@/lib/firestore/daily-cash";
+import { getDailyExpenses } from "@/lib/firestore/daily-expenses";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
-import { summarizeSales } from "@/lib/reports";
-import type { PosSale } from "@/types";
-
-type Preset = "today" | "yesterday" | "last7";
-
-function rangeForPreset(preset: Preset): { fromDate: string; toDate: string } {
-  const today = toDateInputValue();
-  if (preset === "today") {
-    return { fromDate: today, toDate: today };
-  }
-  if (preset === "yesterday") {
-    const yesterday = shiftDateInput(today, -1);
-    return { fromDate: yesterday, toDate: yesterday };
-  }
-  return { fromDate: shiftDateInput(today, -6), toDate: today };
-}
+import type { DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
 export default function CashierSalesPage() {
   const { assignedBranchId } = useBranchAccess();
-  const [preset, setPreset] = useState<Preset>("today");
+  const [date, setDate] = useState(() => toDateInputValue());
   const [sales, setSales] = useState<PosSale[]>([]);
+  const [expenses, setExpenses] = useState<DailyExpense[]>([]);
+  const [cashRecord, setCashRecord] = useState<DailyCashRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-
-  const { fromDate, toDate } = useMemo(() => rangeForPreset(preset), [preset]);
 
   const load = useCallback(async () => {
     if (!assignedBranchId) {
       setSales([]);
+      setExpenses([]);
+      setCashRecord(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      const rows = await getPosSales({
-        branchId: assignedBranchId,
-        fromDate,
-        toDate,
-        max: 500,
-      });
-      setSales(rows);
+      const [saleRows, expenseRows, cashRow] = await Promise.all([
+        getPosSales({
+          branchId: assignedBranchId,
+          fromDate: date,
+          toDate: date,
+          max: 2000,
+        }),
+        getDailyExpenses({ branchId: assignedBranchId, date }),
+        getDailyCashRecord(assignedBranchId, date),
+      ]);
+      setSales(saleRows);
+      setExpenses(expenseRows);
+      setCashRecord(cashRow);
     } catch (error) {
       console.error(error);
       toast.error("Failed to load sales");
     } finally {
       setLoading(false);
     }
-  }, [assignedBranchId, fromDate, toDate]);
+  }, [assignedBranchId, date]);
 
   useEffect(() => {
     void load();
@@ -83,9 +89,18 @@ export default function CashierSalesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [preset]);
+  }, [date]);
 
-  const totals = useMemo(() => summarizeSales(sales), [sales]);
+  const cashAddsTotal = sumDailyCashAdds(cashRecord?.additions ?? []);
+  const summary = useMemo(
+    () =>
+      summarizeDailySalesReport({
+        sales,
+        expenses,
+        cashAddsTotal,
+      }),
+    [sales, expenses, cashAddsTotal]
+  );
 
   const {
     page: safePage,
@@ -111,64 +126,58 @@ export default function CashierSalesPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Sales history</h1>
         <p className="text-muted-foreground">
-          Shop and wholesale receipts for your branch till
+          Shop and wholesale receipts for your branch till ·{" "}
+          {formatDateInputLabel(date)}
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ["today", "Today"],
-            ["yesterday", "Yesterday"],
-            ["last7", "Last 7 days"],
-          ] as const
-        ).map(([key, label]) => (
+      <div className="space-y-2">
+        <Label htmlFor="cashier-sales-date">Date</Label>
+        <div className="flex items-center gap-1">
           <Button
-            key={key}
             type="button"
-            size="sm"
-            variant={preset === key ? "default" : "outline"}
-            onClick={() => setPreset(key)}
+            variant="outline"
+            size="icon"
+            aria-label="Previous date"
+            onClick={() => setDate(shiftDateInput(date, -1))}
           >
-            {label}
+            <ChevronLeft />
           </Button>
-        ))}
+          <Input
+            id="cashier-sales-date"
+            type="date"
+            value={date}
+            max={toDateInputValue()}
+            onChange={(e) => setDate(e.target.value || date)}
+            className="h-8 flex-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Next date"
+            disabled={date >= toDateInputValue()}
+            onClick={() => setDate(shiftDateInput(date, 1))}
+          >
+            <ChevronRight />
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Revenue</CardDescription>
-            <CardTitle className="text-xl tabular-nums">
-              {formatCurrency(totals.revenue)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Receipts</CardDescription>
-            <CardTitle className="text-xl tabular-nums">
-              {totals.receipts}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Items sold</CardDescription>
-            <CardTitle className="text-xl tabular-nums">
-              {totals.itemsSold}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading…
+        </div>
+      ) : (
+        <CashSummaryCard summary={summary} />
+      )}
 
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Receipts</CardTitle>
           <CardDescription>
-            {fromDate === toDate
-              ? formatDate(new Date(`${fromDate}T12:00:00`))
-              : `${fromDate} → ${toDate}`}
+            {total} receipt{total === 1 ? "" : "s"} · {formatDateInputLabel(date)}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -178,17 +187,13 @@ export default function CashierSalesPage() {
             </div>
           ) : sales.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No receipts in this period.
+              No receipts on this day.
             </p>
           ) : (
             <>
-              {/* Mobile cards */}
               <ul className="space-y-3 md:hidden">
                 {pagedItems.map((sale) => (
-                  <li
-                    key={sale.id}
-                    className="rounded-lg border px-3 py-3"
-                  >
+                  <li key={sale.id} className="rounded-lg border px-3 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-1">
                         <p className="text-sm font-medium">
@@ -228,7 +233,6 @@ export default function CashierSalesPage() {
                 ))}
               </ul>
 
-              {/* Desktop table */}
               <div className="hidden overflow-x-auto rounded-md border md:block">
                 <Table>
                   <TableHeader>

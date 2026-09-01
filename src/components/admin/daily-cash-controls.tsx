@@ -14,11 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  addDailyCashAdd,
-  deleteDailyCashAdd,
-  saveDailyCashAmounts,
-} from "@/lib/firestore/daily-cash";
+import { addDailyCashAdd, deleteDailyCashAdd } from "@/lib/firestore/daily-cash";
 import {
   addDailyExpense,
   deleteDailyExpense,
@@ -96,8 +92,6 @@ export function DailyCashExpenseControls({
   expenses,
   cashRecord,
   summary,
-  openingCashText,
-  onOpeningCashTextChange,
   onReload,
 }: {
   branchId: string | null;
@@ -106,8 +100,6 @@ export function DailyCashExpenseControls({
   expenses: DailyExpense[];
   cashRecord: DailyCashRecord | null;
   summary: DailySalesReportSummary;
-  openingCashText: string;
-  onOpeningCashTextChange: (value: string) => void;
   onReload: () => Promise<void>;
 }) {
   const user = useAuthStore((s) => s.user);
@@ -118,7 +110,6 @@ export function DailyCashExpenseControls({
   const [cashAddNote, setCashAddNote] = useState("");
   const [cashAddAmountText, setCashAddAmountText] = useState("");
   const [savingExpense, setSavingExpense] = useState(false);
-  const [savingCashAmounts, setSavingCashAmounts] = useState(false);
   const [savingCashAdd, setSavingCashAdd] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingCashAddId, setDeletingCashAddId] = useState<string | null>(
@@ -175,36 +166,6 @@ export function DailyCashExpenseControls({
       toast.error("Failed to remove expense");
     } finally {
       setDeletingId(null);
-    }
-  };
-
-  const handleSaveCashAmounts = async () => {
-    if (!branchId || !user) return;
-    const opening = parseMoneyInput(openingCashText);
-    if (openingCashText.trim() !== "" && (opening == null || opening < 0)) {
-      toast.error("Enter a valid opening cash amount");
-      return;
-    }
-
-    setSavingCashAmounts(true);
-    try {
-      await saveDailyCashAmounts({
-        branchId,
-        branchName,
-        date,
-        openingCash: opening ?? 0,
-        createdBy: user.uid,
-        createdByName: user.displayName,
-      });
-      toast.success("Opening cash saved");
-      await onReload();
-    } catch (error) {
-      console.error(error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to save opening cash"
-      );
-    } finally {
-      setSavingCashAmounts(false);
     }
   };
 
@@ -356,45 +317,15 @@ export function DailyCashExpenseControls({
           <DialogHeader>
             <DialogTitle>Set daily cash record</DialogTitle>
             <DialogDescription>
-              Set opening cash and add extra cash for this branch and day.
+              Add extra cash for this branch and day.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="opening-cash">Opening cash</Label>
-                <Input
-                  id="opening-cash"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  className="tabular-nums"
-                  value={openingCashText}
-                  onChange={(e) =>
-                    setMoneyText(e.target.value, onOpeningCashTextChange)
-                  }
-                  disabled={savingCashAmounts || !canAct}
-                />
+            <div className="space-y-1.5">
+              <Label>Closing cash</Label>
+              <div className="flex h-9 items-center rounded-lg border border-input bg-muted/40 px-2.5 text-sm font-medium tabular-nums">
+                {formatCurrency(summary.closingCash)}
               </div>
-              <div className="space-y-1.5">
-                <Label>Closing cash</Label>
-                <div className="flex h-9 items-center rounded-lg border border-input bg-muted/40 px-2.5 text-sm font-medium tabular-nums">
-                  {formatCurrency(summary.closingCash)}
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void handleSaveCashAmounts()}
-                disabled={savingCashAmounts || !canAct}
-              >
-                {savingCashAmounts ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : null}
-                Save opening cash
-              </Button>
             </div>
             <div className="space-y-2 border-t pt-4">
               <p className="text-sm font-medium">Cash added</p>

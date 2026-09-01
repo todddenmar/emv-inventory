@@ -29,7 +29,6 @@ export interface DailySalesReportSummary {
   salmonTotal: number;
   expensesTotal: number;
   netCashFromDay: number;
-  openingCash: number;
   cashAddsTotal: number;
   cashOnHand: number;
   closingCash: number;
@@ -221,7 +220,6 @@ export function sumDailyCashAdds(
 export function summarizeDailySalesReport(input: {
   sales: PosSale[];
   expenses: DailyExpense[];
-  openingCash: number;
   cashAddsTotal: number;
 }): DailySalesReportSummary {
   const totalSales = roundMoney(
@@ -244,15 +242,10 @@ export function summarizeDailySalesReport(input: {
       salmonTotal -
       expensesTotal
   );
-  const openingCash = Number.isFinite(input.openingCash)
-    ? roundMoney(Math.max(0, input.openingCash))
-    : 0;
   const cashAddsTotal = Number.isFinite(input.cashAddsTotal)
     ? roundMoney(Math.max(0, input.cashAddsTotal))
     : 0;
-  const cashOnHand = roundMoney(
-    openingCash + cashAddsTotal + netCashFromDay
-  );
+  const cashOnHand = roundMoney(cashAddsTotal + netCashFromDay);
 
   return {
     totalSales,
@@ -262,7 +255,6 @@ export function summarizeDailySalesReport(input: {
     salmonTotal,
     expensesTotal,
     netCashFromDay,
-    openingCash,
     cashAddsTotal,
     cashOnHand,
     closingCash: cashOnHand,
@@ -282,7 +274,6 @@ export function sumClosingCash(input: {
       const summary = summarizeDailySalesReport({
         sales: input.sales.filter((sale) => sale.branchId === branchId),
         expenses: input.expenses.filter((row) => row.branchId === branchId),
-        openingCash: record?.openingCash ?? 0,
         cashAddsTotal: sumDailyCashAdds(record?.additions ?? []),
       });
       return sum + summary.closingCash;

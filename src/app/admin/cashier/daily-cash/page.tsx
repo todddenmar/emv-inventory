@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CashSummaryCard } from "@/components/admin/cash-summary-card";
 import {
   DailyCashExpenseControls,
   NamedAmountList,
@@ -32,7 +33,6 @@ import { getDailyCashRecord } from "@/lib/firestore/daily-cash";
 import { getDailyExpenses } from "@/lib/firestore/daily-expenses";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { formatCurrency } from "@/lib/format";
-import { moneyInputText, parseMoneyInput } from "@/lib/pos-payments";
 import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
 export default function CashierDailyCashPage() {
@@ -42,7 +42,6 @@ export default function CashierDailyCashPage() {
   const [sales, setSales] = useState<PosSale[]>([]);
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [cashRecord, setCashRecord] = useState<DailyCashRecord | null>(null);
-  const [openingCashText, setOpeningCashText] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -60,7 +59,6 @@ export default function CashierDailyCashPage() {
       setSales([]);
       setExpenses([]);
       setCashRecord(null);
-      setOpeningCashText("");
       setLoading(false);
       return;
     }
@@ -80,7 +78,6 @@ export default function CashierDailyCashPage() {
       setSales(saleRows);
       setExpenses(expenseRows);
       setCashRecord(cashRow);
-      setOpeningCashText(cashRow ? moneyInputText(cashRow.openingCash) : "");
     } catch (error) {
       console.error(error);
       toast.error("Failed to load daily cash");
@@ -93,17 +90,15 @@ export default function CashierDailyCashPage() {
     void load();
   }, [load]);
 
-  const openingCash = parseMoneyInput(openingCashText) ?? 0;
   const cashAddsTotal = sumDailyCashAdds(cashRecord?.additions ?? []);
   const summary = useMemo(
     () =>
       summarizeDailySalesReport({
         sales,
         expenses,
-        openingCash,
         cashAddsTotal,
       }),
-    [sales, expenses, openingCash, cashAddsTotal]
+    [sales, expenses, cashAddsTotal]
   );
 
   if (!assignedBranchId) {
@@ -164,8 +159,6 @@ export default function CashierDailyCashPage() {
         expenses={expenses}
         cashRecord={cashRecord}
         summary={summary}
-        openingCashText={openingCashText}
-        onOpeningCashTextChange={setOpeningCashText}
         onReload={load}
       />
 
@@ -197,106 +190,9 @@ export default function CashierDailyCashPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Cash summary</CardTitle>
-              <CardDescription>
-                Closing cash is opening + added cash + net cash from the day.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <SummaryRow
-                label="TOTAL SALES"
-                value={formatCurrency(summary.totalSales)}
-              />
-              <SummaryRow
-                label="BT (Bank transfer)"
-                value={`− ${formatCurrency(summary.bankTransferTotal)}`}
-                muted
-              />
-              <SummaryRow
-                label="HC (Home Credit)"
-                value={`− ${formatCurrency(summary.homeCreditTotal)}`}
-                muted
-              />
-              <SummaryRow
-                label="SK (Skyro)"
-                value={`− ${formatCurrency(summary.skyroTotal)}`}
-                muted
-              />
-              <SummaryRow
-                label="SM (Salmon)"
-                value={`− ${formatCurrency(summary.salmonTotal)}`}
-                muted
-              />
-              <SummaryRow
-                label="EX (Expenses)"
-                value={`− ${formatCurrency(summary.expensesTotal)}`}
-                muted
-              />
-              <div className="border-t pt-3">
-                <SummaryRow
-                  label="Net cash from day"
-                  value={formatCurrency(summary.netCashFromDay)}
-                  strong
-                />
-              </div>
-              <SummaryRow
-                label="+ Opening cash"
-                value={formatCurrency(summary.openingCash)}
-              />
-              <SummaryRow
-                label="+ Cash added"
-                value={formatCurrency(summary.cashAddsTotal)}
-              />
-              <div className="rounded-md bg-muted/50 px-3 py-3">
-                <SummaryRow
-                  label="Closing cash"
-                  value={formatCurrency(summary.closingCash)}
-                  strong
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <CashSummaryCard summary={summary} />
         </>
       )}
-    </div>
-  );
-}
-
-function SummaryRow({
-  label,
-  value,
-  muted,
-  strong,
-}: {
-  label: string;
-  value: string;
-  muted?: boolean;
-  strong?: boolean;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span
-        className={
-          muted
-            ? "text-muted-foreground"
-            : strong
-              ? "font-semibold"
-              : "font-medium"
-        }
-      >
-        {label}
-      </span>
-      <span
-        className={
-          strong
-            ? "tabular-nums text-base font-semibold"
-            : "tabular-nums font-medium"
-        }
-      >
-        {value}
-      </span>
     </div>
   );
 }

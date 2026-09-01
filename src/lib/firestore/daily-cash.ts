@@ -4,7 +4,6 @@ import {
   getDoc,
   runTransaction,
   serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
@@ -41,51 +40,6 @@ export async function getDailyCashRecordsForBranches(
     branchIds.map((id) => getDailyCashRecord(id, date))
   );
   return rows.filter((row): row is DailyCashRecord => row != null);
-}
-
-export async function saveDailyCashAmounts(input: {
-  branchId: string;
-  branchName: string;
-  date: string;
-  openingCash: number;
-  createdBy: string;
-  createdByName?: string | null;
-}): Promise<void> {
-  const openingCash = roundMoney(Math.max(0, input.openingCash));
-  if (!Number.isFinite(openingCash)) {
-    throw new Error("Opening cash must be a valid amount");
-  }
-
-  const ref = doc(
-    getClientDb(),
-    COLLECTIONS.dailyCashRecords,
-    dailyCashRecordId(input.branchId, input.date)
-  );
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    await setDoc(
-      ref,
-      {
-        openingCash,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-    return;
-  }
-
-  await setDoc(ref, {
-    branchId: input.branchId,
-    branchName: input.branchName,
-    date: input.date,
-    openingCash,
-    closingCash: null,
-    additions: [],
-    createdBy: input.createdBy,
-    createdByName: input.createdByName ?? null,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
 }
 
 export async function addDailyCashAdd(input: {
