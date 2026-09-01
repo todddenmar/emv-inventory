@@ -1,3 +1,4 @@
+import { sumTenderAmount } from "@/lib/daily-sales-report";
 import {
   eachDateInRange,
   eachMonthInRange,
@@ -53,7 +54,7 @@ export interface SalesStaffRow {
   receipts: number;
   revenue: number;
   itemsSold: number;
-  avgTicket: number;
+  cashTotal: number;
 }
 
 export interface StockMovementSummary {
@@ -181,6 +182,10 @@ export function topProducts(
     .slice(0, limit);
 }
 
+function cashTenderFromSale(sale: PosSale): number {
+  return sumTenderAmount([sale], "cash");
+}
+
 export function salesByStaff(sales: PosSale[]): SalesStaffRow[] {
   const map = new Map<string, SalesStaffRow>();
 
@@ -192,20 +197,16 @@ export function salesByStaff(sales: PosSale[]): SalesStaffRow[] {
       receipts: 0,
       revenue: 0,
       itemsSold: 0,
-      avgTicket: 0,
+      cashTotal: 0,
     };
     existing.receipts += 1;
     existing.revenue += sale.total;
     existing.itemsSold += sale.itemCount;
+    existing.cashTotal += cashTenderFromSale(sale);
     map.set(key, existing);
   }
 
-  return [...map.values()]
-    .map((row) => ({
-      ...row,
-      avgTicket: row.receipts > 0 ? row.revenue / row.receipts : 0,
-    }))
-    .sort((a, b) => b.revenue - a.revenue);
+  return [...map.values()].sort((a, b) => b.revenue - a.revenue);
 }
 
 export function summarizeStockMovements(

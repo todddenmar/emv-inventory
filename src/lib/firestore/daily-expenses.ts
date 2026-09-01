@@ -49,6 +49,17 @@ export async function getDailyExpenses(options: {
   }
 }
 
+export async function getDailyExpensesForBranches(
+  branchIds: string[],
+  date: string
+): Promise<DailyExpense[]> {
+  if (branchIds.length === 0) return [];
+  const lists = await Promise.all(
+    branchIds.map((branchId) => getDailyExpenses({ branchId, date }))
+  );
+  return lists.flat();
+}
+
 export async function addDailyExpense(input: {
   branchId: string;
   branchName: string;

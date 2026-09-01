@@ -32,6 +32,17 @@ export async function getDailyCashRecord(
   return snap.exists() ? snap.data() : null;
 }
 
+export async function getDailyCashRecordsForBranches(
+  branchIds: string[],
+  date: string
+): Promise<DailyCashRecord[]> {
+  if (branchIds.length === 0) return [];
+  const rows = await Promise.all(
+    branchIds.map((id) => getDailyCashRecord(id, date))
+  );
+  return rows.filter((row): row is DailyCashRecord => row != null);
+}
+
 export async function saveDailyCashAmounts(input: {
   branchId: string;
   branchName: string;

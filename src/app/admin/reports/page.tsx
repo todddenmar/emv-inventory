@@ -56,6 +56,9 @@ import {
   getInventoryLogs,
   inventoryLogReasonLabel,
 } from "@/lib/firestore/inventory-logs";
+import { sumClosingCash } from "@/lib/daily-sales-report";
+import { getDailyCashRecordsForBranches } from "@/lib/firestore/daily-cash";
+import { getDailyExpensesForBranches } from "@/lib/firestore/daily-expenses";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
@@ -230,6 +233,8 @@ export default function AdminReportsPage() {
   const [sales, setSales] = useState<PosSale[]>([]);
   const [prevSales, setPrevSales] = useState<PosSale[]>([]);
   const [logs, setLogs] = useState<InventoryLog[]>([]);
+  const [closingCash, setClosingCash] = useState(0);
+  const [prevClosingCash, setPrevClosingCash] = useState(0);
   const [productPage, setProductPage] = useState(1);
   const [staffPage, setStaffPage] = useState(1);
   const [movementPage, setMovementPage] = useState(1);
@@ -243,6 +248,11 @@ export default function AdminReportsPage() {
       ? null
       : selectedBranchId
     : assignedBranchId;
+
+  const cashBranchIds = useMemo(() => {
+    if (scopeBranchId) return [scopeBranchId];
+    return branches.map((branch) => branch.id);
+  }, [branches, scopeBranchId]);
 
   const effectiveFrom = fromDate;
   const effectiveTo = mode === "day" ? fromDate : toDate;
@@ -267,10 +277,12 @@ export default function AdminReportsPage() {
   }, [canViewAllBranches, assignedBranchId]);
 
   const load = useCallback(async () => {
-    if (!canViewAllBranches && !assignedBranchId) {
+    if ((!canViewAllBranches && !assignedBranchId) || cashBranchIds.length === 0) {
       setSales([]);
       setPrevSales([]);
       setLogs([]);
+      setClosingCash(0);
+      setPrevClosingCash(0);
       setLoading(false);
       return;
     }
@@ -286,7 +298,17 @@ export default function AdminReportsPage() {
     try {
       const channelFilter =
         selectedSaleChannel === "all" ? null : selectedSaleChannel;
-      const [currentSales, priorSales, stockLogs] = await Promise.all([
+      const [
+        currentSales,
+        priorSales,
+        stockLogs,
+        endDaySales,
+        prevEndDaySales,
+        cashRecords,
+        prevCashRecords,
+        expenses,
+        prevExpenses,
+      ] = await Promise.all([
         getPosSales({
           branchId: scopeBranchId,
           fromDate: effectiveFrom,
@@ -307,10 +329,44 @@ export default function AdminReportsPage() {
           toDate: effectiveTo,
           max: 2000,
         }),
+        getPosSales({
+          branchId: scopeBranchId,
+          fromDate: effectiveTo,
+          toDate: effectiveTo,
+          max: 2000,
+        }),
+        getPosSales({
+          branchId: scopeBranchId,
+          fromDate: previous.toDate,
+          toDate: previous.toDate,
+          max: 2000,
+        }),
+        getDailyCashRecordsForBranches(cashBranchIds, effectiveTo),
+        getDailyCashRecordsForBranches(cashBranchIds, previous.toDate),
+        getDailyExpensesForBranches(cashBranchIds, effectiveTo),
+        getDailyExpensesForBranches(cashBranchIds, previous.toDate),
       ]);
+      const inCashScope = (rows: PosSale[]) =>
+        rows.filter((sale) => cashBranchIds.includes(sale.branchId));
       setSales(currentSales);
       setPrevSales(priorSales);
       setLogs(stockLogs);
+      setClosingCash(
+        sumClosingCash({
+          branchIds: cashBranchIds,
+          sales: inCashScope(endDaySales),
+          expenses,
+          cashRecords,
+        })
+      );
+      setPrevClosingCash(
+        sumClosingCash({
+          branchIds: cashBranchIds,
+          sales: inCashScope(prevEndDaySales),
+          expenses: prevExpenses,
+          cashRecords: prevCashRecords,
+        })
+      );
     } catch (error) {
       console.error(error);
       toast.error("Failed to load reports");
@@ -319,6 +375,7 @@ export default function AdminReportsPage() {
     }
   }, [
     assignedBranchId,
+    cashBranchIds,
     effectiveFrom,
     effectiveTo,
     canViewAllBranches,
@@ -677,10 +734,10 @@ export default function AdminReportsPage() {
               previous={prevTotals.itemsSold}
             />
             <KpiCard
-              label="Average ticket"
-              value={formatCurrency(totals.avgTicket)}
-              current={totals.avgTicket}
-              previous={prevTotals.avgTicket}
+              label="Closing cash"
+              value={formatCurrency(closingCash)}
+              current={closingCash}
+              previous={prevClosingCash}
             />
           </div>
 
@@ -846,7 +903,7 @@ export default function AdminReportsPage() {
                         <TableRow>
                           <TableHead>Staff</TableHead>
                           <TableHead className="text-right">Receipts</TableHead>
-                          <TableHead className="text-right">Avg ticket</TableHead>
+                          <TableHead className="text-right">Cash</TableHead>
                           <TableHead className="text-right">Revenue</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -860,7 +917,7 @@ export default function AdminReportsPage() {
                               {row.receipts}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatCurrency(row.avgTicket)}
+                              {formatCurrency(row.cashTotal)}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {formatCurrency(row.revenue)}

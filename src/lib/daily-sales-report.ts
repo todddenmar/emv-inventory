@@ -4,6 +4,7 @@ import {
   tenderMethodLabel,
 } from "@/lib/pos-payments";
 import type {
+  DailyCashRecord,
   DailyExpense,
   PosPaymentKind,
   PosSale,
@@ -266,4 +267,25 @@ export function summarizeDailySalesReport(input: {
     cashOnHand,
     closingCash: cashOnHand,
   };
+}
+
+export function sumClosingCash(input: {
+  branchIds: string[];
+  sales: PosSale[];
+  expenses: DailyExpense[];
+  cashRecords: DailyCashRecord[];
+}): number {
+  if (input.branchIds.length === 0) return 0;
+  return roundMoney(
+    input.branchIds.reduce((sum, branchId) => {
+      const record = input.cashRecords.find((row) => row.branchId === branchId);
+      const summary = summarizeDailySalesReport({
+        sales: input.sales.filter((sale) => sale.branchId === branchId),
+        expenses: input.expenses.filter((row) => row.branchId === branchId),
+        openingCash: record?.openingCash ?? 0,
+        cashAddsTotal: sumDailyCashAdds(record?.additions ?? []),
+      });
+      return sum + summary.closingCash;
+    }, 0)
+  );
 }
