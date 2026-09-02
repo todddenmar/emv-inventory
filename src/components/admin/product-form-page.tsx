@@ -32,12 +32,21 @@ import {
 } from "@/components/ui/select";
 import { CategoryMultiSelect } from "@/components/admin/category-multi-select";
 import { ProductOptionsEditor } from "@/components/admin/product-options-editor";
-import { ProductVariantsEditor } from "@/components/admin/product-variants-editor";
+import {
+  DEFAULT_PRICE_SCOPE,
+  ProductVariantsEditor,
+  type BranchPriceOverrides,
+} from "@/components/admin/product-variants-editor";
 import {
   ProductImageGallery,
   type GalleryItem,
 } from "@/components/admin/product-image-gallery";
 import { getCategories } from "@/lib/firestore/categories";
+import { getBranches } from "@/lib/firestore/branches";
+import {
+  getInventoryForProduct,
+  setBranchVariantPrices,
+} from "@/lib/firestore/inventory";
 import { createVendor, getVendors } from "@/lib/firestore/vendors";
 import {
   getProduct,
@@ -58,6 +67,7 @@ import { parseSpecsText } from "@/lib/specs";
 import { useSlugField } from "@/hooks/use-slug-field";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
+  Branch,
   Category,
   Product,
   ProductImage,
@@ -91,6 +101,7 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [productType, setProductType] = useState("");
@@ -98,6 +109,8 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   const [vendorId, setVendorId] = useState<string | null>(null);
   const [options, setOptions] = useState<ProductOption[]>([]);
   const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [priceScope, setPriceScope] = useState(DEFAULT_PRICE_SCOPE);
+  const [branchPrices, setBranchPrices] = useState<BranchPriceOverrides>({});
   const [specsText, setSpecsText] = useState("");
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [thumbnailId, setThumbnailId] = useState<string | null>(null);
@@ -166,8 +179,14 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
   };
 
   useEffect(() => {
-    Promise.all([getProduct(productId), getCategories(), getVendors()])
-      .then(([loaded, cats, vendorList]) => {
+    Promise.all([
+      getProduct(productId),
+      getCategories(),
+      getVendors(),
+      getBranches(true),
+      getInventoryForProduct(productId),
+    ])
+      .then(([loaded, cats, vendorList, branchList, inventory]) => {
         if (!loaded) {
           toast.error("Product not found");
           router.replace("/admin/products");
@@ -176,6 +195,18 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
         setProduct(loaded);
         setCategories(cats);
         setVendors(vendorList);
+        setBranches(branchList);
+        const overrides: BranchPriceOverrides = {};
+        for (const row of inventory) {
+          if (row.cashPrice == null && row.retailPrice == null) continue;
+          const byVariant = overrides[row.branchId] ?? {};
+          byVariant[row.variantId] = {
+            cashPrice: row.cashPrice,
+            retailPrice: row.retailPrice,
+          };
+          overrides[row.branchId] = byVariant;
+        }
+        setBranchPrices(overrides);
         form.reset({
           name: loaded.name,
         });
@@ -315,6 +346,27 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
             }
           : undefined
       );
+
+      const variantIds = new Set(variants.map((variant) => variant.id));
+      const priceWrites: Array<Promise<void>> = [];
+      for (const [branchId, byVariant] of Object.entries(branchPrices)) {
+        for (const [variantId, prices] of Object.entries(byVariant)) {
+          if (!variantIds.has(variantId)) continue;
+          priceWrites.push(
+            setBranchVariantPrices({
+              branchId,
+              productId,
+              variantId,
+              cashPrice: prices.cashPrice,
+              retailPrice: prices.retailPrice,
+            })
+          );
+        }
+      }
+      const chunkSize = 40;
+      for (let i = 0; i < priceWrites.length; i += chunkSize) {
+        await Promise.all(priceWrites.slice(i, i + chunkSize));
+      }
 
       if (saveOptions.publish) {
         await publishProduct(productId);
@@ -543,6 +595,26 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           images={galleryImages}
           onChange={setVariants}
           disabled={saving || publishing}
+          branches={branches}
+          priceScope={priceScope}
+          onPriceScopeChange={setPriceScope}
+          branchPrices={branchPrices}
+          onBranchPriceChange={(variantId, patch) => {
+            if (priceScope === DEFAULT_PRICE_SCOPE) return;
+            setBranchPrices((prev) => {
+              const current = prev[priceScope]?.[variantId] ?? {
+                cashPrice: null,
+                retailPrice: null,
+              };
+              return {
+                ...prev,
+                [priceScope]: {
+                  ...(prev[priceScope] ?? {}),
+                  [variantId]: { ...current, ...patch },
+                },
+              };
+            });
+          }}
         />
 
         <div className="space-y-2">

@@ -43,6 +43,10 @@ export interface BranchInventory {
   lowStockThreshold: number;
   /** When false, variant is hidden from inventory for this branch. Missing legacy docs default to true. */
   isSelling: boolean;
+  /** Branch cash override. Null/missing uses the catalog variant price. */
+  cashPrice: number | null;
+  /** Branch retail override. Null/missing uses the catalog variant retail price. */
+  retailPrice: number | null;
   updatedAt: Date;
 }
 

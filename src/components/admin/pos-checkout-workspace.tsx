@@ -285,6 +285,7 @@ export function PosCheckoutWorkspace({
               productId: line.productId,
               variantId: line.variantId,
               retailPrice: line.retailPrice as number,
+              branchId: draftMeta.branchId,
             }));
 
       if (retailToPersist.length > 0) {

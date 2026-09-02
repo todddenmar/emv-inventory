@@ -12,6 +12,8 @@ import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { branchInventoryConverter } from "@/lib/firestore/converters";
 import { defaultVariantId } from "@/lib/product-variants";
+import { normalizeRetailPrice } from "@/lib/product-pricing";
+import { roundMoney } from "@/lib/pos-payments";
 import type { BranchInventory, InventoryLogReason, Product } from "@/types";
 
 export function inventoryDocId(branchId: string, variantId: string): string {
@@ -170,6 +172,8 @@ async function applyStockDelta(
         stock: newStock,
         lowStockThreshold: threshold,
         isSelling: true,
+        cashPrice: null,
+        retailPrice: null,
         updatedAt: serverTimestamp(),
       });
     }
@@ -235,6 +239,8 @@ export async function setBranchStockWithLog(
           stock,
           lowStockThreshold,
           isSelling: true,
+          cashPrice: null,
+          retailPrice: null,
           updatedAt: serverTimestamp(),
         });
       }
@@ -293,6 +299,86 @@ export function buildVariantStockMap(
   return Object.fromEntries(inventory.map((i) => [i.variantId, i.stock]));
 }
 
+export async function getInventoryForProduct(
+  productId: string
+): Promise<BranchInventory[]> {
+  const snapshot = await getDocs(
+    query(
+      collection(getClientDb(), COLLECTIONS.branchInventory).withConverter(
+        branchInventoryConverter
+      ),
+      where("productId", "==", productId)
+    )
+  );
+  return snapshot.docs.map((d) => {
+    const data = d.data();
+    return {
+      ...data,
+      variantId: resolveVariantId(
+        d.data() as unknown as Record<string, unknown>,
+        d.id,
+        data.productId
+      ),
+    };
+  });
+}
+
+export async function setBranchVariantPrices(input: {
+  branchId: string;
+  productId: string;
+  variantId: string;
+  cashPrice?: number | null;
+  retailPrice?: number | null;
+}): Promise<void> {
+  const db = getClientDb();
+  const invId = inventoryDocId(input.branchId, input.variantId);
+  const invRef = doc(db, COLLECTIONS.branchInventory, invId).withConverter(
+    branchInventoryConverter
+  );
+
+  const patch: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  };
+  if (input.cashPrice !== undefined) {
+    patch.cashPrice =
+      input.cashPrice == null || !Number.isFinite(input.cashPrice)
+        ? null
+        : roundMoney(Math.max(0, input.cashPrice));
+  }
+  if (input.retailPrice !== undefined) {
+    patch.retailPrice = normalizeRetailPrice(input.retailPrice);
+  }
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(invRef);
+    if (snap.exists()) {
+      tx.update(invRef, patch);
+      return;
+    }
+
+    tx.set(invRef, {
+      id: invId,
+      branchId: input.branchId,
+      productId: input.productId,
+      variantId: input.variantId,
+      stock: 0,
+      lowStockThreshold: 5,
+      isSelling: false,
+      cashPrice:
+        input.cashPrice === undefined
+          ? null
+          : input.cashPrice == null || !Number.isFinite(input.cashPrice)
+            ? null
+            : roundMoney(Math.max(0, input.cashPrice)),
+      retailPrice:
+        input.retailPrice === undefined
+          ? null
+          : normalizeRetailPrice(input.retailPrice),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
 export async function setVariantSelling(
   branchId: string,
   productId: string,
@@ -323,6 +409,8 @@ export async function setVariantSelling(
       stock: 0,
       lowStockThreshold: 5,
       isSelling,
+      cashPrice: null,
+      retailPrice: null,
       updatedAt: serverTimestamp(),
     });
   });

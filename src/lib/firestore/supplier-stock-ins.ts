@@ -106,6 +106,8 @@ export async function completeSupplierStockIn(
           stock: row.newStock,
           lowStockThreshold: row.threshold,
           isSelling: true,
+          cashPrice: null,
+          retailPrice: null,
           updatedAt: serverTimestamp(),
         });
       }

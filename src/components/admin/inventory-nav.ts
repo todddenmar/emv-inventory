@@ -1,6 +1,7 @@
 import {
   ArrowRightLeft,
   History,
+  LayoutGrid,
   PackagePlus,
   Scale,
   Warehouse,
@@ -22,6 +23,13 @@ export const inventoryNavItems: InventoryNavItem[] = [
     label: "Stock levels",
     icon: Warehouse,
     description: "View and adjust branch stock",
+    ownerVisible: true,
+  },
+  {
+    href: "/admin/inventory/remaining-stocks",
+    label: "Remaining stocks",
+    icon: LayoutGrid,
+    description: "Variant stock across all branches",
     ownerVisible: true,
   },
   {

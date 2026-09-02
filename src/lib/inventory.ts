@@ -5,6 +5,7 @@ import type {
   ProductVariant,
 } from "@/types";
 import { defaultVariantId } from "@/lib/product-variants";
+import { resolveVariantPrices } from "@/lib/product-pricing";
 
 export interface VariantWithStock extends ProductVariant {
   productId: string;
@@ -83,8 +84,11 @@ export function mergeVariantsWithInventory(
     );
     for (const variant of product.variants) {
       const entry = resolveInventoryForVariant(product, variant, inventory);
+      const prices = resolveVariantPrices(variant, entry ?? null);
       rows.push({
         ...variant,
+        price: prices.price,
+        retailPrice: prices.retailPrice,
         productId: product.id,
         productName: product.name,
         categoryIds: product.categoryIds,

@@ -19,15 +19,22 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 import { formatVariantLabel } from "@/lib/product-variants";
 import {
   normalizeRetailPrice,
   normalizeWholesalePrice,
 } from "@/lib/product-pricing";
 import { moneyInputText, parseMoneyInput } from "@/lib/pos-payments";
-import type { ProductImage, ProductOption, ProductVariant } from "@/types";
+import type { Branch, ProductImage, ProductOption, ProductVariant } from "@/types";
 
 const moneyInputClass = "h-9 min-w-[7.5rem] tabular-nums";
+export const DEFAULT_PRICE_SCOPE = "default";
+
+export type BranchPriceOverrides = Record<
+  string,
+  Record<string, { cashPrice: number | null; retailPrice: number | null }>
+>;
 
 interface ProductVariantsEditorProps {
   variants: ProductVariant[];
@@ -35,6 +42,14 @@ interface ProductVariantsEditorProps {
   images: ProductImage[];
   onChange: (variants: ProductVariant[]) => void;
   disabled?: boolean;
+  branches?: Branch[];
+  priceScope?: string;
+  onPriceScopeChange?: (scope: string) => void;
+  branchPrices?: BranchPriceOverrides;
+  onBranchPriceChange?: (
+    variantId: string,
+    patch: { cashPrice?: number | null; retailPrice?: number | null }
+  ) => void;
 }
 
 export function ProductVariantsEditor({
@@ -43,7 +58,15 @@ export function ProductVariantsEditor({
   images,
   onChange,
   disabled,
+  branches = [],
+  priceScope = DEFAULT_PRICE_SCOPE,
+  onPriceScopeChange,
+  branchPrices = {},
+  onBranchPriceChange,
 }: ProductVariantsEditorProps) {
+  const isDefaultScope = priceScope === DEFAULT_PRICE_SCOPE;
+  const catalogOnly = !isDefaultScope;
+
   const updateVariant = (id: string, patch: Partial<ProductVariant>) => {
     onChange(
       variants.map((variant) =>
@@ -52,18 +75,64 @@ export function ProductVariantsEditor({
     );
   };
 
+  const overrideFor = (variantId: string) =>
+    isDefaultScope ? undefined : branchPrices[priceScope]?.[variantId];
+
   return (
     <div className="space-y-3">
-      <div>
-        <Label>Variants</Label>
-        <p className="text-xs text-muted-foreground">
-          Set SKU, cash, retail, and optional wholesale pricing, and optional image
-          per variant.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <Label>Variants</Label>
+          <p className="text-xs text-muted-foreground">
+            {isDefaultScope
+              ? "Default cash and retail apply to every branch unless you pick a branch and override them."
+              : "Empty cash or retail uses the default price. Wholesale stays on the catalog."}
+          </p>
+        </div>
+        {onPriceScopeChange ? (
+          <div className="w-full min-w-0 sm:w-64">
+            <Label htmlFor="variant-price-scope" className="text-xs">
+              Prices for
+            </Label>
+            <Select
+              value={priceScope}
+              onValueChange={(value) =>
+                onPriceScopeChange(value || DEFAULT_PRICE_SCOPE)
+              }
+              disabled={disabled}
+            >
+              <SelectTrigger id="variant-price-scope" className="mt-1.5 h-9">
+                <SelectValue>
+                  {(value) => {
+                    if (!value || value === DEFAULT_PRICE_SCOPE) {
+                      return "Default (all branches)";
+                    }
+                    return (
+                      branches.find((branch) => branch.id === value)?.name ??
+                      "Branch"
+                    );
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={DEFAULT_PRICE_SCOPE}>
+                  Default (all branches)
+                </SelectItem>
+                {branches.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </div>
 
       <div className="space-y-3 lg:hidden">
-        {variants.map((variant) => (
+        {variants.map((variant) => {
+          const override = overrideFor(variant.id);
+          return (
           <div
             key={variant.id}
             className="space-y-3 rounded-md border p-3"
@@ -76,27 +145,59 @@ export function ProductVariantsEditor({
                 <Label className="text-xs text-muted-foreground">SKU</Label>
                 <SkuField
                   variant={variant}
-                  disabled={disabled}
+                  disabled={disabled || catalogOnly}
                   onChange={(sku) => updateVariant(variant.id, { sku })}
                 />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Cash</Label>
-                <CashField
-                  variant={variant}
-                  disabled={disabled}
-                  onChange={(price) => updateVariant(variant.id, { price })}
-                />
+                {isDefaultScope ? (
+                  <CashField
+                    variant={variant}
+                    disabled={disabled}
+                    onChange={(price) => updateVariant(variant.id, { price })}
+                  />
+                ) : (
+                  <VariantMoneyField
+                    variantId={`${priceScope}-${variant.id}-cash`}
+                    amount={override?.cashPrice ?? null}
+                    optional
+                    disabled={disabled}
+                    placeholder={`Default ${formatCurrency(variant.price)}`}
+                    onCommit={(value) =>
+                      onBranchPriceChange?.(variant.id, { cashPrice: value })
+                    }
+                  />
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Retail</Label>
-                <RetailField
-                  variant={variant}
-                  disabled={disabled}
-                  onChange={(retailPrice) =>
-                    updateVariant(variant.id, { retailPrice })
-                  }
-                />
+                {isDefaultScope ? (
+                  <RetailField
+                    variant={variant}
+                    disabled={disabled}
+                    onChange={(retailPrice) =>
+                      updateVariant(variant.id, { retailPrice })
+                    }
+                  />
+                ) : (
+                  <VariantMoneyField
+                    variantId={`${priceScope}-${variant.id}-retail`}
+                    amount={override?.retailPrice ?? null}
+                    optional
+                    disabled={disabled}
+                    placeholder={
+                      variant.retailPrice != null
+                        ? `Default ${formatCurrency(variant.retailPrice)}`
+                        : "Default (none)"
+                    }
+                    onCommit={(value) =>
+                      onBranchPriceChange?.(variant.id, {
+                        retailPrice: normalizeRetailPrice(value),
+                      })
+                    }
+                  />
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">
@@ -104,7 +205,7 @@ export function ProductVariantsEditor({
                 </Label>
                 <WholesaleField
                   variant={variant}
-                  disabled={disabled}
+                  disabled={disabled || catalogOnly}
                   onChange={(wholesalePrice) =>
                     updateVariant(variant.id, { wholesalePrice })
                   }
@@ -115,13 +216,14 @@ export function ProductVariantsEditor({
                 <VariantImageField
                   variant={variant}
                   images={images}
-                  disabled={disabled}
+                  disabled={disabled || catalogOnly}
                   onChange={(imageId) => updateVariant(variant.id, { imageId })}
                 />
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="hidden overflow-hidden rounded-md border lg:block">
@@ -137,7 +239,9 @@ export function ProductVariantsEditor({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {variants.map((variant) => (
+            {variants.map((variant) => {
+              const override = overrideFor(variant.id);
+              return (
               <TableRow key={variant.id}>
                 <TableCell className="font-medium whitespace-normal">
                   {formatVariantLabel(variant, options)}
@@ -145,30 +249,62 @@ export function ProductVariantsEditor({
                 <TableCell>
                   <SkuField
                     variant={variant}
-                    disabled={disabled}
+                    disabled={disabled || catalogOnly}
                     onChange={(sku) => updateVariant(variant.id, { sku })}
                   />
                 </TableCell>
                 <TableCell>
-                  <CashField
-                    variant={variant}
-                    disabled={disabled}
-                    onChange={(price) => updateVariant(variant.id, { price })}
-                  />
+                  {isDefaultScope ? (
+                    <CashField
+                      variant={variant}
+                      disabled={disabled}
+                      onChange={(price) => updateVariant(variant.id, { price })}
+                    />
+                  ) : (
+                    <VariantMoneyField
+                      variantId={`${priceScope}-${variant.id}-cash`}
+                      amount={override?.cashPrice ?? null}
+                      optional
+                      disabled={disabled}
+                      placeholder={`Default ${formatCurrency(variant.price)}`}
+                      onCommit={(value) =>
+                        onBranchPriceChange?.(variant.id, { cashPrice: value })
+                      }
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
-                  <RetailField
-                    variant={variant}
-                    disabled={disabled}
-                    onChange={(retailPrice) =>
-                      updateVariant(variant.id, { retailPrice })
-                    }
-                  />
+                  {isDefaultScope ? (
+                    <RetailField
+                      variant={variant}
+                      disabled={disabled}
+                      onChange={(retailPrice) =>
+                        updateVariant(variant.id, { retailPrice })
+                      }
+                    />
+                  ) : (
+                    <VariantMoneyField
+                      variantId={`${priceScope}-${variant.id}-retail`}
+                      amount={override?.retailPrice ?? null}
+                      optional
+                      disabled={disabled}
+                      placeholder={
+                        variant.retailPrice != null
+                          ? `Default ${formatCurrency(variant.retailPrice)}`
+                          : "Default (none)"
+                      }
+                      onCommit={(value) =>
+                        onBranchPriceChange?.(variant.id, {
+                          retailPrice: normalizeRetailPrice(value),
+                        })
+                      }
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
                   <WholesaleField
                     variant={variant}
-                    disabled={disabled}
+                    disabled={disabled || catalogOnly}
                     onChange={(wholesalePrice) =>
                       updateVariant(variant.id, { wholesalePrice })
                     }
@@ -178,14 +314,15 @@ export function ProductVariantsEditor({
                   <VariantImageField
                     variant={variant}
                     images={images}
-                    disabled={disabled}
+                    disabled={disabled || catalogOnly}
                     onChange={(imageId) =>
                       updateVariant(variant.id, { imageId })
                     }
                   />
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </div>

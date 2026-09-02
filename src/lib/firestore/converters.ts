@@ -46,6 +46,13 @@ function toDate(value: Timestamp | Date | undefined | null): Date {
   return value.toDate();
 }
 
+function optionalMoney(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  return amount;
+}
+
 export const categoryConverter: FirestoreDataConverter<Category> = {
   toFirestore(category: Category): DocumentData {
     return {
@@ -221,6 +228,8 @@ export const branchInventoryConverter: FirestoreDataConverter<BranchInventory> =
       stock: item.stock,
       lowStockThreshold: item.lowStockThreshold,
       isSelling: item.isSelling,
+      cashPrice: item.cashPrice,
+      retailPrice: item.retailPrice,
       updatedAt: item.updatedAt,
     };
   },
@@ -242,6 +251,8 @@ export const branchInventoryConverter: FirestoreDataConverter<BranchInventory> =
       lowStockThreshold: data.lowStockThreshold ?? 5,
       // Legacy docs without the field remain visible as selling.
       isSelling: data.isSelling !== false,
+      cashPrice: optionalMoney(data.cashPrice),
+      retailPrice: optionalMoney(data.retailPrice),
       updatedAt: toDate(data.updatedAt),
     };
   },

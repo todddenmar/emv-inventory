@@ -124,6 +124,8 @@ export async function applyBranchTransferInTransaction(
         stock: destNew,
         lowStockThreshold: row.destThreshold,
         isSelling: true,
+        cashPrice: null,
+        retailPrice: null,
         updatedAt: serverTimestamp(),
       });
     }

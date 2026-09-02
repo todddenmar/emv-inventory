@@ -1,4 +1,5 @@
 import type {
+  BranchInventory,
   PosPaymentMethod,
   PricePromotion,
   ProductVariant,
@@ -26,6 +27,24 @@ export function unitPriceForPaymentMethod(
 ): number | null {
   if (method === "cash") return variant.price;
   return normalizeRetailPrice(variant.retailPrice);
+}
+
+/** Catalog prices, with optional per-branch cash/retail overrides. */
+export function resolveVariantPrices(
+  variant: Pick<ProductVariant, "price" | "retailPrice">,
+  inventory?: Pick<BranchInventory, "cashPrice" | "retailPrice"> | null
+): { price: number; retailPrice: number | null } {
+  const cashOverride = inventory?.cashPrice;
+  const price =
+    cashOverride != null && Number.isFinite(cashOverride)
+      ? cashOverride
+      : variant.price;
+  const retailOverride = inventory?.retailPrice;
+  const retailPrice =
+    retailOverride != null
+      ? normalizeRetailPrice(retailOverride)
+      : normalizeRetailPrice(variant.retailPrice);
+  return { price, retailPrice };
 }
 
 export interface EffectiveSalePrices {

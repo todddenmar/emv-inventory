@@ -29,6 +29,7 @@ import {
 } from "@/lib/product-pricing";
 import { getDefaultVariant } from "@/lib/product-variants";
 import { roundMoney } from "@/lib/pos-payments";
+import { setBranchVariantPrices } from "@/lib/firestore/inventory";
 import type { Category, Product, ProductVariant } from "@/types";
 
 function productsRef(): CollectionReference<Product> {
@@ -292,41 +293,24 @@ export async function updateProduct(
   }
 }
 
-/** Persist retail prices entered at POS onto product variants. */
+/** Persist POS-entered retail as a branch override, not the catalog default. */
 export async function setVariantRetailPrices(
   updates: Array<{
     productId: string;
     variantId: string;
     retailPrice: number;
+    branchId: string;
   }>
 ): Promise<void> {
-  const byProduct = new Map<string, Array<{ variantId: string; retailPrice: number }>>();
-  for (const update of updates) {
-    const list = byProduct.get(update.productId) ?? [];
-    list.push({
-      variantId: update.variantId,
-      retailPrice: update.retailPrice,
-    });
-    byProduct.set(update.productId, list);
-  }
-
   await Promise.all(
-    [...byProduct.entries()].map(async ([productId, variantUpdates]) => {
-      const product = await getProduct(productId);
-      if (!product) return;
-
-      let changed = false;
-      const variants = product.variants.map((variant) => {
-        const match = variantUpdates.find((u) => u.variantId === variant.id);
-        if (!match) return variant;
-        if (variant.retailPrice === match.retailPrice) return variant;
-        changed = true;
-        return { ...variant, retailPrice: match.retailPrice };
-      });
-
-      if (!changed) return;
-      await updateProduct(productId, { variants });
-    })
+    updates.map((update) =>
+      setBranchVariantPrices({
+        branchId: update.branchId,
+        productId: update.productId,
+        variantId: update.variantId,
+        retailPrice: update.retailPrice,
+      })
+    )
   );
 }
 

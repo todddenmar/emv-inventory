@@ -34,7 +34,7 @@ export const DOC_TOC = [
     id: "inventory",
     label: "Inventory",
     keywords:
-      "inventory stock levels daily stock changes opening closing supplier stock in adjustment history transfers low stock",
+      "inventory stock levels remaining stocks daily stock changes opening closing supplier stock in adjustment history transfers low stock",
   },
   {
     id: "reports",
@@ -158,7 +158,7 @@ const ROLE_SCOPE_ROWS: {
   },
   {
     scope: "Stock levels",
-    note: "Owners can view only; they cannot edit quantities.",
+    note: "Owners can view stock levels and remaining stocks; they cannot edit quantities.",
     marks: ["yes", "yes", "view", "no"],
   },
   {
@@ -489,6 +489,14 @@ function DocsSections({
                   <td className="px-4 py-3 text-[#2a3140]">
                     See and edit quantity on hand per selling variant. Low-stock
                     warnings use each category’s threshold.
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-medium">Remaining stocks</td>
+                  <td className="px-4 py-3 text-[#2a3140]">
+                    Guide of current stock per variant across branches, grouped
+                    by category and product. Branches where a variant is not
+                    selling show Unassigned instead of 0.
                   </td>
                 </tr>
                 <tr>
