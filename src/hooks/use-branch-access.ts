@@ -34,5 +34,6 @@ export function useBranchAccess() {
     scopedBranchId,
     canAccessBranch,
     hasBranchAssignment: canViewAllBranches || !!assignedBranchId,
+    canManagePricePromotions: isElevatedAdmin || isOwner,
   };
 }

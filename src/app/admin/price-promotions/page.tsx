@@ -68,7 +68,7 @@ function statusBadgeVariant(
 }
 
 export default function AdminPricePromotionsPage() {
-  const { isElevatedAdmin } = useBranchAccess();
+  const { canManagePricePromotions } = useBranchAccess();
   const user = useAuthStore((s) => s.user);
   const [promotions, setPromotions] = useState<PricePromotion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,12 +128,12 @@ export default function AdminPricePromotionsPage() {
     }
   };
 
-  if (!isElevatedAdmin) {
+  if (!canManagePricePromotions) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only admins can manage price promotions.
+            Only admins and owners can manage price promotions.
           </p>
         </CardContent>
       </Card>

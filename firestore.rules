@@ -216,7 +216,7 @@ service cloud.firestore {
 
     match /physicalProductPriceLogs/{logId} {
       allow read: if isStaff();
-      allow create: if isElevatedAdmin();
+      allow create: if isElevatedAdmin() || isOwner();
       allow update, delete: if false;
     }
 
@@ -340,8 +340,8 @@ service cloud.firestore {
 
     match /physicalPricePromotions/{promotionId} {
       allow read: if isStaff();
-      allow create, update: if isElevatedAdmin();
-      allow delete: if isElevatedAdmin();
+      allow create, update: if isElevatedAdmin() || isOwner();
+      allow delete: if isElevatedAdmin() || isOwner();
     }
   }
 }

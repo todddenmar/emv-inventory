@@ -39,6 +39,7 @@ import type {
 import { migrateLegacyProductVariants, getDefaultVariant, defaultVariantId } from "@/lib/product-variants";
 import { specsToText } from "@/lib/specs";
 import { parseOptionalPosTenderMethod, parsePosTenderMethod } from "@/lib/pos-payments";
+import { parsePosItemCoverage } from "@/lib/pos-coverage";
 
 function toDate(value: Timestamp | Date | undefined | null): Date {
   if (!value) return new Date();
@@ -862,6 +863,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
           paymentAccount: primary?.paymentAccount ?? lineAccount,
           kind: primary?.kind ?? kind,
           note: primary?.note ?? note,
+          coverage: parsePosItemCoverage(item.coverage),
         };
       }),
       itemCount: data.itemCount ?? 0,

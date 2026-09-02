@@ -362,6 +362,9 @@ export interface PosSaleCustomer {
   address: string | null;
 }
 
+/** Whether this line is a regular sale, warranty, or replacement. */
+export type PosItemCoverage = "none" | "warranty" | "replacement";
+
 export interface PosSaleItem {
   productId: string;
   variantId: string;
@@ -382,6 +385,8 @@ export interface PosSaleItem {
   paymentAccount: PosSalePaymentAccount | null;
   kind: PosPaymentKind | null;
   note: string | null;
+  /** Regular sale when missing on legacy receipts. */
+  coverage: PosItemCoverage;
 }
 
 export interface PosSale {

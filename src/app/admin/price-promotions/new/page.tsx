@@ -51,7 +51,7 @@ type SaleDraft = Record<
 
 export default function NewPricePromotionPage() {
   const router = useRouter();
-  const { isElevatedAdmin } = useBranchAccess();
+  const { canManagePricePromotions } = useBranchAccess();
   const user = useAuthStore((s) => s.user);
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -258,12 +258,12 @@ export default function NewPricePromotionPage() {
     }
   };
 
-  if (!isElevatedAdmin) {
+  if (!canManagePricePromotions) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only admins can create price promotions.
+            Only admins and owners can create price promotions.
           </p>
         </CardContent>
       </Card>

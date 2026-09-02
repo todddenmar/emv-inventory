@@ -228,6 +228,14 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                     <TableCell className="font-medium">
                       <div>
                         <p>{item.productName}</p>
+                        {item.coverage === "warranty" ||
+                        item.coverage === "replacement" ? (
+                          <Badge variant="outline" className="mt-1">
+                            {item.coverage === "warranty"
+                              ? "Warranty"
+                              : "Replacement"}
+                          </Badge>
+                        ) : null}
                         {item.tenderMethod ||
                         (item.payments?.length ?? 0) > 0 ? (
                           <p className="text-xs font-normal">

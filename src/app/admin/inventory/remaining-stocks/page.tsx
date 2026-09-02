@@ -329,7 +329,7 @@ export default function RemainingStocksPage() {
                 }}
               >
                 <SelectTrigger size="sm" className="w-full sm:w-56">
-                  <SelectValue>
+                  <SelectValue placeholder="All groups">
                     {(value) => {
                       if (!value || value === "all") return "All groups";
                       return (
@@ -358,7 +358,7 @@ export default function RemainingStocksPage() {
                 }
               >
                 <SelectTrigger size="sm" className="w-full sm:w-56">
-                  <SelectValue>
+                  <SelectValue placeholder="All categories">
                     {(value) => {
                       if (!value || value === "all") return "All categories";
                       if (value === UNCATEGORIZED_CATEGORY_ID) {

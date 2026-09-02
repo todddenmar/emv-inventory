@@ -39,7 +39,7 @@ export default function PricePromotionDetailPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const { isElevatedAdmin } = useBranchAccess();
+  const { canManagePricePromotions } = useBranchAccess();
   const user = useAuthStore((s) => s.user);
   const [promo, setPromo] = useState<PricePromotion | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,12 +88,12 @@ export default function PricePromotionDetailPage({
     }
   };
 
-  if (!isElevatedAdmin) {
+  if (!canManagePricePromotions) {
     return (
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground">
-            Only admins can manage price promotions.
+            Only admins and owners can manage price promotions.
           </p>
         </CardContent>
       </Card>

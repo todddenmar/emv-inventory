@@ -28,7 +28,7 @@ export const DOC_TOC = [
     id: "selling",
     label: "Selling (POS)",
     keywords:
-      "pos wholesale shop cart checkout sale assortment voucher reseller freebie",
+      "pos wholesale shop cart checkout sale assortment voucher reseller freebie warranty replacement",
   },
   {
     id: "inventory",
@@ -183,7 +183,7 @@ const ROLE_SCOPE_ROWS: {
   },
   {
     scope: "Price promotions",
-    marks: ["yes", "yes", "no", "no"],
+    marks: ["yes", "yes", "yes", "no"],
   },
   {
     scope: "Products, categories, branches",
@@ -404,7 +404,7 @@ function DocsSections({
             <RoleCard
               role="Owner"
               home="/admin"
-              sees="Dashboard, sales reports, stock levels, and price-change history across all branches. View-only on inventory — no stock edits, POS, or settings."
+              sees="Dashboard, sales reports, stock levels, remaining stocks, price-change history, and price promotions across all branches. View-only on inventory quantities — no stock edits, POS, or most settings."
             />
             <RoleCard
               role="Cashier"
@@ -466,6 +466,10 @@ function DocsSections({
           <ul className="list-disc space-y-2 pl-5">
             <li>Only variants assigned to the branch assortment appear.</li>
             <li>Checkout writes a sale and reduces stock (logged as a sale).</li>
+            <li>
+              At checkout, mark each item as <strong>None</strong>,{" "}
+              <strong>Warranty</strong>, or <strong>Replacement</strong>.
+            </li>
             <li>
               Freebies, vouchers, resellers, and payment accounts are configured
               under Settings when your role allows it.

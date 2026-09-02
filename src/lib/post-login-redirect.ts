@@ -43,6 +43,12 @@ export function isOwnerAllowedPath(pathname: string): boolean {
   ) {
     return true;
   }
+  if (
+    pathname === "/admin/price-promotions" ||
+    pathname.startsWith("/admin/price-promotions/")
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -52,7 +58,8 @@ export function isOwnerNavHref(href: string): boolean {
     href === "/admin/reports" ||
     href === "/admin/inventory" ||
     href === "/admin/inventory/remaining-stocks" ||
-    href === "/admin/price-changes"
+    href === "/admin/price-changes" ||
+    href === "/admin/price-promotions"
   );
 }
 

@@ -22,6 +22,7 @@ import {
   isVoucherRedeemable,
 } from "@/lib/firestore/vouchers";
 import { formatCurrency } from "@/lib/format";
+import { parsePosItemCoverage } from "@/lib/pos-coverage";
 import {
   clearPosCheckoutDraft,
   draftAmountDue,
@@ -380,6 +381,7 @@ export function PosCheckoutWorkspace({
               paymentAccount: primary?.paymentAccount ?? null,
               kind: primary?.kind ?? null,
               note: primary?.note ?? null,
+              coverage: parsePosItemCoverage(line.coverage),
             });
           }
           return items;
