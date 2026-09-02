@@ -3,6 +3,7 @@ import type {
   PosCustomerDraft,
 } from "@/components/admin/pos-cart";
 import { ensureCartLinePaymentFields } from "@/lib/pos-payments";
+import { parsePosCustomerType } from "@/lib/pos-customer-type";
 import type {
   PosPaymentMethod,
   PosSaleChannel,
@@ -91,6 +92,7 @@ export function loadPosCheckoutDraft(
 
     return {
       ...parsed,
+      customerType: parsePosCustomerType(parsed.customerType),
       lines: parsed.lines.map((line) => ensureCartLinePaymentFields(line)),
     };
   } catch {

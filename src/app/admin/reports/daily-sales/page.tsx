@@ -277,7 +277,9 @@ export default function DailySalesReportPage() {
                         rows.map((row) => (
                           <TableRow key={row.key}>
                             <TableCell className="tabular-nums font-medium">
-                              {formatCurrency(row.amount)}
+                              {row.omitAmount
+                                ? "—"
+                                : formatCurrency(row.amount)}
                             </TableCell>
                             <TableCell>{row.itemLabel}</TableCell>
                             <TableCell>

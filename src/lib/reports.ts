@@ -6,6 +6,7 @@ import {
   toDateInputValue,
   toMonthKey,
 } from "@/lib/dates";
+import { isNonRevenueCustomerType } from "@/lib/pos-customer-type";
 import type {
   InventoryLog,
   InventoryLogReason,
@@ -70,8 +71,12 @@ export interface StockMovementSummary {
   netUnits: number;
 }
 
+function saleRevenue(sale: PosSale): number {
+  return isNonRevenueCustomerType(sale.customerType) ? 0 : sale.total;
+}
+
 export function summarizeSales(sales: PosSale[]): SalesTotals {
-  const revenue = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const revenue = sales.reduce((sum, sale) => sum + saleRevenue(sale), 0);
   const receipts = sales.length;
   const itemsSold = sales.reduce((sum, sale) => sum + sale.itemCount, 0);
   return {
@@ -100,7 +105,7 @@ export function salesByDay(
     const date = toDateInputValue(sale.createdAt);
     const row = map.get(date);
     if (!row) continue;
-    row.revenue += sale.total;
+    row.revenue += saleRevenue(sale);
     row.receipts += 1;
     row.itemsSold += sale.itemCount;
   }
@@ -126,7 +131,7 @@ export function salesByMonth(
     const month = toMonthKey(sale.createdAt);
     const row = map.get(month);
     if (!row) continue;
-    row.revenue += sale.total;
+    row.revenue += saleRevenue(sale);
     row.receipts += 1;
     row.itemsSold += sale.itemCount;
   }
@@ -145,7 +150,7 @@ export function salesByHour(sales: PosSale[]): SalesHourRow[] {
   for (const sale of sales) {
     const hour = sale.createdAt.getHours();
     const row = rows[hour];
-    row.revenue += sale.total;
+    row.revenue += saleRevenue(sale);
     row.receipts += 1;
     row.itemsSold += sale.itemCount;
   }
@@ -173,7 +178,9 @@ export function topProducts(
         receipts: 0,
       };
       existing.quantity += item.quantity;
-      existing.revenue += item.lineTotal;
+      existing.revenue += isNonRevenueCustomerType(sale.customerType)
+        ? 0
+        : item.lineTotal;
       if (!seen.has(key)) {
         existing.receipts += 1;
         seen.add(key);
@@ -211,7 +218,7 @@ export function salesByStaff(
       cashTotal: 0,
     };
     existing.receipts += 1;
-    existing.revenue += sale.total;
+    existing.revenue += saleRevenue(sale);
     existing.itemsSold += sale.itemCount;
     existing.cashTotal += cashTenderFromSale(sale, methods);
     map.set(key, existing);

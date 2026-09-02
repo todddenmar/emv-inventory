@@ -3,6 +3,10 @@ import {
   roundMoney,
 } from "@/lib/pos-payments";
 import {
+  isNonRevenueCustomerType,
+  nonRevenueCustomerTypeNote,
+} from "@/lib/pos-customer-type";
+import {
   isCashTender,
   paymentMethodName,
   paymentMethodShortLabel,
@@ -22,6 +26,7 @@ export interface DailySalesReportRow {
   key: string;
   saleId: string;
   amount: number;
+  omitAmount: boolean;
   itemLabel: string;
   paymentNote: string | null;
   tenderMethod: PosTenderMethod | null;
@@ -117,6 +122,7 @@ export function sumCashTenderAmount(
 ): number {
   return roundMoney(
     sales.reduce((sum, sale) => {
+      if (isNonRevenueCustomerType(sale.customerType)) return sum;
       const part = salePayments(sale)
         .filter((line) => isCashTender(line.tenderMethod, methods))
         .reduce(
@@ -134,6 +140,7 @@ export function sumTenderAmount(
 ): number {
   return roundMoney(
     sales.reduce((sum, sale) => {
+      if (isNonRevenueCustomerType(sale.customerType)) return sum;
       const part = salePayments(sale)
         .filter((line) => line.tenderMethod === method)
         .reduce(
@@ -159,14 +166,17 @@ export function flattenDailySalesRows(
     const hasItemPayments = items.some((item) => item.tenderMethod != null);
     const payments = salePayments(sale);
     const saleTenderNotes = nonCashTenderNotes(payments, methods);
+    const omitAmount = isNonRevenueCustomerType(sale.customerType);
+    const coverageNote = nonRevenueCustomerTypeNote(sale.customerType);
 
     if (items.length === 0) {
       rows.push({
         key: `${sale.id}-empty`,
         saleId: sale.id,
-        amount: sale.amountDue,
+        amount: omitAmount ? 0 : sale.amountDue,
+        omitAmount,
         itemLabel: "Sale",
-        paymentNote: saleTenderNotes,
+        paymentNote: coverageNote ?? saleTenderNotes,
         tenderMethod: sale.tenderMethod,
       });
       continue;
@@ -178,17 +188,20 @@ export function flattenDailySalesRows(
           ? item.lineTotal
           : roundMoney(item.unitPrice * item.quantity);
 
-      let paymentNote: string | null = null;
-      if (hasItemPayments) {
-        paymentNote = itemPaymentNote(item, methods);
-      } else if (index === 0) {
-        paymentNote = saleTenderNotes;
+      let paymentNote: string | null = coverageNote;
+      if (!paymentNote) {
+        if (hasItemPayments) {
+          paymentNote = itemPaymentNote(item, methods);
+        } else if (index === 0) {
+          paymentNote = saleTenderNotes;
+        }
       }
 
       rows.push({
         key: `${sale.id}-${item.variantId}-${index}`,
         saleId: sale.id,
-        amount,
+        amount: omitAmount ? 0 : amount,
+        omitAmount,
         itemLabel: `${item.quantity}× ${item.productName}`,
         paymentNote,
         tenderMethod: item.tenderMethod,
@@ -251,15 +264,15 @@ export function summarizeDailySalesReport(input: {
 }): DailySalesReportSummary {
   const methods = input.paymentMethods ?? null;
   const totalSales = roundMoney(
-    input.sales.reduce(
-      (sum, sale) =>
-        sum + (Number.isFinite(sale.amountDue) ? sale.amountDue : 0),
-      0
-    )
+    input.sales.reduce((sum, sale) => {
+      if (isNonRevenueCustomerType(sale.customerType)) return sum;
+      return sum + (Number.isFinite(sale.amountDue) ? sale.amountDue : 0);
+    }, 0)
   );
 
   const amounts = new Map<string, number>();
   for (const sale of input.sales) {
+    if (isNonRevenueCustomerType(sale.customerType)) continue;
     for (const line of salePayments(sale)) {
       if (isCashTender(line.tenderMethod, methods)) continue;
       const amount = Number.isFinite(line.amount) ? line.amount : 0;

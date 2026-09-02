@@ -22,7 +22,7 @@ import {
   isVoucherRedeemable,
 } from "@/lib/firestore/vouchers";
 import { formatCurrency } from "@/lib/format";
-import { parsePosItemCoverage } from "@/lib/pos-coverage";
+import { requiresPosCustomerDetails } from "@/lib/pos-customer-type";
 import {
   clearPosCheckoutDraft,
   draftAmountDue,
@@ -262,7 +262,7 @@ export function PosCheckoutWorkspace({
     }
 
     if (
-      (customerType === "reservation" || customerType === "delivery") &&
+      requiresPosCustomerDetails(customerType) &&
       !customer.name.trim()
     ) {
       toast.error("Enter customer name");
@@ -310,7 +310,9 @@ export function PosCheckoutWorkspace({
         payments,
         customerType,
         customer:
-          customerType === "walk_in" ? null : normalizePosCustomer(customer),
+          requiresPosCustomerDetails(customerType)
+            ? normalizePosCustomer(customer)
+            : null,
         resellerId: appliedVoucher?.resellerId ?? null,
         resellerName: appliedVoucher?.resellerName ?? null,
         voucherId: appliedVoucher?.id ?? null,
@@ -381,7 +383,6 @@ export function PosCheckoutWorkspace({
               paymentAccount: primary?.paymentAccount ?? null,
               kind: primary?.kind ?? null,
               note: primary?.note ?? null,
-              coverage: parsePosItemCoverage(line.coverage),
             });
           }
           return items;
@@ -481,7 +482,7 @@ export function PosCheckoutWorkspace({
         }}
         onCustomerTypeChange={(type) => {
           setCustomerType(type);
-          if (type === "walk_in") {
+          if (!requiresPosCustomerDetails(type)) {
             const empty = emptyPosCustomerDraft();
             setCustomer(empty);
             persistDraft({ customerType: type, customer: empty });

@@ -18,6 +18,10 @@ import { posSaleConverter } from "@/lib/firestore/converters";
 import { inventoryDocId } from "@/lib/firestore/inventory";
 import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
 import { isVoucherRedeemable } from "@/lib/firestore/vouchers";
+import {
+  parsePosCustomerType,
+  requiresPosCustomerDetails,
+} from "@/lib/pos-customer-type";
 import type {
   PaymentAccount,
   PosCustomerType,
@@ -174,8 +178,8 @@ export async function completePosSale(
     }
   }
 
-  const customerType = input.customerType ?? "walk_in";
-  if (customerType === "reservation" || customerType === "delivery") {
+  const customerType = parsePosCustomerType(input.customerType);
+  if (requiresPosCustomerDetails(customerType)) {
     if (!input.customer?.name?.trim()) {
       throw new Error("Customer name is required");
     }
@@ -372,7 +376,9 @@ export async function completePosSale(
       payments,
       customerType,
       customer:
-        customerType === "walk_in" ? null : (input.customer ?? null),
+        requiresPosCustomerDetails(customerType)
+          ? (input.customer ?? null)
+          : null,
       resellerId: input.resellerId ?? null,
       resellerName: input.resellerName ?? null,
       voucherId,

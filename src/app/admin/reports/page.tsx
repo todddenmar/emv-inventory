@@ -68,6 +68,10 @@ import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems, TABLE_PAGE_SIZE } from "@/lib/pagination";
 import {
+  isNonRevenueCustomerType,
+  posCustomerTypeLabel,
+} from "@/lib/pos-customer-type";
+import {
   filterInventoryLogsByProducts,
   filterSalesByProducts,
   productIdsForCategoryFilter,
@@ -1085,8 +1089,21 @@ export default function AdminReportsPage() {
                               {sale.items.length > 2 ? "…" : ""}
                             </span>
                           </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">
-                            {formatCurrency(sale.total)}
+                          <TableCell className="text-right">
+                            {isNonRevenueCustomerType(sale.customerType) ? (
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="tabular-nums text-muted-foreground">
+                                  —
+                                </span>
+                                <Badge variant="outline">
+                                  {posCustomerTypeLabel(sale.customerType)}
+                                </Badge>
+                              </div>
+                            ) : (
+                              <span className="font-medium tabular-nums">
+                                {formatCurrency(sale.total)}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end">

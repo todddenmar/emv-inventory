@@ -39,7 +39,7 @@ import type {
 import { migrateLegacyProductVariants, getDefaultVariant, defaultVariantId } from "@/lib/product-variants";
 import { specsToText } from "@/lib/specs";
 import { parseOptionalPosTenderMethod, parsePosTenderMethod } from "@/lib/pos-payments";
-import { parsePosItemCoverage } from "@/lib/pos-coverage";
+import { parsePosCustomerType } from "@/lib/pos-customer-type";
 
 function toDate(value: Timestamp | Date | undefined | null): Date {
   if (!value) return new Date();
@@ -693,10 +693,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
         ? Number(data.amountDue)
         : Math.max(0, total - voucherAmountApplied);
     const tenderMethod = parsePosTenderMethod(data.tenderMethod);
-    const customerType =
-      data.customerType === "reservation" || data.customerType === "delivery"
-        ? data.customerType
-        : "walk_in";
+    const customerType = parsePosCustomerType(data.customerType);
     const paymentAccount: PosSale["paymentAccount"] = rawAccount
       ? {
           id: String(rawAccount.id ?? ""),
@@ -863,7 +860,6 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
           paymentAccount: primary?.paymentAccount ?? lineAccount,
           kind: primary?.kind ?? kind,
           note: primary?.note ?? note,
-          coverage: parsePosItemCoverage(item.coverage),
         };
       }),
       itemCount: data.itemCount ?? 0,

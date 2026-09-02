@@ -34,6 +34,7 @@ import { getPosSale } from "@/lib/firestore/pos-sales";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { tenderMethodLabel, formatPaymentLineNote, paymentKindLabel } from "@/lib/pos-payments";
+import { posCustomerTypeLabel } from "@/lib/pos-customer-type";
 import { cn } from "@/lib/utils";
 import type { PosSale } from "@/types";
 
@@ -46,12 +47,6 @@ interface SaleInvoiceDialogProps {
 
 function priceListLabel(method: PosSale["paymentMethod"]): string {
   return method === "retail" ? "Retail" : "Cash";
-}
-
-function customerTypeLabel(type: PosSale["customerType"]): string {
-  if (type === "reservation") return "Reservation";
-  if (type === "delivery") return "Delivery";
-  return "Walk in";
 }
 
 function MetaChip({
@@ -112,7 +107,7 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
           <Badge variant="default">Wholesale</Badge>
         ) : null}
         <Badge variant="secondary">{paymentSummary}</Badge>
-        <Badge variant="outline">{customerTypeLabel(sale.customerType)}</Badge>
+        <Badge variant="outline">{posCustomerTypeLabel(sale.customerType)}</Badge>
         <Badge variant="outline" className="font-mono text-[10px]">
           {sale.id.slice(0, 8)}…
         </Badge>
@@ -228,14 +223,6 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                     <TableCell className="font-medium">
                       <div>
                         <p>{item.productName}</p>
-                        {item.coverage === "warranty" ||
-                        item.coverage === "replacement" ? (
-                          <Badge variant="outline" className="mt-1">
-                            {item.coverage === "warranty"
-                              ? "Warranty"
-                              : "Replacement"}
-                          </Badge>
-                        ) : null}
                         {item.tenderMethod ||
                         (item.payments?.length ?? 0) > 0 ? (
                           <p className="text-xs font-normal">
@@ -346,7 +333,7 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted-foreground">Customer type</dt>
                 <dd className="font-medium">
-                  {customerTypeLabel(sale.customerType)}
+                  {posCustomerTypeLabel(sale.customerType)}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -403,7 +390,7 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                     Type
                   </dt>
                   <dd className="font-medium">
-                    {customerTypeLabel(sale.customerType)}
+                    {posCustomerTypeLabel(sale.customerType)}
                   </dd>
                 </div>
                 {customer?.name ? (

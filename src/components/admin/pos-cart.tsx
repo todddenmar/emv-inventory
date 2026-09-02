@@ -45,14 +45,14 @@ import {
 } from "@/lib/pos-payments";
 import { paymentMethodName } from "@/lib/payment-methods";
 import {
-  parsePosItemCoverage,
-  posItemCoverageLabel,
-} from "@/lib/pos-coverage";
+  parsePosCustomerType,
+  posCustomerTypeLabel,
+  requiresPosCustomerDetails,
+} from "@/lib/pos-customer-type";
 import type {
   PaymentAccount,
   PaymentMethod,
   PosCustomerType,
-  PosItemCoverage,
   PosPaymentKind,
   PosPaymentMethod,
   PosSaleChannel,
@@ -89,8 +89,6 @@ export interface PosCartLine {
   priceList: PosPaymentMethod;
   /** Split tenders covering this line's total. */
   payments: PosCheckoutPaymentLine[];
-  /** Regular sale, warranty, or replacement. */
-  coverage?: PosItemCoverage;
 }
 
 export type PosCustomerDraft = {
@@ -121,9 +119,7 @@ export function normalizePosCustomer(
 export type PosCheckoutStep = "details" | "review";
 
 export function customerTypeLabel(type: PosCustomerType): string {
-  if (type === "reservation") return "Reservation";
-  if (type === "delivery") return "Delivery";
-  return "Walk in";
+  return posCustomerTypeLabel(type);
 }
 
 export function tenderMethodLabel(method: PosTenderMethod): string {
@@ -140,39 +136,6 @@ function lineLabel(line: PosCartLine): string | null {
   return line.variantLabel && line.variantLabel !== "Default"
     ? line.variantLabel
     : null;
-}
-
-function LineCoverageSelect({
-  line,
-  disabled,
-  onChange,
-}: {
-  line: PosCartLine;
-  disabled?: boolean;
-  onChange: (coverage: PosItemCoverage) => void;
-}) {
-  const coverage = parsePosItemCoverage(line.coverage);
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs">Warranty / replacement</Label>
-      <Select
-        value={coverage}
-        disabled={disabled}
-        onValueChange={(value) => onChange(parsePosItemCoverage(value))}
-      >
-        <SelectTrigger size="sm" className="w-full">
-          <SelectValue>
-            {(value) => posItemCoverageLabel(parsePosItemCoverage(value))}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">None</SelectItem>
-          <SelectItem value="warranty">Warranty</SelectItem>
-          <SelectItem value="replacement">Replacement</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
-  );
 }
 
 function cartTotals(
@@ -541,7 +504,7 @@ interface PosCheckoutDialogProps {
     patch: Partial<
       Pick<
         PosCartLine,
-        "priceList" | "payments" | "unitPrice" | "retailPrice" | "coverage"
+        "priceList" | "payments" | "unitPrice" | "retailPrice"
       >
     >
   ) => void;
@@ -628,8 +591,7 @@ export function PosCheckoutDialog({
     paidLines.some(
       (line) => line.priceList === "retail" && line.retailPrice == null
     );
-  const showCustomerForm =
-    customerType === "reservation" || customerType === "delivery";
+  const showCustomerForm = requiresPosCustomerDetails(customerType);
   const customerSummary = showCustomerForm
     ? normalizePosCustomer(customer)
     : null;
@@ -668,7 +630,7 @@ export function PosCheckoutDialog({
         </h2>
         <p className="text-sm text-muted-foreground">
           {step === "details"
-            ? "Step 1 of 2 — payment, coverage, customer, and voucher"
+            ? "Step 1 of 2 — payment, customer, and voucher"
             : "Step 2 of 2 — confirm before charging"}
           {branchName ? ` · ${branchName}` : ""}
         </p>
@@ -826,13 +788,6 @@ export function PosCheckoutDialog({
                                 </p>
                               ) : null}
                             </div>
-                            <LineCoverageSelect
-                              line={line}
-                              disabled={charging}
-                              onChange={(coverage) =>
-                                onLineChange(line.variantId, { coverage })
-                              }
-                            />
                             <div className="grid grid-cols-2 gap-2 text-sm">
                               <div className="rounded-md border bg-muted/30 px-2.5 py-2">
                                 <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
@@ -944,13 +899,6 @@ export function PosCheckoutDialog({
                             </p>
                           ) : null}
                         </div>
-                        <LineCoverageSelect
-                          line={line}
-                          disabled={charging}
-                          onChange={(coverage) =>
-                            onLineChange(line.variantId, { coverage })
-                          }
-                        />
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <button
                             type="button"
@@ -1429,9 +1377,7 @@ export function PosCheckoutDialog({
                   <Select
                     value={customerType}
                     onValueChange={(value) =>
-                      onCustomerTypeChange(
-                        (value as PosCustomerType) ?? "walk_in"
-                      )
+                      onCustomerTypeChange(parsePosCustomerType(value))
                     }
                     disabled={charging}
                   >
@@ -1448,6 +1394,8 @@ export function PosCheckoutDialog({
                       <SelectItem value="walk_in">Walk in</SelectItem>
                       <SelectItem value="reservation">Reservation</SelectItem>
                       <SelectItem value="delivery">Delivery</SelectItem>
+                      <SelectItem value="warranty">Warranty</SelectItem>
+                      <SelectItem value="replacement">Replacement</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1570,13 +1518,6 @@ export function PosCheckoutDialog({
                           </p>
                           {label ? (
                             <p className="text-muted-foreground">{label}</p>
-                          ) : null}
-                          {parsePosItemCoverage(line.coverage) !== "none" ? (
-                            <Badge variant="outline" className="mt-1">
-                              {posItemCoverageLabel(
-                                parsePosItemCoverage(line.coverage)
-                              )}
-                            </Badge>
                           ) : null}
                           <p className="tabular-nums text-muted-foreground">
                             @ {formatCurrency(line.unitPrice)}

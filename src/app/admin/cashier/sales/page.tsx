@@ -42,6 +42,10 @@ import { getDailyExpenses } from "@/lib/firestore/daily-expenses";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
+import {
+  isNonRevenueCustomerType,
+  posCustomerTypeLabel,
+} from "@/lib/pos-customer-type";
 import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
 export default function CashierSalesPage() {
@@ -244,8 +248,15 @@ export default function CashierSalesPage() {
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-2">
                         <p className="font-semibold tabular-nums">
-                          {formatCurrency(sale.total)}
+                          {isNonRevenueCustomerType(sale.customerType)
+                            ? "—"
+                            : formatCurrency(sale.total)}
                         </p>
+                        {isNonRevenueCustomerType(sale.customerType) ? (
+                          <Badge variant="outline" className="text-[10px]">
+                            {posCustomerTypeLabel(sale.customerType)}
+                          </Badge>
+                        ) : null}
                         <SaleInvoiceButton sale={sale} />
                       </div>
                     </div>
@@ -299,8 +310,21 @@ export default function CashierSalesPage() {
                             {sale.items.length > 2 ? "…" : ""}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">
-                          {formatCurrency(sale.total)}
+                        <TableCell className="text-right">
+                          {isNonRevenueCustomerType(sale.customerType) ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="tabular-nums text-muted-foreground">
+                                —
+                              </span>
+                              <Badge variant="outline" className="text-xs">
+                                {posCustomerTypeLabel(sale.customerType)}
+                              </Badge>
+                            </div>
+                          ) : (
+                            <span className="font-medium tabular-nums">
+                              {formatCurrency(sale.total)}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <SaleInvoiceButton sale={sale} />

@@ -467,8 +467,13 @@ function DocsSections({
             <li>Only variants assigned to the branch assortment appear.</li>
             <li>Checkout writes a sale and reduces stock (logged as a sale).</li>
             <li>
-              At checkout, mark each item as <strong>None</strong>,{" "}
-              <strong>Warranty</strong>, or <strong>Replacement</strong>.
+              At checkout, set <strong>Customer type</strong> to{" "}
+              <strong>Walk in</strong>, <strong>Reservation</strong>,{" "}
+              <strong>Delivery</strong>, <strong>Warranty</strong>, or{" "}
+              <strong>Replacement</strong>. Warranty and replacement receipts
+              still deduct stock and appear on sales reports, but they show as
+              a label with no peso value and are excluded from revenue and cash
+              totals.
             </li>
             <li>
               Freebies, vouchers, resellers, and payment accounts are configured
