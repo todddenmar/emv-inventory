@@ -87,19 +87,19 @@ function StockCell({
 
 function CategoryBlock({
   group,
-  branches,
-  colCount,
+  branch,
 }: {
   group: RemainingStockCategoryGroup;
-  branches: Branch[];
-  colCount: number;
+  branch: Branch;
 }) {
+  const colCount = 3;
+
   return (
     <>
       <TableRow className="border-primary/20 bg-primary hover:bg-primary">
         <TableCell
           colSpan={colCount}
-          className="sticky left-0 bg-primary py-2.5 text-sm font-semibold tracking-wide text-primary-foreground"
+          className="sticky left-0 whitespace-normal bg-primary py-2.5 text-sm font-semibold tracking-wide text-primary-foreground"
         >
           {group.categoryName}
         </TableCell>
@@ -109,30 +109,24 @@ function CategoryBlock({
           <TableRow className="bg-accent hover:bg-accent">
             <TableCell
               colSpan={colCount}
-              className="sticky left-0 bg-accent py-2 pl-4 text-sm font-medium text-accent-foreground"
+              className="sticky left-0 whitespace-normal bg-accent py-2 pl-4 text-sm font-medium text-accent-foreground"
             >
               {product.productName}
             </TableCell>
           </TableRow>
           {product.variants.map((variant) => (
             <TableRow key={variant.variantId}>
-              <TableCell className="sticky left-0 z-10 bg-background font-medium">
+              <TableCell className="sticky left-0 z-10 whitespace-normal bg-background font-medium">
                 {variant.label}
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {variant.sku || "—"}
               </TableCell>
-              {branches.map((branch) => (
-                <StockCell
-                  key={branch.id}
-                  amount={variant.stocks[branch.id] ?? 0}
-                  assigned={variant.assigned[branch.id] === true}
-                  lowStockThreshold={variant.lowStockThreshold}
-                />
-              ))}
-              <TableCell className="text-right font-medium tabular-nums">
-                {variant.total}
-              </TableCell>
+              <StockCell
+                amount={variant.stocks[branch.id] ?? 0}
+                assigned={variant.assigned[branch.id] === true}
+                lowStockThreshold={variant.lowStockThreshold}
+              />
             </TableRow>
           ))}
         </Fragment>
@@ -150,6 +144,7 @@ export default function RemainingStocksPage() {
   const [search, setSearch] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
+  const [selectedBranchId, setSelectedBranchId] = useState("");
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
@@ -167,6 +162,11 @@ export default function RemainingStocksPage() {
         setCategoryGroups(groupList);
         setProducts(productList);
         setInventory(inventoryList);
+        setSelectedBranchId((prev) =>
+          prev && branchList.some((branch) => branch.id === prev)
+            ? prev
+            : (branchList[0]?.id ?? "")
+        );
       })
       .catch((error) => {
         console.error(error);
@@ -259,7 +259,10 @@ export default function RemainingStocksPage() {
     [pagedItems]
   );
 
-  const colCount = 2 + branches.length + 1;
+  const selectedBranch =
+    branches.find((branch) => branch.id === selectedBranchId) ??
+    branches[0] ??
+    null;
 
   return (
     <div className="space-y-6">
@@ -274,11 +277,38 @@ export default function RemainingStocksPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Filters</CardTitle>
           <CardDescription>
-            Search, category group, and category apply across all branches.
+            Choose a branch, then search or filter by category.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="flex min-w-0 flex-col gap-2">
+              <Label>Branch</Label>
+              <Select
+                value={selectedBranch?.id ?? ""}
+                onValueChange={(value) => {
+                  if (value) setSelectedBranchId(value);
+                }}
+              >
+                <SelectTrigger size="sm" className="w-full sm:w-56">
+                  <SelectValue placeholder="Select branch">
+                    {(value) => {
+                      const branch = branches.find((item) => item.id === value);
+                      return branch
+                        ? `${branch.name} (${branch.code})`
+                        : "Select branch";
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name} ({branch.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="remaining-stock-search">Search</Label>
               <Input
@@ -370,8 +400,8 @@ export default function RemainingStocksPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Stock by branch</CardTitle>
             <CardDescription>
-              {total} product{total === 1 ? "" : "s"} · {branches.length}{" "}
-              branch{branches.length === 1 ? "" : "es"}
+              {total} product{total === 1 ? "" : "s"}
+              {selectedBranch ? ` · ${selectedBranch.name}` : ""}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -379,34 +409,30 @@ export default function RemainingStocksPage() {
               <p className="text-sm text-muted-foreground">
                 No active branches.
               </p>
+            ) : !selectedBranch ? (
+              <p className="text-sm text-muted-foreground">
+                Select a branch to view remaining stocks.
+              </p>
             ) : pagedGroups.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No selling variants match these filters.
               </p>
             ) : (
               <div className="overflow-x-auto rounded-md border">
-                <Table className="min-w-[40rem]">
+                <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="sticky left-0 z-20 min-w-[10rem] bg-background">
+                      <TableHead className="sticky left-0 z-20 min-w-[8rem] bg-background sm:min-w-[10rem]">
                         Variant
                       </TableHead>
-                      <TableHead className="min-w-[7rem]">SKU</TableHead>
-                      {branches.map((branch) => (
-                        <TableHead
-                          key={branch.id}
-                          className="min-w-[8rem] text-right"
-                        >
-                          <span className="block truncate" title={branch.name}>
-                            {branch.name}
-                          </span>
-                          <span className="block text-xs font-normal text-muted-foreground">
-                            {branch.code}
-                          </span>
-                        </TableHead>
-                      ))}
-                      <TableHead className="min-w-[5rem] text-right">
-                        Total
+                      <TableHead className="min-w-[6rem]">SKU</TableHead>
+                      <TableHead className="min-w-[7rem] text-right">
+                        <span className="block truncate" title={selectedBranch.name}>
+                          {selectedBranch.name}
+                        </span>
+                        <span className="block text-xs font-normal text-muted-foreground">
+                          {selectedBranch.code}
+                        </span>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -415,8 +441,7 @@ export default function RemainingStocksPage() {
                       <CategoryBlock
                         key={group.categoryId}
                         group={group}
-                        branches={branches}
-                        colCount={colCount}
+                        branch={selectedBranch}
                       />
                     ))}
                   </TableBody>

@@ -499,9 +499,9 @@ function DocsSections({
                 <tr>
                   <td className="px-4 py-3 font-medium">Remaining stocks</td>
                   <td className="px-4 py-3 text-[#2a3140]">
-                    Guide of current stock per variant across branches, grouped
-                    by category and product. Branches where a variant is not
-                    selling show Unassigned instead of 0.
+                    Guide of current stock per variant, filtered to one branch.
+                    Branches where a variant is not selling show Unassigned
+                    instead of 0.
                   </td>
                 </tr>
                 <tr>

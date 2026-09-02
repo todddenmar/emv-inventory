@@ -29,7 +29,7 @@ export const inventoryNavItems: InventoryNavItem[] = [
     href: "/admin/inventory/remaining-stocks",
     label: "Remaining stocks",
     icon: LayoutGrid,
-    description: "Variant stock across all branches",
+    description: "Variant stock for a selected branch",
     ownerVisible: true,
   },
   {
