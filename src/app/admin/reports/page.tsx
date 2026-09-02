@@ -59,6 +59,7 @@ import {
 import { sumClosingCash } from "@/lib/daily-sales-report";
 import { getDailyCashRecordsForBranches } from "@/lib/firestore/daily-cash";
 import { getDailyExpensesForBranches } from "@/lib/firestore/daily-expenses";
+import { getPaymentMethods } from "@/lib/firestore/payment-methods";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
@@ -93,6 +94,7 @@ import type {
   PosSale,
   PosSaleChannel,
   Product,
+  PaymentMethod,
 } from "@/types";
 
 type RangeMode = "day" | "range";
@@ -235,6 +237,7 @@ export default function AdminReportsPage() {
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [closingCash, setClosingCash] = useState(0);
   const [prevClosingCash, setPrevClosingCash] = useState(0);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [productPage, setProductPage] = useState(1);
   const [staffPage, setStaffPage] = useState(1);
   const [movementPage, setMovementPage] = useState(1);
@@ -308,6 +311,7 @@ export default function AdminReportsPage() {
         prevCashRecords,
         expenses,
         prevExpenses,
+        paymentMethods,
       ] = await Promise.all([
         getPosSales({
           branchId: scopeBranchId,
@@ -345,18 +349,21 @@ export default function AdminReportsPage() {
         getDailyCashRecordsForBranches(cashBranchIds, previous.toDate),
         getDailyExpensesForBranches(cashBranchIds, effectiveTo),
         getDailyExpensesForBranches(cashBranchIds, previous.toDate),
+        getPaymentMethods(),
       ]);
       const inCashScope = (rows: PosSale[]) =>
         rows.filter((sale) => cashBranchIds.includes(sale.branchId));
       setSales(currentSales);
       setPrevSales(priorSales);
       setLogs(stockLogs);
+      setPaymentMethods(paymentMethods);
       setClosingCash(
         sumClosingCash({
           branchIds: cashBranchIds,
           sales: inCashScope(endDaySales),
           expenses,
           cashRecords,
+          paymentMethods,
         })
       );
       setPrevClosingCash(
@@ -365,6 +372,7 @@ export default function AdminReportsPage() {
           sales: inCashScope(prevEndDaySales),
           expenses: prevExpenses,
           cashRecords: prevCashRecords,
+          paymentMethods,
         })
       );
     } catch (error) {
@@ -421,8 +429,8 @@ export default function AdminReportsPage() {
     [filteredSales]
   );
   const staffRows = useMemo(
-    () => salesByStaff(filteredSales),
-    [filteredSales]
+    () => salesByStaff(filteredSales, paymentMethods),
+    [filteredSales, paymentMethods]
   );
   const movementRows = useMemo(
     () => summarizeStockMovements(filteredLogs),

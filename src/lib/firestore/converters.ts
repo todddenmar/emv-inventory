@@ -6,6 +6,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { parseUserRole } from "@/lib/roles";
+import { resolveSlug } from "@/lib/slug";
 import type {
   AppUser,
   Branch,
@@ -20,6 +21,7 @@ import type {
   InventoryLog,
   Invite,
   PaymentAccount,
+  PaymentMethod,
   PosSale,
   Product,
   ProductImage,
@@ -36,7 +38,7 @@ import type {
 } from "@/types";
 import { migrateLegacyProductVariants, getDefaultVariant, defaultVariantId } from "@/lib/product-variants";
 import { specsToText } from "@/lib/specs";
-import { resolveSlug } from "@/lib/slug";
+import { parseOptionalPosTenderMethod, parsePosTenderMethod } from "@/lib/pos-payments";
 
 function toDate(value: Timestamp | Date | undefined | null): Date {
   if (!value) return new Date();
@@ -678,16 +680,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       data.amountDue != null
         ? Number(data.amountDue)
         : Math.max(0, total - voucherAmountApplied);
-    const tenderRaw = data.tenderMethod;
-    const tenderMethod =
-      tenderRaw === "ewallet" ||
-      tenderRaw === "bank_transfer" ||
-      tenderRaw === "home_credit" ||
-      tenderRaw === "skyro" ||
-      tenderRaw === "salmon" ||
-      tenderRaw === "card_swipe"
-        ? tenderRaw
-        : "cash";
+    const tenderMethod = parsePosTenderMethod(data.tenderMethod);
     const customerType =
       data.customerType === "reservation" || data.customerType === "delivery"
         ? data.customerType
@@ -706,15 +699,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
     const parsePaymentLine = (raw: unknown): PosSale["payments"][number] | null => {
       if (!raw || typeof raw !== "object") return null;
       const row = raw as Record<string, unknown>;
-      const method: PosSale["tenderMethod"] =
-        row.tenderMethod === "ewallet" ||
-        row.tenderMethod === "bank_transfer" ||
-        row.tenderMethod === "home_credit" ||
-        row.tenderMethod === "skyro" ||
-        row.tenderMethod === "salmon" ||
-        row.tenderMethod === "card_swipe"
-          ? row.tenderMethod
-          : "cash";
+      const method = parsePosTenderMethod(row.tenderMethod);
       const amount = Number(row.amount ?? 0);
       if (!Number.isFinite(amount)) return null;
       const acct = row.paymentAccount as PosSale["paymentAccount"] | undefined;
@@ -792,16 +777,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       total,
       amountDue,
       items: rawItems.map((item) => {
-        const tenderMethod =
-          item.tenderMethod === "ewallet" ||
-          item.tenderMethod === "bank_transfer" ||
-          item.tenderMethod === "home_credit" ||
-          item.tenderMethod === "skyro" ||
-          item.tenderMethod === "salmon" ||
-          item.tenderMethod === "card_swipe" ||
-          item.tenderMethod === "cash"
-            ? item.tenderMethod
-            : null;
+        const tenderMethod = parseOptionalPosTenderMethod(item.tenderMethod);
         const acct = item.paymentAccount as
           | PosSale["paymentAccount"]
           | undefined
@@ -909,6 +885,48 @@ export const paymentAccountConverter: FirestoreDataConverter<PaymentAccount> = {
       accountName: String(data.accountName ?? ""),
       accountNumber: String(data.accountNumber ?? ""),
       isActive: data.isActive !== false,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
+    };
+  },
+};
+
+export const paymentMethodConverter: FirestoreDataConverter<PaymentMethod> = {
+  toFirestore(method: PaymentMethod): DocumentData {
+    return {
+      key: method.key,
+      name: method.name,
+      shortLabel: method.shortLabel,
+      isCash: method.isCash,
+      isActive: method.isActive,
+      isBuiltIn: method.isBuiltIn,
+      needsPaymentAccount: method.needsPaymentAccount,
+      accountType: method.accountType,
+      position: method.position,
+      createdAt: method.createdAt,
+      updatedAt: method.updatedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): PaymentMethod {
+    const data = snapshot.data(options);
+    const key = String(data.key ?? snapshot.id).trim() || snapshot.id;
+    return {
+      id: snapshot.id,
+      key,
+      name: String(data.name ?? key),
+      shortLabel: String(data.shortLabel ?? "").trim(),
+      isCash: data.isCash === true || key === "cash",
+      isActive: data.isActive !== false,
+      isBuiltIn: data.isBuiltIn === true,
+      needsPaymentAccount: data.needsPaymentAccount === true,
+      accountType:
+        data.accountType === "bank_transfer" || data.accountType === "ewallet"
+          ? data.accountType
+          : null,
+      position: Number.isFinite(data.position) ? Number(data.position) : 0,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
     };

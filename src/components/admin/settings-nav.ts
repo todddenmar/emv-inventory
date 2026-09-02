@@ -1,5 +1,6 @@
 import {
   Building2,
+  CreditCard,
   FileJson,
   FolderKanban,
   ListChecks,
@@ -67,6 +68,13 @@ export const settingsNavItems: SettingsNavItem[] = [
     icon: Ticket,
     elevatedOnly: false,
     description: "Prepaid store credit codes",
+  },
+  {
+    href: "/admin/settings/payment-methods",
+    label: "Payment methods",
+    icon: CreditCard,
+    elevatedOnly: false,
+    description: "POS tenders and which ones deduct from cash on hand",
   },
   {
     href: "/admin/settings/payment-accounts",

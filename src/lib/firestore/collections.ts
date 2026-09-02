@@ -17,6 +17,7 @@ export const COLLECTIONS = {
   resellers: "physicalResellers",
   vouchers: "physicalVouchers",
   paymentAccounts: "physicalPaymentAccounts",
+  paymentMethods: "physicalPaymentMethods",
   pricePromotions: "physicalPricePromotions",
   /** Auth — shared, not physical-prefixed */
   users: "users",

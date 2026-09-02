@@ -52,7 +52,7 @@ export const DOC_TOC = [
     id: "settings",
     label: "Settings",
     keywords:
-      "settings general assortment category groups suppliers resellers vouchers payment accounts users invites import",
+      "settings general assortment category groups suppliers resellers vouchers payment methods payment accounts users invites import",
   },
   {
     id: "glossary",
@@ -191,7 +191,7 @@ const ROLE_SCOPE_ROWS: {
   },
   {
     scope: "Settings (ops)",
-    note: "Assortment, resellers, vouchers, payment accounts.",
+    note: "Assortment, resellers, vouchers, payment methods, payment accounts.",
     marks: ["yes", "yes", "no", "no"],
   },
   {
@@ -594,7 +594,7 @@ function DocsSections({
             <li>General display preferences</li>
             <li>Branch assortment</li>
             <li>Category groups (for report filters)</li>
-            <li>Suppliers, resellers, vouchers, payment accounts</li>
+            <li>Suppliers, resellers, vouchers, payment methods, payment accounts</li>
             <li>Users &amp; invites</li>
             <li>Product JSON import (master admin)</li>
           </ul>

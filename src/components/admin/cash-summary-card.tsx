@@ -64,8 +64,8 @@ export function CashSummaryCard({
           <p className="text-sm font-medium text-foreground">{name}</p>
         ) : null}
         <CardDescription>
-          Closing cash is added cash + net cash from the day (sales minus bank
-          transfer, home credit, Skyro, Salmon, and expenses).
+          Closing cash is added cash + net cash from the day (sales minus
+          non-cash payments and expenses).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
@@ -73,31 +73,14 @@ export function CashSummaryCard({
           label="TOTAL SALES"
           value={formatCurrency(summary.totalSales)}
         />
-        <SummaryRow
-          label="BT (Bank transfer)"
-          value={`− ${formatCurrency(summary.bankTransferTotal)}`}
-          muted
-        />
-        <SummaryRow
-          label="HC (Home Credit)"
-          value={`− ${formatCurrency(summary.homeCreditTotal)}`}
-          muted
-        />
-        <SummaryRow
-          label="SK (Skyro)"
-          value={`− ${formatCurrency(summary.skyroTotal)}`}
-          muted
-        />
-        <SummaryRow
-          label="SM (Salmon)"
-          value={`− ${formatCurrency(summary.salmonTotal)}`}
-          muted
-        />
-        <SummaryRow
-          label="EX (Expenses)"
-          value={`− ${formatCurrency(summary.expensesTotal)}`}
-          muted
-        />
+        {summary.deductions.map((row) => (
+          <SummaryRow
+            key={row.key}
+            label={row.label}
+            value={`− ${formatCurrency(row.amount)}`}
+            muted
+          />
+        ))}
         <div className="border-t pt-3">
           <SummaryRow
             label="Net cash from day"

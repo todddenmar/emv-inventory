@@ -1,4 +1,4 @@
-import { sumTenderAmount } from "@/lib/daily-sales-report";
+import { sumCashTenderAmount } from "@/lib/daily-sales-report";
 import {
   eachDateInRange,
   eachMonthInRange,
@@ -6,7 +6,12 @@ import {
   toDateInputValue,
   toMonthKey,
 } from "@/lib/dates";
-import type { InventoryLog, InventoryLogReason, PosSale } from "@/types";
+import type {
+  InventoryLog,
+  InventoryLogReason,
+  PaymentMethod,
+  PosSale,
+} from "@/types";
 
 export interface SalesTotals {
   revenue: number;
@@ -182,11 +187,17 @@ export function topProducts(
     .slice(0, limit);
 }
 
-function cashTenderFromSale(sale: PosSale): number {
-  return sumTenderAmount([sale], "cash");
+function cashTenderFromSale(
+  sale: PosSale,
+  methods?: PaymentMethod[] | null
+): number {
+  return sumCashTenderAmount([sale], methods);
 }
 
-export function salesByStaff(sales: PosSale[]): SalesStaffRow[] {
+export function salesByStaff(
+  sales: PosSale[],
+  methods?: PaymentMethod[] | null
+): SalesStaffRow[] {
   const map = new Map<string, SalesStaffRow>();
 
   for (const sale of sales) {
@@ -202,7 +213,7 @@ export function salesByStaff(sales: PosSale[]): SalesStaffRow[] {
     existing.receipts += 1;
     existing.revenue += sale.total;
     existing.itemsSold += sale.itemCount;
-    existing.cashTotal += cashTenderFromSale(sale);
+    existing.cashTotal += cashTenderFromSale(sale, methods);
     map.set(key, existing);
   }
 

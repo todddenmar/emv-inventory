@@ -19,6 +19,7 @@ import {
   NamedAmountList,
 } from "@/components/admin/daily-cash-controls";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { usePaymentMethods } from "@/hooks/use-payment-methods";
 import {
   formatDateInputLabel,
   shiftDateInput,
@@ -37,6 +38,7 @@ import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
 export default function CashierDailyCashPage() {
   const { assignedBranchId } = useBranchAccess();
+  const { methods: paymentMethods } = usePaymentMethods();
   const [branch, setBranch] = useState<Branch | null>(null);
   const [date, setDate] = useState(() => toDateInputValue());
   const [sales, setSales] = useState<PosSale[]>([]);
@@ -97,8 +99,9 @@ export default function CashierDailyCashPage() {
         sales,
         expenses,
         cashAddsTotal,
+        paymentMethods,
       }),
-    [sales, expenses, cashAddsTotal]
+    [sales, expenses, cashAddsTotal, paymentMethods]
   );
 
   if (!assignedBranchId) {

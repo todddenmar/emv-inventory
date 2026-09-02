@@ -1,11 +1,17 @@
 import {
   formatPaymentLineNote,
   roundMoney,
-  tenderMethodLabel,
 } from "@/lib/pos-payments";
+import {
+  isCashTender,
+  paymentMethodName,
+  paymentMethodShortLabel,
+  sortPaymentMethods,
+} from "@/lib/payment-methods";
 import type {
   DailyCashRecord,
   DailyExpense,
+  PaymentMethod,
   PosPaymentKind,
   PosSale,
   PosSaleItem,
@@ -21,12 +27,15 @@ export interface DailySalesReportRow {
   tenderMethod: PosTenderMethod | null;
 }
 
+export interface CashDeductionRow {
+  key: string;
+  label: string;
+  amount: number;
+}
+
 export interface DailySalesReportSummary {
   totalSales: number;
-  bankTransferTotal: number;
-  homeCreditTotal: number;
-  skyroTotal: number;
-  salmonTotal: number;
+  deductions: CashDeductionRow[];
   expensesTotal: number;
   netCashFromDay: number;
   cashAddsTotal: number;
@@ -58,7 +67,10 @@ function salePayments(sale: PosSale): Array<{
   ];
 }
 
-function itemPaymentNote(item: PosSaleItem): string | null {
+function itemPaymentNote(
+  item: PosSaleItem,
+  methods?: PaymentMethod[] | null
+): string | null {
   const pays =
     item.payments?.length > 0
       ? item.payments
@@ -75,14 +87,9 @@ function itemPaymentNote(item: PosSaleItem): string | null {
   if (pays.length === 0) return null;
 
   const parts = pays.map((pay) => {
-    const methodLabel =
-      pay.tenderMethod === "bank_transfer"
-        ? "BANK TRANSFER"
-        : pay.tenderMethod === "home_credit"
-          ? "HC"
-          : pay.tenderMethod === "cash"
-            ? null
-            : tenderMethodLabel(pay.tenderMethod).toUpperCase();
+    const methodLabel = isCashTender(pay.tenderMethod, methods)
+      ? null
+      : paymentMethodShortLabel(pay.tenderMethod, methods);
     const kindNote = formatPaymentLineNote(pay);
     const bits = [methodLabel, kindNote].filter(Boolean);
     if (bits.length === 0 && pays.length > 1) {
@@ -104,6 +111,23 @@ function itemPaymentNote(item: PosSaleItem): string | null {
   return joined || null;
 }
 
+export function sumCashTenderAmount(
+  sales: PosSale[],
+  methods?: PaymentMethod[] | null
+): number {
+  return roundMoney(
+    sales.reduce((sum, sale) => {
+      const part = salePayments(sale)
+        .filter((line) => isCashTender(line.tenderMethod, methods))
+        .reduce(
+          (s, line) => s + (Number.isFinite(line.amount) ? line.amount : 0),
+          0
+        );
+      return sum + part;
+    }, 0)
+  );
+}
+
 export function sumTenderAmount(
   sales: PosSale[],
   method: PosTenderMethod
@@ -121,7 +145,10 @@ export function sumTenderAmount(
   );
 }
 
-export function flattenDailySalesRows(sales: PosSale[]): DailySalesReportRow[] {
+export function flattenDailySalesRows(
+  sales: PosSale[],
+  methods?: PaymentMethod[] | null
+): DailySalesReportRow[] {
   const sorted = [...sales].sort(
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime()
   );
@@ -131,7 +158,7 @@ export function flattenDailySalesRows(sales: PosSale[]): DailySalesReportRow[] {
     const items = sale.items.length > 0 ? sale.items : [];
     const hasItemPayments = items.some((item) => item.tenderMethod != null);
     const payments = salePayments(sale);
-    const saleTenderNotes = nonCashTenderNotes(payments);
+    const saleTenderNotes = nonCashTenderNotes(payments, methods);
 
     if (items.length === 0) {
       rows.push({
@@ -153,7 +180,7 @@ export function flattenDailySalesRows(sales: PosSale[]): DailySalesReportRow[] {
 
       let paymentNote: string | null = null;
       if (hasItemPayments) {
-        paymentNote = itemPaymentNote(item);
+        paymentNote = itemPaymentNote(item, methods);
       } else if (index === 0) {
         paymentNote = saleTenderNotes;
       }
@@ -173,21 +200,20 @@ export function flattenDailySalesRows(sales: PosSale[]): DailySalesReportRow[] {
 }
 
 function nonCashTenderNotes(
-  payments: Array<{ tenderMethod: PosTenderMethod; amount: number }>
+  payments: Array<{ tenderMethod: PosTenderMethod; amount: number }>,
+  methods?: PaymentMethod[] | null
 ): string | null {
-  const notes: string[] = [];
-  const add = (method: PosTenderMethod, label: string) => {
-    const amount = roundMoney(
-      payments
-        .filter((p) => p.tenderMethod === method)
-        .reduce((s, p) => s + p.amount, 0)
-    );
-    if (amount > 0) notes.push(`${label} ${formatCurrencyPlain(amount)}`);
-  };
-  add("bank_transfer", "BANK TRANSFER");
-  add("home_credit", "HC");
-  add("skyro", "SKYRO");
-  add("salmon", "SALMON");
+  const byKey = new Map<string, number>();
+  for (const pay of payments) {
+    if (isCashTender(pay.tenderMethod, methods)) continue;
+    const amount = Number.isFinite(pay.amount) ? pay.amount : 0;
+    if (amount <= 0) continue;
+    byKey.set(pay.tenderMethod, (byKey.get(pay.tenderMethod) ?? 0) + amount);
+  }
+  const notes = [...byKey.entries()].map(([key, amount]) => {
+    const label = paymentMethodShortLabel(key, methods);
+    return `${label} ${formatCurrencyPlain(roundMoney(amount))}`;
+  });
   return notes.length > 0 ? notes.join(" · ") : null;
 }
 
@@ -221,7 +247,9 @@ export function summarizeDailySalesReport(input: {
   sales: PosSale[];
   expenses: DailyExpense[];
   cashAddsTotal: number;
+  paymentMethods?: PaymentMethod[] | null;
 }): DailySalesReportSummary {
+  const methods = input.paymentMethods ?? null;
   const totalSales = roundMoney(
     input.sales.reduce(
       (sum, sale) =>
@@ -229,19 +257,57 @@ export function summarizeDailySalesReport(input: {
       0
     )
   );
-  const bankTransferTotal = sumTenderAmount(input.sales, "bank_transfer");
-  const homeCreditTotal = sumTenderAmount(input.sales, "home_credit");
-  const skyroTotal = sumTenderAmount(input.sales, "skyro");
-  const salmonTotal = sumTenderAmount(input.sales, "salmon");
+
+  const amounts = new Map<string, number>();
+  for (const sale of input.sales) {
+    for (const line of salePayments(sale)) {
+      if (isCashTender(line.tenderMethod, methods)) continue;
+      const amount = Number.isFinite(line.amount) ? line.amount : 0;
+      if (amount <= 0) continue;
+      amounts.set(
+        line.tenderMethod,
+        (amounts.get(line.tenderMethod) ?? 0) + amount
+      );
+    }
+  }
+
+  const keys = new Set<string>(amounts.keys());
+  for (const method of methods ?? []) {
+    if (!method.isCash && method.isActive) keys.add(method.key);
+  }
+  if (keys.size === 0) {
+    for (const method of ["bank_transfer", "home_credit", "skyro", "salmon", "card_swipe", "ewallet"]) {
+      keys.add(method);
+    }
+  }
+
+  const orderedKeys = sortPaymentMethods(
+    [...keys].map((key) => {
+      const match = methods?.find((row) => row.key === key);
+      return {
+        key,
+        position: match?.position ?? 50,
+        name: paymentMethodName(key, methods),
+      };
+    })
+  ).map((row) => row.key);
+
+  const tenderDeductions: CashDeductionRow[] = orderedKeys.map((key) => {
+    const amount = roundMoney(amounts.get(key) ?? 0);
+    const short = paymentMethodShortLabel(key, methods);
+    const name = paymentMethodName(key, methods);
+    return {
+      key,
+      label: `${short} (${name})`,
+      amount,
+    };
+  });
+
   const expensesTotal = sumDailyExpenses(input.expenses);
-  const netCashFromDay = roundMoney(
-    totalSales -
-      bankTransferTotal -
-      homeCreditTotal -
-      skyroTotal -
-      salmonTotal -
-      expensesTotal
+  const nonCashTotal = roundMoney(
+    tenderDeductions.reduce((sum, row) => sum + row.amount, 0)
   );
+  const netCashFromDay = roundMoney(totalSales - nonCashTotal - expensesTotal);
   const cashAddsTotal = Number.isFinite(input.cashAddsTotal)
     ? roundMoney(Math.max(0, input.cashAddsTotal))
     : 0;
@@ -249,10 +315,14 @@ export function summarizeDailySalesReport(input: {
 
   return {
     totalSales,
-    bankTransferTotal,
-    homeCreditTotal,
-    skyroTotal,
-    salmonTotal,
+    deductions: [
+      ...tenderDeductions,
+      {
+        key: "expenses",
+        label: "EX (Expenses)",
+        amount: expensesTotal,
+      },
+    ],
     expensesTotal,
     netCashFromDay,
     cashAddsTotal,
@@ -266,6 +336,7 @@ export function sumClosingCash(input: {
   sales: PosSale[];
   expenses: DailyExpense[];
   cashRecords: DailyCashRecord[];
+  paymentMethods?: PaymentMethod[] | null;
 }): number {
   if (input.branchIds.length === 0) return 0;
   return roundMoney(
@@ -275,6 +346,7 @@ export function sumClosingCash(input: {
         sales: input.sales.filter((sale) => sale.branchId === branchId),
         expenses: input.expenses.filter((row) => row.branchId === branchId),
         cashAddsTotal: sumDailyCashAdds(record?.additions ?? []),
+        paymentMethods: input.paymentMethods,
       });
       return sum + summary.closingCash;
     }, 0)

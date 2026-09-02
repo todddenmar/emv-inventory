@@ -43,8 +43,10 @@ import {
   isPosTenderMethod as isPaymentTenderMethod,
   type PosCheckoutPaymentLine,
 } from "@/lib/pos-payments";
+import { paymentMethodName } from "@/lib/payment-methods";
 import type {
   PaymentAccount,
+  PaymentMethod,
   PosCustomerType,
   PosPaymentKind,
   PosPaymentMethod,
@@ -488,6 +490,7 @@ interface PosCheckoutDialogProps {
   branchName: string;
   saleChannel?: PosSaleChannel;
   paymentAccounts: PaymentAccount[];
+  tenderMethods?: PaymentMethod[];
   customerType: PosCustomerType;
   customer: PosCustomerDraft;
   appliedVoucher: Voucher | null;
@@ -518,6 +521,7 @@ export function PosCheckoutDialog({
   branchName,
   saleChannel = "shop",
   paymentAccounts,
+  tenderMethods,
   customerType,
   customer,
   appliedVoucher,
@@ -535,6 +539,12 @@ export function PosCheckoutDialog({
 }: PosCheckoutDialogProps) {
   const isWholesale = saleChannel === "wholesale";
   const isPage = layout === "page";
+  const methodOptions =
+    tenderMethods && tenderMethods.length > 0
+      ? tenderMethods.map((method) => method.key)
+      : POS_TENDER_METHODS;
+  const methodLabel = (key: string) =>
+    paymentMethodName(key, tenderMethods);
   const [paymentEditor, setPaymentEditor] = useState<{
     variantId: string;
     payId: string | null;
@@ -1208,9 +1218,7 @@ export function PosCheckoutDialog({
                                         <div className="flex items-start justify-between gap-2">
                                           <div className="min-w-0">
                                             <p className="truncate text-sm font-medium">
-                                              {tenderMethodLabel(
-                                                pay.tenderMethod
-                                              )}
+                                              {methodLabel(pay.tenderMethod)}
                                               {account
                                                 ? ` · ${account.provider}`
                                                 : ""}
@@ -1579,7 +1587,7 @@ export function PosCheckoutDialog({
                           >
                             <span className="min-w-0">
                               <span className="font-medium">
-                                {tenderMethodLabel(pay.tenderMethod)}
+                                {methodLabel(pay.tenderMethod)}
                               </span>
                               {formatPaymentLineNote(pay) ? (
                                 <span className="ml-1 font-medium text-red-700">
@@ -1789,16 +1797,14 @@ export function PosCheckoutDialog({
                   <SelectTrigger id="pay-editor-method">
                     <SelectValue>
                       {(value) =>
-                        value
-                          ? tenderMethodLabel(value as PosTenderMethod)
-                          : null
+                        value ? methodLabel(value) : null
                       }
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {POS_TENDER_METHODS.map((method) => (
+                    {methodOptions.map((method) => (
                       <SelectItem key={method} value={method}>
-                        {tenderMethodLabel(method)}
+                        {methodLabel(method)}
                       </SelectItem>
                     ))}
                   </SelectContent>

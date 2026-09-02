@@ -22,6 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getPaymentAccounts } from "@/lib/firestore/payment-accounts";
+import { getPaymentMethods } from "@/lib/firestore/payment-methods";
+import { paymentMethodName } from "@/lib/payment-methods";
 import {
   getPosSale,
   resolveSalePaymentDrafts,
@@ -45,12 +47,12 @@ import {
   salePaymentLineToCheckout,
   shouldEditSalePaymentsByItem,
   sumCheckoutPaymentAmounts,
-  tenderMethodLabel,
   tenderNeedsPaymentAccount,
   type PosCheckoutPaymentLine,
 } from "@/lib/pos-payments";
 import type {
   PaymentAccount,
+  PaymentMethod,
   PosPaymentKind,
   PosSale,
   PosTenderMethod,
@@ -125,6 +127,7 @@ export function EditSalePaymentDialog({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
+  const [tenderMethods, setTenderMethods] = useState<PaymentMethod[]>([]);
   const [itemDrafts, setItemDrafts] = useState<ItemPaymentDraft[]>([]);
   const [saleDrafts, setSaleDrafts] = useState<PosCheckoutPaymentLine[]>([]);
   const [editByItem, setEditByItem] = useState(false);
@@ -147,8 +150,9 @@ export function EditSalePaymentDialog({
     setLoading(true);
 
     const load = async () => {
-      const [accountRows, row] = await Promise.all([
+      const [accountRows, methodRows, row] = await Promise.all([
         getPaymentAccounts(false),
+        getPaymentMethods({ activeOnly: true }),
         sale ? Promise.resolve(sale) : saleId ? getPosSale(saleId) : Promise.resolve(null),
       ]);
       if (cancelled) return;
@@ -158,6 +162,7 @@ export function EditSalePaymentDialog({
         return;
       }
       setAccounts(accountRows);
+      setTenderMethods(methodRows);
       setLoaded(row);
       setEditByItem(shouldEditSalePaymentsByItem(row));
       setItemDrafts(buildItemDrafts(row));
@@ -214,6 +219,13 @@ export function EditSalePaymentDialog({
       : true);
 
   const editorDraft = lineEditor?.draft ?? null;
+  const methodOptions = (() => {
+    const keys = tenderMethods.map((method) => method.key);
+    const current = editorDraft?.tenderMethod;
+    if (current && !keys.includes(current)) keys.push(current);
+    return keys.length > 0 ? keys : POS_TENDER_METHODS;
+  })();
+  const methodLabel = (key: string) => paymentMethodName(key, tenderMethods);
   const editorExpectedType = editorDraft
     ? accountTypeForTender(editorDraft.tenderMethod)
     : null;
@@ -402,7 +414,7 @@ export function EditSalePaymentDialog({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
-                        {tenderMethodLabel(pay.tenderMethod)}
+                        {methodLabel(pay.tenderMethod)}
                         {account ? ` · ${account.provider}` : ""}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
@@ -518,16 +530,14 @@ export function EditSalePaymentDialog({
                     <SelectTrigger id="edit-pay-method">
                       <SelectValue>
                         {(value) =>
-                          value
-                            ? tenderMethodLabel(value as PosTenderMethod)
-                            : null
+                          value ? methodLabel(value) : null
                         }
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {POS_TENDER_METHODS.map((method) => (
+                      {methodOptions.map((method) => (
                         <SelectItem key={method} value={method}>
-                          {tenderMethodLabel(method)}
+                          {methodLabel(method)}
                         </SelectItem>
                       ))}
                     </SelectContent>

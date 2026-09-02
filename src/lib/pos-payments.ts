@@ -1,3 +1,8 @@
+import {
+  BUILT_IN_PAYMENT_METHODS,
+  findPaymentMethod,
+  paymentMethodName,
+} from "@/lib/payment-methods";
 import type {
   PaymentAccount,
   PosPaymentKind,
@@ -8,15 +13,8 @@ import type {
   PosTenderMethod,
 } from "@/types";
 
-export const POS_TENDER_METHODS: PosTenderMethod[] = [
-  "cash",
-  "ewallet",
-  "bank_transfer",
-  "home_credit",
-  "skyro",
-  "salmon",
-  "card_swipe",
-];
+export const POS_TENDER_METHODS: PosTenderMethod[] =
+  BUILT_IN_PAYMENT_METHODS.map((method) => method.key);
 
 export const POS_PAYMENT_KINDS: PosPaymentKind[] = [
   "full",
@@ -71,22 +69,7 @@ export function parseMoneyInput(raw: string): number | null {
 }
 
 export function tenderMethodLabel(method: PosTenderMethod): string {
-  switch (method) {
-    case "ewallet":
-      return "E-wallet";
-    case "bank_transfer":
-      return "Bank transfer";
-    case "home_credit":
-      return "Home Credit";
-    case "skyro":
-      return "Skyro";
-    case "salmon":
-      return "Salmon";
-    case "card_swipe":
-      return "Card/Swipe";
-    default:
-      return "Cash";
-  }
+  return paymentMethodName(method);
 }
 
 export function isPosPaymentKind(value: unknown): value is PosPaymentKind {
@@ -143,31 +126,31 @@ export function formatPaymentLineNote(line: {
 }
 
 export function isPosTenderMethod(value: unknown): value is PosTenderMethod {
-  return (
-    value === "cash" ||
-    value === "ewallet" ||
-    value === "bank_transfer" ||
-    value === "home_credit" ||
-    value === "skyro" ||
-    value === "salmon" ||
-    value === "card_swipe"
-  );
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 export function parsePosTenderMethod(value: unknown): PosTenderMethod {
-  return isPosTenderMethod(value) ? value : "cash";
+  if (typeof value !== "string") return "cash";
+  const key = value.trim();
+  return key || "cash";
+}
+
+export function parseOptionalPosTenderMethod(
+  value: unknown
+): PosTenderMethod | null {
+  if (typeof value !== "string") return null;
+  const key = value.trim();
+  return key || null;
 }
 
 export function tenderNeedsPaymentAccount(method: PosTenderMethod): boolean {
-  return method === "ewallet" || method === "bank_transfer";
+  return findPaymentMethod(method)?.needsPaymentAccount === true;
 }
 
 export function accountTypeForTender(
   method: PosTenderMethod
 ): "ewallet" | "bank_transfer" | null {
-  if (method === "ewallet") return "ewallet";
-  if (method === "bank_transfer") return "bank_transfer";
-  return null;
+  return findPaymentMethod(method)?.accountType ?? null;
 }
 
 export function createCheckoutPaymentLineId(): string {

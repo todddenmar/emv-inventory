@@ -26,6 +26,7 @@ import { CashSummaryCard } from "@/components/admin/cash-summary-card";
 import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { usePaymentMethods } from "@/hooks/use-payment-methods";
 import {
   formatDateInputLabel,
   shiftDateInput,
@@ -45,6 +46,7 @@ import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
 export default function CashierSalesPage() {
   const { assignedBranchId } = useBranchAccess();
+  const { methods: paymentMethods } = usePaymentMethods();
   const [date, setDate] = useState(() => toDateInputValue());
   const [branch, setBranch] = useState<Branch | null>(null);
   const [sales, setSales] = useState<PosSale[]>([]);
@@ -110,8 +112,9 @@ export default function CashierSalesPage() {
         sales,
         expenses,
         cashAddsTotal,
+        paymentMethods,
       }),
-    [sales, expenses, cashAddsTotal]
+    [sales, expenses, cashAddsTotal, paymentMethods]
   );
 
   const {

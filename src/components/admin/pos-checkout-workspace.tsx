@@ -14,6 +14,7 @@ import {
 } from "@/components/admin/pos-cart";
 import { useAuthStore } from "@/stores/auth-store";
 import { getPaymentAccounts } from "@/lib/firestore/payment-accounts";
+import { getPaymentMethods } from "@/lib/firestore/payment-methods";
 import { completePosSale } from "@/lib/firestore/pos-sales";
 import { setVariantRetailPrices } from "@/lib/firestore/products";
 import {
@@ -40,6 +41,7 @@ import {
 } from "@/lib/pos-payments";
 import type {
   PaymentAccount,
+  PaymentMethod,
   PosCustomerType,
   PosPaymentMethod,
   PosSaleChannel,
@@ -68,6 +70,7 @@ export function PosCheckoutWorkspace({
   const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>(
     []
   );
+  const [tenderMethods, setTenderMethods] = useState<PaymentMethod[]>([]);
   const [customerType, setCustomerType] =
     useState<PosCustomerType>("walk_in");
   const [customer, setCustomer] = useState<PosCustomerDraft>(
@@ -115,6 +118,9 @@ export function PosCheckoutWorkspace({
 
     getPaymentAccounts(true)
       .then(setPaymentAccounts)
+      .catch(console.error);
+    getPaymentMethods({ activeOnly: true })
+      .then(setTenderMethods)
       .catch(console.error);
   }, [saleChannel, homePath, router]);
 
@@ -424,6 +430,7 @@ export function PosCheckoutWorkspace({
         branchName={draftMeta.branchName}
         saleChannel={saleChannel}
         paymentAccounts={paymentAccounts}
+        tenderMethods={tenderMethods}
         customerType={customerType}
         customer={customer}
         appliedVoucher={appliedVoucher}

@@ -32,6 +32,7 @@ import {
 import { NamedAmountList } from "@/components/admin/daily-cash-controls";
 import { CashSummaryCard } from "@/components/admin/cash-summary-card";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { usePaymentMethods } from "@/hooks/use-payment-methods";
 import { formatDateInputLabel, shiftDateInput, toDateInputValue } from "@/lib/dates";
 import {
   flattenDailySalesRows,
@@ -47,6 +48,7 @@ import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
 export default function DailySalesReportPage() {
   const { canViewAllBranches, assignedBranchId } = useBranchAccess();
+  const { methods: paymentMethods } = usePaymentMethods();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("");
@@ -122,7 +124,10 @@ export default function DailySalesReportPage() {
     void load();
   }, [load]);
 
-  const rows = useMemo(() => flattenDailySalesRows(sales), [sales]);
+  const rows = useMemo(
+    () => flattenDailySalesRows(sales, paymentMethods),
+    [sales, paymentMethods]
+  );
   const cashAddsTotal = sumDailyCashAdds(cashRecord?.additions ?? []);
   const summary = useMemo(
     () =>
@@ -130,8 +135,9 @@ export default function DailySalesReportPage() {
         sales,
         expenses,
         cashAddsTotal,
+        paymentMethods,
       }),
-    [sales, expenses, cashAddsTotal]
+    [sales, expenses, cashAddsTotal, paymentMethods]
   );
 
   if (!canViewAllBranches && !assignedBranchId) {

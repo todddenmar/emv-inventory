@@ -279,6 +279,7 @@ export type PosPaymentMethod = "cash" | "retail";
 
 export type PosSaleChannel = "shop" | "wholesale";
 
+/** Built-in plus custom payment-method keys stored on sales. */
 export type PosTenderMethod =
   | "cash"
   | "ewallet"
@@ -286,7 +287,27 @@ export type PosTenderMethod =
   | "home_credit"
   | "skyro"
   | "salmon"
-  | "card_swipe";
+  | "card_swipe"
+  | (string & {});
+
+/** Configurable POS tender (Settings → Payment methods). */
+export interface PaymentMethod {
+  id: string;
+  /** Stored on sale payment lines as `tenderMethod`. */
+  key: string;
+  name: string;
+  /** Short till label, e.g. BT, HC, SW. */
+  shortLabel: string;
+  /** When true, this tender stays in the till (not deducted). */
+  isCash: boolean;
+  isActive: boolean;
+  isBuiltIn: boolean;
+  needsPaymentAccount: boolean;
+  accountType: PaymentAccountType | null;
+  position: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export type PosCustomerType = "walk_in" | "reservation" | "delivery";
 
