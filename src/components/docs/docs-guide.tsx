@@ -376,6 +376,11 @@ function DocsSections({
             Cashiers must be linked to a <strong>branch</strong>.
             Until that is set, the app shows a “branch not assigned” message.
           </Callout>
+          <p>
+            To take away a staff account later, use <strong>Remove access</strong>{" "}
+            under Settings → Users. That person cannot sign in until an admin
+            assigns a staff role again.
+          </p>
         </Section>
       ) : null}
 
@@ -603,7 +608,7 @@ function DocsSections({
             <li>Branch assortment</li>
             <li>Category groups (for report filters)</li>
             <li>Suppliers, resellers, vouchers, payment methods, payment accounts</li>
-            <li>Users &amp; invites</li>
+            <li>Users &amp; invites (assign roles or remove access)</li>
             <li>Product JSON import (master admin)</li>
           </ul>
         </Section>

@@ -215,6 +215,29 @@ export async function updateUserAccess(
   }
 }
 
+export async function removeUserAccess(
+  uid: string,
+  actorUid: string
+): Promise<void> {
+  if (uid === actorUid) {
+    throw new Error("You cannot remove your own access");
+  }
+
+  const user = await getUser(uid);
+  if (!user) {
+    throw new Error("User not found");
+  }
+  if (!isStaffRole(user.role)) {
+    throw new Error("This user already has no staff access");
+  }
+
+  await updateUserAccess(
+    uid,
+    { role: "customer", branchId: null },
+    actorUid
+  );
+}
+
 export function isStaff(role: UserRole): boolean {
   return isStaffRole(role);
 }

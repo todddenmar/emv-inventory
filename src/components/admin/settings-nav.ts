@@ -104,7 +104,7 @@ export const settingsNavItems: SettingsNavItem[] = [
     label: "Users",
     icon: Users,
     elevatedOnly: true,
-    description: "Manage staff roles and branch assignment",
+    description: "Manage staff roles, branch assignment, and remove access",
   },
   {
     href: "/admin/settings/users/invites",

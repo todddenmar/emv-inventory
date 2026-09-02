@@ -13,8 +13,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -43,10 +54,18 @@ import {
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getBranches } from "@/lib/firestore/branches";
-import { getAllUsers, updateUserAccess } from "@/lib/firestore/users";
+import {
+  getAllUsers,
+  removeUserAccess,
+  updateUserAccess,
+} from "@/lib/firestore/users";
 import { syncAuthClaims } from "@/lib/auth-claims";
 import { paginateItems } from "@/lib/pagination";
-import { isMasterAdminRole, roleAssignableBy } from "@/lib/roles";
+import {
+  isMasterAdminRole,
+  isStaffRole,
+  roleAssignableBy,
+} from "@/lib/roles";
 import type { AppUser, Branch, UserRole } from "@/types";
 
 const roleBadgeVariant = (
@@ -77,6 +96,9 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [pendingRemoveUser, setPendingRemoveUser] = useState<AppUser | null>(
+    null
+  );
   const [role, setRole] = useState<UserRole>("customer");
   const [branchId, setBranchId] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -114,6 +136,25 @@ export default function AdminUsersPage() {
     if (isMasterAdmin) return users;
     return users.filter((u) => !isMasterAdminRole(u.role));
   }, [users, isMasterAdmin]);
+
+  const masterAdminCount = useMemo(
+    () => users.filter((u) => isMasterAdminRole(u.role)).length,
+    [users]
+  );
+
+  const canRemoveAccess = (user: AppUser) => {
+    if (!currentUser) return false;
+    if (user.uid === currentUser.uid) return false;
+    if (user.isAnonymous) return false;
+    if (!isStaffRole(user.role)) return false;
+    if (isMasterAdminRole(user.role) && !isMasterAdminRole(currentUser.role)) {
+      return false;
+    }
+    if (isMasterAdminRole(user.role) && masterAdminCount <= 1) {
+      return false;
+    }
+    return true;
+  };
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -163,6 +204,15 @@ export default function AdminUsersPage() {
     setBranchId("");
   };
 
+  const requestRemoveAccess = (user: AppUser) => {
+    if (!canRemoveAccess(user)) {
+      toast.error("You cannot remove access for this user");
+      return;
+    }
+    closeEdit();
+    setPendingRemoveUser(user);
+  };
+
   const handleSave = async () => {
     if (!editingUser || !currentUser) return;
 
@@ -192,6 +242,25 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleRemoveAccess = async () => {
+    if (!pendingRemoveUser || !currentUser) return;
+
+    setSubmitting(true);
+    try {
+      await removeUserAccess(pendingRemoveUser.uid, currentUser.uid);
+      await syncAuthClaims(pendingRemoveUser.uid).catch(console.error);
+      toast.success("Staff access removed");
+      setPendingRemoveUser(null);
+      loadData();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to remove access"
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (!isElevatedAdmin) {
     return (
       <Card>
@@ -210,9 +279,10 @@ export default function AdminUsersPage() {
         <div>
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-muted-foreground">
-            Assign admin, owner, and cashier roles. Cashiers must be linked to a
-            branch. Owners can view the dashboard, sales reports, inventory, and
-            price changes across all branches.
+            Assign admin, owner, and cashier roles, or remove access so the
+            account can no longer sign in. Cashiers must be linked to a branch.
+            Owners can view the dashboard, sales reports, inventory, and price
+            changes across all branches.
           </p>
         </div>
         <LinkButton href="/admin/settings/users/invites" variant="outline">
@@ -290,14 +360,25 @@ export default function AdminUsersPage() {
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={user.isAnonymous}
-                          onClick={() => openEdit(user)}
-                        >
-                          Manage access
-                        </Button>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={user.isAnonymous}
+                            onClick={() => openEdit(user)}
+                          >
+                            Manage access
+                          </Button>
+                          {canRemoveAccess(user) ? (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => requestRemoveAccess(user)}
+                            >
+                              Remove access
+                            </Button>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -317,13 +398,14 @@ export default function AdminUsersPage() {
       </Card>
 
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && closeEdit()}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Manage user access</DialogTitle>
           </DialogHeader>
           {editingUser && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 rounded-lg border p-3">
+            <>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 rounded-lg border p-3">
                 <UserAvatar
                   displayName={editingUser.displayName}
                   email={editingUser.email}
@@ -431,19 +513,65 @@ export default function AdminUsersPage() {
                   Customers have no access to this inventory app.
                 </p>
               )}
+              </div>
 
-              <Button
-                className="w-full"
-                onClick={handleSave}
-                disabled={submitting}
+              <DialogFooter
+                className={
+                  canRemoveAccess(editingUser) ? "sm:justify-between" : undefined
+                }
               >
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save changes
-              </Button>
-            </div>
+                {canRemoveAccess(editingUser) ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => requestRemoveAccess(editingUser)}
+                    disabled={submitting}
+                  >
+                    Remove access
+                  </Button>
+                ) : null}
+                <Button onClick={handleSave} disabled={submitting}>
+                  {submitting && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Save changes
+                </Button>
+              </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!pendingRemoveUser}
+        onOpenChange={(open) => {
+          if (!open && !submitting) setPendingRemoveUser(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove staff access?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingRemoveUser
+                ? `${pendingRemoveUser.displayName || pendingRemoveUser.email || "This user"} will no longer be able to sign in to this app. You can restore access later by assigning a staff role.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={submitting}
+              onClick={() => void handleRemoveAccess()}
+            >
+              {submitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Remove access
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
