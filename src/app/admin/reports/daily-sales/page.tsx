@@ -231,7 +231,7 @@ export default function DailySalesReportPage() {
             <div className="flex min-w-0 flex-col gap-2">
               <Label>Branch</Label>
               <div className="flex h-8 w-full items-center rounded-lg border border-input px-2.5 text-sm sm:w-56">
-                {selectedBranch?.name ?? "â€”"}
+                {selectedBranch?.name ?? "—"}
               </div>
             </div>
           )}
@@ -241,11 +241,11 @@ export default function DailySalesReportPage() {
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          Loading reportâ€¦
+          Loading report...
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-          <div className="space-y-6">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-6">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Sales</CardTitle>
@@ -329,6 +329,7 @@ export default function DailySalesReportPage() {
           </div>
 
           <CashSummaryCard
+            className="min-w-0 lg:sticky lg:top-4"
             summary={summary}
             branchName={selectedBranch?.name}
           />

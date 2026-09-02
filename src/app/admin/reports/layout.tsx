@@ -15,7 +15,7 @@ export function ReportsNav({
   const pathname = usePathname();
 
   return (
-    <nav className={cn("space-y-1", className)}>
+    <nav className={cn("flex flex-col gap-1", className)}>
       {reportsNavItems.map((item) => {
         const Icon = item.icon;
         const isOverview = item.href === "/admin/reports";
@@ -29,7 +29,7 @@ export function ReportsNav({
             href={item.href}
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+              "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap transition-colors",
               isActive
                 ? "bg-primary text-primary-foreground"
                 : "hover:bg-muted"
@@ -50,15 +50,15 @@ export default function AdminReportsLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="-m-4 flex min-h-[calc(100dvh-4rem)] flex-col md:-m-6 md:flex-row">
-      <aside className="w-full shrink-0 border-b bg-muted/20 p-4 md:sticky md:top-0 md:max-h-[calc(100dvh-4rem)] md:w-56 md:self-start md:overflow-y-auto md:border-r md:border-b-0">
-        <div className="mb-4">
+    <div className="-m-4 flex min-h-[calc(100dvh-4rem)] min-w-0 flex-col md:-m-6 md:flex-row">
+      <aside className="w-full shrink-0 border-b bg-muted/20 p-3 md:sticky md:top-0 md:max-h-[calc(100dvh-4rem)] md:w-56 md:self-start md:overflow-y-auto md:border-r md:border-b-0 md:p-4">
+        <div className="mb-3 md:mb-4">
           <h2 className="text-sm font-semibold">Reports</h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="hidden text-xs text-muted-foreground md:block">
             Sales overview and daily cash reports
           </p>
         </div>
-        <ReportsNav />
+        <ReportsNav className="flex-row overflow-x-auto md:flex-col md:overflow-visible" />
       </aside>
       <div className="min-w-0 flex-1 p-4 md:p-6">{children}</div>
     </div>

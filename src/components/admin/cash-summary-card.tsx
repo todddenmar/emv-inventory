@@ -21,24 +21,24 @@ function SummaryRow({
   strong?: boolean;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
+    <div className="flex items-start justify-between gap-3">
       <span
-        className={
+        className={cn(
+          "min-w-0 flex-1 break-words leading-snug",
           muted
             ? "text-muted-foreground"
             : strong
               ? "font-semibold"
               : "font-medium"
-        }
+        )}
       >
         {label}
       </span>
       <span
-        className={
-          strong
-            ? "tabular-nums text-base font-semibold"
-            : "tabular-nums font-medium"
-        }
+        className={cn(
+          "shrink-0 text-right tabular-nums whitespace-nowrap",
+          strong ? "text-base font-semibold" : "font-medium"
+        )}
       >
         {value}
       </span>
@@ -57,18 +57,18 @@ export function CashSummaryCard({
 }) {
   const name = branchName?.trim() || null;
   return (
-    <Card className={cn("h-fit", className)}>
+    <Card className={cn("h-fit min-w-0", className)}>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Cash summary</CardTitle>
         {name ? (
-          <p className="text-sm font-medium text-foreground">{name}</p>
+          <p className="truncate text-sm font-medium text-foreground">{name}</p>
         ) : null}
-        <CardDescription>
+        <CardDescription className="text-pretty">
           Closing cash is added cash + net cash from the day (sales minus
           non-cash payments and expenses).
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
+      <CardContent className="min-w-0 space-y-2.5 text-sm sm:space-y-3">
         <SummaryRow
           label="TOTAL SALES"
           value={formatCurrency(summary.totalSales)}
@@ -93,11 +93,12 @@ export function CashSummaryCard({
           value={formatCurrency(summary.cashAddsTotal)}
         />
         <div className="rounded-md bg-muted/50 px-3 py-3">
-          <SummaryRow
-            label="Closing cash"
-            value={formatCurrency(summary.closingCash)}
-            strong
-          />
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+            <span className="font-semibold">Closing cash</span>
+            <span className="text-lg font-semibold tabular-nums whitespace-nowrap sm:text-base">
+              {formatCurrency(summary.closingCash)}
+            </span>
+          </div>
         </div>
       </CardContent>
     </Card>
