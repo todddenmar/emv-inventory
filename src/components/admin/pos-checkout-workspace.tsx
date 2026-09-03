@@ -22,7 +22,11 @@ import {
   isVoucherRedeemable,
 } from "@/lib/firestore/vouchers";
 import { formatCurrency } from "@/lib/format";
-import { requiresPosCustomerDetails } from "@/lib/pos-customer-type";
+import {
+  isNonRevenueCustomerType,
+  posCustomerTypeLabel,
+  requiresPosCustomerDetails,
+} from "@/lib/pos-customer-type";
 import {
   clearPosCheckoutDraft,
   draftAmountDue,
@@ -235,7 +239,10 @@ export function PosCheckoutWorkspace({
   const handleCharge = async () => {
     if (!user || !draftMeta || lines.length === 0) return;
 
+    const noCharge = isNonRevenueCustomerType(customerType);
+
     const missingRetail =
+      !noCharge &&
       !isWholesale &&
       lines.some(
         (line) =>
@@ -252,7 +259,7 @@ export function PosCheckoutWorkspace({
     let payments;
     try {
       payments =
-        amountDue <= 0.01
+        noCharge || amountDue <= 0.01
           ? []
           : resolvePaymentsFromCartLines(lines, paymentAccounts, amountDue);
     } catch (err) {
@@ -272,7 +279,7 @@ export function PosCheckoutWorkspace({
 
     setCharging(true);
     try {
-      const retailToPersist = isWholesale
+      const retailToPersist = noCharge || isWholesale
         ? []
         : lines
             .filter(
@@ -313,21 +320,21 @@ export function PosCheckoutWorkspace({
           requiresPosCustomerDetails(customerType)
             ? normalizePosCustomer(customer)
             : null,
-        resellerId: appliedVoucher?.resellerId ?? null,
-        resellerName: appliedVoucher?.resellerName ?? null,
-        voucherId: appliedVoucher?.id ?? null,
+        resellerId: noCharge ? null : (appliedVoucher?.resellerId ?? null),
+        resellerName: noCharge ? null : (appliedVoucher?.resellerName ?? null),
+        voucherId: noCharge ? null : (appliedVoucher?.id ?? null),
         items: (() => {
           const items: PosSaleItem[] = [];
           const scale =
-            amountDue > 0.01
-              ? amountDue /
+            noCharge || amountDue <= 0.01
+              ? 1
+              : amountDue /
                 Math.max(
                   0.01,
                   lines
                     .filter((l) => !l.isFreebie)
                     .reduce((s, l) => s + l.unitPrice * l.quantity, 0)
-                )
-              : 1;
+                );
 
           for (const line of lines) {
             const name = line.isFreebie
@@ -339,11 +346,13 @@ export function PosCheckoutWorkspace({
               : line.variantLabel && line.variantLabel !== "Default"
                 ? `${line.productName} — ${line.variantLabel}`
                 : line.productName;
-            const unitPrice = line.isFreebie ? 0 : line.unitPrice;
+            const unitPrice = noCharge || line.isFreebie ? 0 : line.unitPrice;
             const lineTotal = unitPrice * line.quantity;
 
             const itemPayments =
-              !cartLineNeedsPayment(line) || !(line.payments?.length > 0)
+              noCharge ||
+              !cartLineNeedsPayment(line) ||
+              !(line.payments?.length > 0)
                 ? []
                 : line.payments
                     .filter(
@@ -392,7 +401,11 @@ export function PosCheckoutWorkspace({
       });
 
       clearPosCheckoutDraft(saleChannel);
-      toast.success("Sale completed");
+      toast.success(
+        noCharge
+          ? `${posCustomerTypeLabel(customerType)} recorded`
+          : "Sale completed"
+      );
       router.replace(homePath);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sale failed");
@@ -419,10 +432,18 @@ export function PosCheckoutWorkspace({
           </p>
         </div>
         <p className="text-sm tabular-nums text-muted-foreground sm:text-right">
-          Amount due{" "}
-          <span className="text-base font-semibold text-foreground">
-            {formatCurrency(amountDue)}
-          </span>
+          {isNonRevenueCustomerType(customerType) ? (
+            <span className="text-base font-semibold text-foreground">
+              No charge
+            </span>
+          ) : (
+            <>
+              Amount due{" "}
+              <span className="text-base font-semibold text-foreground">
+                {formatCurrency(amountDue)}
+              </span>
+            </>
+          )}
         </p>
       </div>
       <PosCheckoutDialog

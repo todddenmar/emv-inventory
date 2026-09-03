@@ -19,6 +19,7 @@ import { inventoryDocId } from "@/lib/firestore/inventory";
 import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
 import { isVoucherRedeemable } from "@/lib/firestore/vouchers";
 import {
+  isNonRevenueCustomerType,
   parsePosCustomerType,
   requiresPosCustomerDetails,
 } from "@/lib/pos-customer-type";
@@ -179,13 +180,27 @@ export async function completePosSale(
   }
 
   const customerType = parsePosCustomerType(input.customerType);
+  const noCharge = isNonRevenueCustomerType(customerType);
   if (requiresPosCustomerDetails(customerType)) {
     if (!input.customer?.name?.trim()) {
       throw new Error("Customer name is required");
     }
   }
 
-  for (const item of input.items) {
+  const items = noCharge
+    ? input.items.map((item) => ({
+        ...item,
+        unitPrice: 0,
+        lineTotal: 0,
+        payments: [],
+        tenderMethod: null,
+        paymentAccount: null,
+        kind: null,
+        note: null,
+      }))
+    : input.items;
+
+  for (const item of items) {
     if (item.quantity <= 0) {
       throw new Error(`Invalid quantity for ${item.productName}`);
     }
@@ -198,8 +213,8 @@ export async function completePosSale(
   const saleRef = doc(collection(db, COLLECTIONS.posSales));
   const saleId = saleRef.id;
   const saleLabel = `Sale ${saleId.slice(-6).toUpperCase()}`;
-  const itemCount = input.items.reduce((sum, item) => sum + item.quantity, 0);
-  const total = input.items.reduce((sum, item) => sum + item.lineTotal, 0);
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
 
   await runTransaction(db, async (tx) => {
     const rows: Array<{
@@ -209,7 +224,7 @@ export async function completePosSale(
       newStock: number;
     }> = [];
 
-    for (const item of input.items) {
+    for (const item of items) {
       const invRef = doc(
         db,
         COLLECTIONS.branchInventory,
@@ -253,7 +268,7 @@ export async function completePosSale(
     let nextRemaining = 0;
     let nextStatus: Voucher["status"] = "active";
 
-    if (input.voucherId) {
+    if (!noCharge && input.voucherId) {
       voucherRef = doc(db, COLLECTIONS.vouchers, input.voucherId);
       const voucherSnap = await tx.get(voucherRef);
       if (!voucherSnap.exists()) {
@@ -379,14 +394,14 @@ export async function completePosSale(
         requiresPosCustomerDetails(customerType)
           ? (input.customer ?? null)
           : null,
-      resellerId: input.resellerId ?? null,
-      resellerName: input.resellerName ?? null,
+      resellerId: noCharge ? null : (input.resellerId ?? null),
+      resellerName: noCharge ? null : (input.resellerName ?? null),
       voucherId,
       voucherCode,
       voucherAmountApplied,
       total,
       amountDue,
-      items: input.items,
+      items,
       itemCount,
       createdBy: input.createdBy,
       createdByName: input.createdByName ?? null,

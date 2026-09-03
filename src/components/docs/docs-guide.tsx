@@ -471,9 +471,8 @@ function DocsSections({
               <strong>Walk in</strong>, <strong>Reservation</strong>,{" "}
               <strong>Delivery</strong>, <strong>Warranty</strong>, or{" "}
               <strong>Replacement</strong>. Warranty and replacement receipts
-              still deduct stock and appear on sales reports, but they show as
-              a label with no peso value and are excluded from revenue and cash
-              totals.
+              still deduct stock and appear on sales reports with no peso
+              value. They have no charge at checkout.
             </li>
             <li>
               Freebies, vouchers, resellers, and payment accounts are configured

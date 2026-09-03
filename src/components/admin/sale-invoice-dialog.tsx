@@ -34,7 +34,7 @@ import { getPosSale } from "@/lib/firestore/pos-sales";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { tenderMethodLabel, formatPaymentLineNote, paymentKindLabel } from "@/lib/pos-payments";
-import { posCustomerTypeLabel } from "@/lib/pos-customer-type";
+import { posCustomerTypeLabel, isNonRevenueCustomerType } from "@/lib/pos-customer-type";
 import { cn } from "@/lib/utils";
 import type { PosSale } from "@/types";
 
@@ -80,11 +80,13 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
       customer?.address
   );
   const amountDue = sale.amountDue ?? sale.total;
+  const noCharge = isNonRevenueCustomerType(sale.customerType);
   const hasVoucher = Boolean(
     sale.voucherCode || (sale.voucherAmountApplied ?? 0) > 0
   );
-  const paymentLines =
-    sale.payments?.length > 0
+  const paymentLines = noCharge
+    ? []
+    : sale.payments?.length > 0
       ? sale.payments
       : [
           {
@@ -95,8 +97,9 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
             note: null,
           },
         ];
-  const paymentSummary =
-    paymentLines.length === 1
+  const paymentSummary = noCharge
+    ? "No charge"
+    : paymentLines.length === 1
       ? tenderMethodLabel(paymentLines[0].tenderMethod)
       : `${paymentLines.length} methods`;
 
@@ -196,12 +199,14 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                     ) : null}
                   </div>
                   <p className="shrink-0 text-sm font-semibold tabular-nums">
-                    {formatCurrency(item.lineTotal)}
+                    {noCharge ? "—" : formatCurrency(item.lineTotal)}
                   </p>
                 </div>
+                {noCharge ? null : (
                 <p className="mt-1 text-xs text-muted-foreground tabular-nums">
                   {item.quantity} × {formatCurrency(item.unitPrice)}
                 </p>
+                )}
               </li>
             ))}
           </ul>
@@ -264,10 +269,10 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                       {item.quantity}
                     </TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {formatCurrency(item.unitPrice)}
+                      {noCharge ? "—" : formatCurrency(item.unitPrice)}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
-                      {formatCurrency(item.lineTotal)}
+                      {noCharge ? "—" : formatCurrency(item.lineTotal)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -286,19 +291,22 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                   {sale.saleChannel === "wholesale" ? "Wholesale" : "Shop"}
                 </dd>
               </div>
-              {sale.saleChannel !== "wholesale" ? (
+              {noCharge || sale.saleChannel === "wholesale" ? null : (
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-muted-foreground">Price list</dt>
                   <dd className="font-medium">
                     {priceListLabel(sale.paymentMethod)}
                   </dd>
                 </div>
-              ) : null}
+              )}
               <div className="space-y-2 border-t pt-2">
                 <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   Payments
                 </p>
-                {paymentLines.map((line, index) => (
+                {noCharge ? (
+                  <p className="text-sm text-muted-foreground">No charge</p>
+                ) : (
+                paymentLines.map((line, index) => (
                   <div
                     key={`${line.tenderMethod}-${index}`}
                     className="flex items-start justify-between gap-3"
@@ -328,7 +336,8 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
                       {formatCurrency(line.amount)}
                     </p>
                   </div>
-                ))}
+                ))
+                )}
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted-foreground">Customer type</dt>
@@ -338,7 +347,9 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
               </div>
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted-foreground">Subtotal</dt>
-                <dd className="tabular-nums">{formatCurrency(sale.total)}</dd>
+                <dd className="tabular-nums">
+                  {noCharge ? "No charge" : formatCurrency(sale.total)}
+                </dd>
               </div>
               {hasVoucher ? (
                 <>
@@ -373,7 +384,9 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
               ) : null}
               <div className="flex items-center justify-between gap-3 border-t pt-3 text-base font-semibold">
                 <dt>Amount due</dt>
-                <dd className="tabular-nums">{formatCurrency(amountDue)}</dd>
+                <dd className="tabular-nums">
+                  {noCharge ? "No charge" : formatCurrency(amountDue)}
+                </dd>
               </div>
             </dl>
           </section>

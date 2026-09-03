@@ -45,6 +45,7 @@ import {
 } from "@/lib/pos-payments";
 import { paymentMethodName } from "@/lib/payment-methods";
 import {
+  isNonRevenueCustomerType,
   parsePosCustomerType,
   posCustomerTypeLabel,
   requiresPosCustomerDetails,
@@ -562,8 +563,9 @@ export function PosCheckoutDialog({
     lines,
     appliedVoucher
   );
+  const noCharge = isNonRevenueCustomerType(customerType);
   const paidLines = lines.filter((line) => !line.isFreebie);
-  const payableLines = lines.filter(cartLineNeedsPayment);
+  const payableLines = noCharge ? [] : lines.filter(cartLineNeedsPayment);
   const missingPaymentAccount = payableLines.some((line) =>
     (line.payments ?? []).some((pay) => {
       if (!tenderNeedsPaymentAccount(pay.tenderMethod)) return false;
@@ -587,6 +589,7 @@ export function PosCheckoutDialog({
       line.payments.some((pay) => !Number.isFinite(pay.amount) || pay.amount <= 0)
   );
   const missingRetail =
+    !noCharge &&
     !isWholesale &&
     paidLines.some(
       (line) => line.priceList === "retail" && line.retailPrice == null
@@ -600,7 +603,7 @@ export function PosCheckoutDialog({
 
   const goToReview = () => {
     if (missingRetail) return;
-    if (amountDue > 0.01 && payableLines.length === 0) return;
+    if (!noCharge && amountDue > 0.01 && payableLines.length === 0) return;
     if (missingPaymentAccount || unbalancedItemPayments || invalidItemPaymentAmount)
       return;
     if (missingCustomerName) return;
@@ -630,8 +633,12 @@ export function PosCheckoutDialog({
         </h2>
         <p className="text-sm text-muted-foreground">
           {step === "details"
-            ? "Step 1 of 2 — payment, customer, and voucher"
-            : "Step 2 of 2 — confirm before charging"}
+            ? noCharge
+              ? "Step 1 of 2 — customer type"
+              : "Step 1 of 2 — payment, customer, and voucher"
+            : noCharge
+              ? "Step 2 of 2 — confirm with no charge"
+              : "Step 2 of 2 — confirm before charging"}
           {branchName ? ` · ${branchName}` : ""}
         </p>
       </div>
@@ -718,9 +725,11 @@ export function PosCheckoutDialog({
             {charging ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : null}
-            {amountDue <= 0.01
-              ? "Complete sale"
-              : `Confirm charge ${formatCurrency(amountDue)}`}
+            {noCharge
+              ? `Confirm ${customerTypeLabel(customerType).toLowerCase()}`
+              : amountDue <= 0.01
+                ? "Complete sale"
+                : `Confirm charge ${formatCurrency(amountDue)}`}
           </Button>
         </>
       )}
@@ -744,6 +753,36 @@ export function PosCheckoutDialog({
               }
             >
               <div className="space-y-5">
+              {noCharge ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">
+                    Items ({itemCount})
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {customerTypeLabel(customerType)} has no charge. Stock
+                    still deducts when you confirm.
+                  </p>
+                  <ul className="divide-y rounded-lg border">
+                    {lines.map((line) => {
+                      const label = lineLabel(line);
+                      return (
+                        <li
+                          key={line.variantId}
+                          className="px-3 py-2 text-sm"
+                        >
+                          <p className="font-medium">
+                            {line.quantity}× {line.productName}
+                          </p>
+                          {label ? (
+                            <p className="text-muted-foreground">{label}</p>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : (
+              <>
               {isWholesale ? (
                 <div className="space-y-3">
                   <div>
@@ -1289,6 +1328,8 @@ export function PosCheckoutDialog({
                   </p>
                 ) : null}
               </div>
+              </>
+              )}
 
               </div>
 
@@ -1300,18 +1341,21 @@ export function PosCheckoutDialog({
                 }
               >
               <div className="rounded-lg border bg-muted/30 p-3">
-                <p className="text-xs text-muted-foreground">Amount due</p>
+                <p className="text-xs text-muted-foreground">
+                  {noCharge ? "Charge" : "Amount due"}
+                </p>
                 <p className="text-2xl font-semibold tabular-nums">
-                  {formatCurrency(amountDue)}
+                  {noCharge ? "No charge" : formatCurrency(amountDue)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {itemCount} item{itemCount === 1 ? "" : "s"}
-                  {voucherApplied > 0
+                  {!noCharge && voucherApplied > 0
                     ? ` · voucher −${formatCurrency(voucherApplied)}`
                     : ""}
                 </p>
               </div>
 
+              {noCharge ? null : (
               <div className="space-y-2">
                 <Label htmlFor="pos-voucher-code">Voucher code</Label>
                 <p className="text-xs text-muted-foreground">
@@ -1370,6 +1414,7 @@ export function PosCheckoutDialog({
                   </div>
                 ) : null}
               </div>
+              )}
 
               <div className="space-y-3">
                 <div className="space-y-2">
@@ -1519,13 +1564,21 @@ export function PosCheckoutDialog({
                           {label ? (
                             <p className="text-muted-foreground">{label}</p>
                           ) : null}
-                          <p className="tabular-nums text-muted-foreground">
-                            @ {formatCurrency(line.unitPrice)}
-                          </p>
+                          {noCharge ? null : (
+                            <p className="tabular-nums text-muted-foreground">
+                              @ {formatCurrency(line.unitPrice)}
+                            </p>
+                          )}
                         </div>
-                        <p className="shrink-0 font-medium tabular-nums">
-                          {formatCurrency(line.unitPrice * line.quantity)}
-                        </p>
+                        {noCharge ? (
+                          <p className="shrink-0 text-sm text-muted-foreground">
+                            No charge
+                          </p>
+                        ) : (
+                          <p className="shrink-0 font-medium tabular-nums">
+                            {formatCurrency(line.unitPrice * line.quantity)}
+                          </p>
+                        )}
                       </li>
                     );
                   })}
@@ -1546,7 +1599,7 @@ export function PosCheckoutDialog({
                     {isWholesale ? "Wholesale" : "Shop"}
                   </span>
                 </div>
-                {!isWholesale ? (
+                {!noCharge && !isWholesale ? (
                   <div className="flex justify-between gap-2">
                     <span className="text-muted-foreground">Price list</span>
                     <span className="font-medium capitalize">
@@ -1561,7 +1614,11 @@ export function PosCheckoutDialog({
                 ) : null}
                 <div className="space-y-2 border-t pt-2">
                   <p className="text-muted-foreground">Payments by item</p>
-                  {payableLines.length === 0 ? (
+                  {noCharge ? (
+                    <p className="text-sm text-muted-foreground">
+                      No charge for {customerTypeLabel(customerType).toLowerCase()}.
+                    </p>
+                  ) : payableLines.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       No payment needed — amount due is {formatCurrency(0)}.
                     </p>
@@ -1624,7 +1681,7 @@ export function PosCheckoutDialog({
                     {customerTypeLabel(customerType)}
                   </span>
                 </div>
-                {appliedVoucher ? (
+                {appliedVoucher && !noCharge ? (
                   <>
                     <div className="flex justify-between gap-2">
                       <span className="text-muted-foreground">Voucher</span>
@@ -1671,6 +1728,13 @@ export function PosCheckoutDialog({
               </div>
 
               <div className="space-y-1 rounded-lg border p-3">
+                {noCharge ? (
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-medium">Amount due</span>
+                    <span className="text-xl font-bold">No charge</span>
+                  </div>
+                ) : (
+                  <>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="tabular-nums">
@@ -1691,6 +1755,8 @@ export function PosCheckoutDialog({
                     {formatCurrency(amountDue)}
                   </span>
                 </div>
+                  </>
+                )}
               </div>
               </aside>
             </div>
