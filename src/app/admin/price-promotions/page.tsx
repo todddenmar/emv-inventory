@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus, StopCircle } from "lucide-react";
+import { Loader2, MoreHorizontal, Pencil, Plus, StopCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -36,19 +42,81 @@ import {
   endPricePromotion,
   getPricePromotions,
 } from "@/lib/firestore/price-promotions";
-import { isPricePromotionCurrentlyActive } from "@/lib/product-pricing";
-import { formatDate } from "@/lib/format";
+import {
+  isPricePromotionCurrentlyActive,
+  pricePromotionDisplayStatus,
+} from "@/lib/product-pricing";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
-import type { PricePromotion, PricePromotionStatus } from "@/types";
+import type { PricePromotion } from "@/types";
 
-type StatusFilter = "all" | "live" | PricePromotionStatus;
+type StatusFilter = "all" | "live" | "active" | "scheduled" | "ended" | "expired";
 
 function displayStatus(promo: PricePromotion, now: Date): string {
-  if (promo.status === "ended" || promo.endedAt) return "ended";
-  if (promo.endsAt && promo.endsAt.getTime() < now.getTime()) return "expired";
-  if (promo.startsAt.getTime() > now.getTime()) return "scheduled";
-  if (isPricePromotionCurrentlyActive(promo, now)) return "active";
-  return promo.status;
+  return pricePromotionDisplayStatus(promo, now);
+}
+
+function promoItemPreview(promo: PricePromotion, limit = 3): string {
+  return promo.items
+    .slice(0, limit)
+    .map(
+      (item) =>
+        `${item.productName} ${formatCurrency(item.salePrice)}${
+          item.saleRetailPrice != null
+            ? ` / ${formatCurrency(item.saleRetailPrice)}`
+            : ""
+        }`
+    )
+    .join(" · ");
+}
+
+function PromoRowActions({
+  promo,
+  status,
+  ending,
+  onEnd,
+}: {
+  promo: PricePromotion;
+  status: string;
+  ending: boolean;
+  onEnd: () => void;
+}) {
+  const canEnd = status === "active" || status === "scheduled";
+  const editLabel =
+    status === "ended" || status === "expired" ? "Start again" : "Edit";
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="ghost" size="icon-sm">
+            {ending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MoreHorizontal className="h-4 w-4" />
+            )}
+            <span className="sr-only">Open actions</span>
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem
+          render={
+            <Link href={`/admin/price-promotions/${promo.id}`}>
+              <Pencil className="h-4 w-4" />
+              {editLabel}
+            </Link>
+          }
+        />
+        {canEnd ? (
+          <DropdownMenuItem disabled={ending} onClick={onEnd}>
+            <StopCircle className="h-4 w-4" />
+            End now
+          </DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 function statusBadgeVariant(
@@ -212,7 +280,58 @@ export default function AdminPricePromotionsPage() {
             </p>
           ) : (
             <>
-              <div className="overflow-x-auto rounded-md border">
+              <ul className="space-y-3 md:hidden">
+                {pagedItems.map((promo) => {
+                  const status = displayStatus(promo, now);
+                  const preview = promoItemPreview(promo);
+                  const extra = Math.max(0, promo.items.length - 3);
+                  return (
+                    <li key={promo.id} className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <Link
+                            href={`/admin/price-promotions/${promo.id}`}
+                            className="font-medium hover:underline"
+                          >
+                            {promo.name}
+                          </Link>
+                          <div className="mt-1">
+                            <Badge variant={statusBadgeVariant(status)}>
+                              {status}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatDate(promo.startsAt)}
+                            {" → "}
+                            {promo.endsAt
+                              ? formatDate(promo.endsAt)
+                              : "until ended"}
+                          </p>
+                          {preview ? (
+                            <p className="mt-2 text-sm">
+                              {preview}
+                              {extra > 0 ? ` · +${extra} more` : ""}
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              {promo.itemCount} item
+                              {promo.itemCount === 1 ? "" : "s"}
+                            </p>
+                          )}
+                        </div>
+                        <PromoRowActions
+                          promo={promo}
+                          status={status}
+                          ending={endingId === promo.id}
+                          onEnd={() => void handleEnd(promo.id)}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div className="hidden overflow-x-auto rounded-md border md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -226,8 +345,6 @@ export default function AdminPricePromotionsPage() {
                   <TableBody>
                     {pagedItems.map((promo) => {
                       const status = displayStatus(promo, now);
-                      const canEnd =
-                        status === "active" || status === "scheduled";
                       return (
                         <TableRow key={promo.id}>
                           <TableCell className="font-medium">
@@ -237,6 +354,15 @@ export default function AdminPricePromotionsPage() {
                             >
                               {promo.name}
                             </Link>
+                            {promo.items[0] ? (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {promo.items[0].productName}{" "}
+                                {formatCurrency(promo.items[0].salePrice)}
+                                {promo.itemCount > 1
+                                  ? ` · +${promo.itemCount - 1}`
+                                  : ""}
+                              </p>
+                            ) : null}
                           </TableCell>
                           <TableCell>
                             <Badge variant={statusBadgeVariant(status)}>
@@ -254,25 +380,12 @@ export default function AdminPricePromotionsPage() {
                             {promo.itemCount}
                           </TableCell>
                           <TableCell className="text-right">
-                            {canEnd ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={endingId === promo.id}
-                                onClick={() => void handleEnd(promo.id)}
-                              >
-                                {endingId === promo.id ? (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                  <StopCircle className="mr-2 h-4 w-4" />
-                                )}
-                                End now
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">
-                                —
-                              </span>
-                            )}
+                            <PromoRowActions
+                              promo={promo}
+                              status={status}
+                              ending={endingId === promo.id}
+                              onEnd={() => void handleEnd(promo.id)}
+                            />
                           </TableCell>
                         </TableRow>
                       );

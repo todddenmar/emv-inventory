@@ -66,6 +66,17 @@ export function isPricePromotionCurrentlyActive(
   return promo.status === "active" || promo.status === "scheduled";
 }
 
+export function pricePromotionDisplayStatus(
+  promo: Pick<PricePromotion, "status" | "startsAt" | "endsAt" | "endedAt">,
+  now: Date = new Date()
+): "ended" | "expired" | "scheduled" | "active" {
+  if (promo.status === "ended" || promo.endedAt) return "ended";
+  if (promo.endsAt && promo.endsAt.getTime() < now.getTime()) return "expired";
+  if (promo.startsAt.getTime() > now.getTime()) return "scheduled";
+  if (isPricePromotionCurrentlyActive(promo, now)) return "active";
+  return "ended";
+}
+
 export function resolveEffectivePrices(
   variant: Pick<ProductVariant, "price" | "retailPrice">,
   promoMap: Map<string, EffectiveSalePrices> | undefined,

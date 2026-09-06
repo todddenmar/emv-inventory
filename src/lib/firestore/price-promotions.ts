@@ -192,6 +192,146 @@ export async function createPricePromotion(
   return docRef.id;
 }
 
+function promotionPriceLogEntries(
+  items: PricePromotionItem[],
+  previousByVariant: Map<string, PricePromotionItem> | null,
+  actor: { performedBy: string; performedByName: string | null },
+  note: string,
+  promotionId: string
+) {
+  return items
+    .filter((item) => {
+      if (!previousByVariant) return true;
+      const prev = previousByVariant.get(item.variantId);
+      if (!prev) return true;
+      return prev.salePrice !== item.salePrice;
+    })
+    .map((item) => {
+      const prev = previousByVariant?.get(item.variantId);
+      const previousPrice = prev ? prev.salePrice : item.basePrice;
+      const newPrice = item.salePrice;
+      const delta = newPrice - previousPrice;
+      return {
+        productId: item.productId,
+        productName: item.productName,
+        variantId: item.variantId,
+        variantLabel: item.productName,
+        previousPrice,
+        newPrice,
+        delta,
+        direction: (delta >= 0 ? "increase" : "decrease") as
+          | "increase"
+          | "decrease",
+        performedBy: actor.performedBy,
+        performedByName: actor.performedByName,
+        note,
+        promotionId,
+      };
+    });
+}
+
+function validatePromotionItems(items: PricePromotionItem[]) {
+  if (items.length === 0) {
+    throw new Error("Add at least one variant");
+  }
+  for (const item of items) {
+    if (!Number.isFinite(item.salePrice) || item.salePrice < 0) {
+      throw new Error(`Invalid sale cash price for ${item.productName}`);
+    }
+  }
+}
+
+export interface UpdatePricePromotionInput {
+  name: string;
+  startsAt: Date;
+  endsAt: Date | null;
+  items: PricePromotionItem[];
+  performedBy: string;
+  performedByName: string | null;
+}
+
+export async function updatePricePromotion(
+  id: string,
+  input: UpdatePricePromotionInput
+): Promise<void> {
+  if (!input.name.trim()) {
+    throw new Error("Promotion name is required");
+  }
+  validatePromotionItems(input.items);
+
+  const existing = await getPricePromotion(id);
+  if (!existing) {
+    throw new Error("Promotion not found");
+  }
+
+  const all = await getPricePromotions();
+  const overlaps = findOverlappingVariantIds(
+    all,
+    input.items,
+    input.startsAt,
+    input.endsAt,
+    id
+  );
+  if (overlaps.length > 0) {
+    throw new Error(
+      `Some variants already have an overlapping promotion (${overlaps.length}). End or adjust the other sale first.`
+    );
+  }
+
+  const wasEnded = existing.status === "ended" || existing.endedAt != null;
+  const nextStatus = resolveCreateStatus(input.startsAt);
+  const name = input.name.trim();
+  const previousByVariant = new Map(
+    existing.items.map((item) => [item.variantId, item])
+  );
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.pricePromotions, id), {
+    name,
+    status: nextStatus,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+    items: input.items,
+    itemCount: input.items.length,
+    endedAt: null,
+    updatedAt: serverTimestamp(),
+  });
+
+  const wasLive = isPricePromotionCurrentlyActive(existing);
+  const willBeLive = isPricePromotionCurrentlyActive({
+    status: nextStatus,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+  });
+
+  const actor = {
+    performedBy: input.performedBy,
+    performedByName: input.performedByName,
+  };
+
+  if (wasEnded || (!wasLive && willBeLive)) {
+    const logs = promotionPriceLogEntries(
+      input.items,
+      null,
+      actor,
+      `Sale started: ${name}`,
+      id
+    );
+    if (logs.length > 0) await createProductPriceLogs(logs);
+    return;
+  }
+
+  if (wasLive && willBeLive) {
+    const logs = promotionPriceLogEntries(
+      input.items,
+      previousByVariant,
+      actor,
+      `Sale updated: ${name}`,
+      id
+    );
+    if (logs.length > 0) await createProductPriceLogs(logs);
+  }
+}
+
 export async function endPricePromotion(
   id: string,
   actor: { performedBy: string; performedByName?: string | null }
