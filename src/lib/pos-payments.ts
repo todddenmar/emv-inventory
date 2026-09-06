@@ -55,6 +55,13 @@ export interface PosCheckoutPaymentLine {
   note: string;
 }
 
+/** Linked cart variants that share one payment split (checkout draft only). */
+export interface PosCheckoutPaymentGroup {
+  id: string;
+  variantIds: string[];
+  payments: PosCheckoutPaymentLine[];
+}
+
 export function moneyInputText(amount: number): string {
   if (!Number.isFinite(amount)) return "";
   return String(roundMoney(Math.max(0, amount)));
@@ -158,6 +165,13 @@ export function createCheckoutPaymentLineId(): string {
     return crypto.randomUUID();
   }
   return `pay-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function createCheckoutPaymentGroupId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `grp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function roundMoney(value: number): number {
@@ -349,7 +363,7 @@ export function itemPaymentsCoverLineTotal(
   );
 }
 
-type CartLineForPayment = {
+export type CartLineForPayment = {
   variantId: string;
   quantity: number;
   unitPrice: number;
@@ -357,14 +371,168 @@ type CartLineForPayment = {
   payments: PosCheckoutPaymentLine[];
 };
 
+export function normalizeCheckoutPaymentLine(
+  pay: Partial<PosCheckoutPaymentLine> & Pick<PosCheckoutPaymentLine, "tenderMethod">
+): PosCheckoutPaymentLine {
+  const amount = Number.isFinite(pay.amount) ? roundMoney(pay.amount as number) : 0;
+  return {
+    id: pay.id || createCheckoutPaymentLineId(),
+    tenderMethod: parsePosTenderMethod(pay.tenderMethod),
+    amount,
+    amountText:
+      typeof pay.amountText === "string"
+        ? pay.amountText
+        : moneyInputText(amount),
+    paymentAccountId: pay.paymentAccountId ?? null,
+    kind: parsePosPaymentKind(pay.kind),
+    note: typeof pay.note === "string" ? pay.note : "",
+  };
+}
+
+export function groupedVariantIdSet(
+  groups: PosCheckoutPaymentGroup[] | null | undefined
+): Set<string> {
+  const ids = new Set<string>();
+  for (const group of groups ?? []) {
+    for (const variantId of group.variantIds) ids.add(variantId);
+  }
+  return ids;
+}
+
+export function sanitizePaymentGroups(
+  groups: PosCheckoutPaymentGroup[] | null | undefined,
+  lines: CartLineForPayment[]
+): PosCheckoutPaymentGroup[] {
+  const payableIds = new Set(
+    lines.filter(cartLineNeedsPayment).map((line) => line.variantId)
+  );
+  const used = new Set<string>();
+  const next: PosCheckoutPaymentGroup[] = [];
+
+  for (const group of groups ?? []) {
+    const variantIds = [...new Set(group.variantIds)].filter((id) => {
+      if (!payableIds.has(id) || used.has(id)) return false;
+      return true;
+    });
+    if (variantIds.length < 2) continue;
+    for (const id of variantIds) used.add(id);
+    next.push({
+      id: group.id || createCheckoutPaymentGroupId(),
+      variantIds,
+      payments: Array.isArray(group.payments)
+        ? group.payments.map((pay) =>
+            normalizeCheckoutPaymentLine({
+              ...pay,
+              tenderMethod: pay.tenderMethod ?? "cash",
+            })
+          )
+        : [],
+    });
+  }
+
+  return next;
+}
+
+export function paymentGroupMerchandiseTotal(
+  group: Pick<PosCheckoutPaymentGroup, "variantIds">,
+  lines: CartLineForPayment[]
+): number {
+  const ids = new Set(group.variantIds);
+  return roundMoney(
+    lines.reduce((sum, line) => {
+      if (!ids.has(line.variantId) || !cartLineNeedsPayment(line)) return sum;
+      return sum + cartLineMerchandiseTotal(line);
+    }, 0)
+  );
+}
+
+function assertPositivePayments(payments: PosCheckoutPaymentLine[]) {
+  if (!payments || payments.length === 0) {
+    throw new Error("Add at least one payment for each item or linked group");
+  }
+  for (const pay of payments) {
+    if (!Number.isFinite(pay.amount) || pay.amount <= 0) {
+      throw new Error("Each payment amount must be greater than 0");
+    }
+  }
+}
+
 /**
- * Flatten per-item payment splits into sale-level payments.
- * If a voucher reduces amountDue, every split is scaled proportionally.
+ * Split group payments across member items by line-total share.
+ * Last item absorbs rounding so each payment still sums to its original amount.
+ */
+export function allocateGroupPaymentsToItems(
+  group: PosCheckoutPaymentGroup,
+  lines: CartLineForPayment[]
+): Map<string, PosCheckoutPaymentLine[]> {
+  const members = group.variantIds
+    .map((id) => lines.find((line) => line.variantId === id))
+    .filter(
+      (line): line is CartLineForPayment =>
+        line != null && cartLineNeedsPayment(line)
+    );
+  const result = new Map<string, PosCheckoutPaymentLine[]>();
+  for (const member of members) result.set(member.variantId, []);
+
+  const groupTotal = roundMoney(
+    members.reduce((sum, line) => sum + cartLineMerchandiseTotal(line), 0)
+  );
+  if (groupTotal <= PAYMENT_AMOUNT_TOLERANCE || members.length === 0) {
+    return result;
+  }
+
+  for (const pay of group.payments) {
+    const amount = roundMoney(Math.max(0, pay.amount));
+    let allocated = 0;
+    for (let i = 0; i < members.length; i++) {
+      const member = members[i];
+      const share =
+        i === members.length - 1
+          ? roundMoney(amount - allocated)
+          : roundMoney(
+              (cartLineMerchandiseTotal(member) / groupTotal) * amount
+            );
+      allocated = roundMoney(allocated + share);
+      if (share <= PAYMENT_AMOUNT_TOLERANCE) continue;
+      result.get(member.variantId)?.push(
+        createItemPaymentLine(share, {
+          tenderMethod: pay.tenderMethod,
+          paymentAccountId: pay.paymentAccountId,
+          kind: pay.kind,
+          note: pay.note,
+        })
+      );
+    }
+  }
+
+  return result;
+}
+
+export function allocatedPaymentsForCartLines(
+  lines: CartLineForPayment[],
+  groups: PosCheckoutPaymentGroup[] | null | undefined
+): Map<string, PosCheckoutPaymentLine[]> {
+  const sanitized = sanitizePaymentGroups(groups, lines);
+  const byVariant = new Map<string, PosCheckoutPaymentLine[]>();
+  for (const group of sanitized) {
+    const allocated = allocateGroupPaymentsToItems(group, lines);
+    for (const [variantId, payments] of allocated) {
+      byVariant.set(variantId, payments);
+    }
+  }
+  return byVariant;
+}
+
+/**
+ * Flatten group + per-item payment splits into sale-level payments.
+ * Linked groups emit their payments once. If a voucher reduces amountDue,
+ * every split is scaled proportionally.
  */
 export function resolvePaymentsFromCartLines(
   lines: CartLineForPayment[],
   accounts: PaymentAccount[],
-  amountDue: number
+  amountDue: number,
+  paymentGroups: PosCheckoutPaymentGroup[] = []
 ): PosPaymentLine[] {
   const paid = lines.filter((line) => cartLineNeedsPayment(line));
   if (amountDue <= PAYMENT_AMOUNT_TOLERANCE) {
@@ -381,6 +549,9 @@ export function resolvePaymentsFromCartLines(
     throw new Error("Merchandise total must be greater than 0");
   }
 
+  const groups = sanitizePaymentGroups(paymentGroups, paid);
+  const groupedIds = groupedVariantIdSet(groups);
+
   type Draft = {
     tenderMethod: PosTenderMethod;
     amount: number;
@@ -390,16 +561,32 @@ export function resolvePaymentsFromCartLines(
   };
   const drafts: Draft[] = [];
 
+  for (const group of groups) {
+    const groupTotal = paymentGroupMerchandiseTotal(group, paid);
+    assertPositivePayments(group.payments);
+    if (!itemPaymentsCoverLineTotal(group.payments, groupTotal)) {
+      throw new Error(
+        "Linked items' payments must equal those items' combined total"
+      );
+    }
+    for (const pay of group.payments) {
+      drafts.push({
+        tenderMethod: pay.tenderMethod,
+        amount: pay.amount,
+        paymentAccountId: pay.paymentAccountId,
+        kind: parsePosPaymentKind(pay.kind),
+        note: pay.note.trim(),
+      });
+    }
+  }
+
   for (const line of paid) {
+    if (groupedIds.has(line.variantId)) continue;
     const lineTotal = cartLineMerchandiseTotal(line);
     if (!line.payments || line.payments.length === 0) {
       throw new Error("Add at least one payment for each item");
     }
-    for (const pay of line.payments) {
-      if (!Number.isFinite(pay.amount) || pay.amount <= 0) {
-        throw new Error("Each payment amount must be greater than 0");
-      }
-    }
+    assertPositivePayments(line.payments);
     if (!itemPaymentsCoverLineTotal(line.payments, lineTotal)) {
       throw new Error("Each item's payments must equal that item's line total");
     }

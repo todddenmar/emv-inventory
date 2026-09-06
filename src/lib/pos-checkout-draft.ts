@@ -2,7 +2,11 @@ import type {
   PosCartLine,
   PosCustomerDraft,
 } from "@/components/admin/pos-cart";
-import { ensureCartLinePaymentFields } from "@/lib/pos-payments";
+import {
+  ensureCartLinePaymentFields,
+  sanitizePaymentGroups,
+  type PosCheckoutPaymentGroup,
+} from "@/lib/pos-payments";
 import { parsePosCustomerType } from "@/lib/pos-customer-type";
 import type {
   PosPaymentMethod,
@@ -21,6 +25,7 @@ export interface PosCheckoutDraft {
   customer: PosCustomerDraft;
   appliedVoucher: Voucher | null;
   voucherCodeInput: string;
+  paymentGroups: PosCheckoutPaymentGroup[];
   savedAt: number;
 }
 
@@ -94,6 +99,10 @@ export function loadPosCheckoutDraft(
       ...parsed,
       customerType: parsePosCustomerType(parsed.customerType),
       lines: parsed.lines.map((line) => ensureCartLinePaymentFields(line)),
+      paymentGroups: sanitizePaymentGroups(
+        parsed.paymentGroups,
+        parsed.lines
+      ),
     };
   } catch {
     return null;

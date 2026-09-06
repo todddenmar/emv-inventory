@@ -36,13 +36,18 @@ import {
   type PosCheckoutDraft,
 } from "@/lib/pos-checkout-draft";
 import {
+  allocatedPaymentsForCartLines,
   cartLineNeedsPayment,
+  defaultItemPayments,
   ensureCartLinePaymentFields,
+  groupedVariantIdSet,
   resolvePaymentsFromCartLines,
   roundMoney,
+  sanitizePaymentGroups,
   snapshotPaymentAccount,
   syncPaymentsToLineTotal,
   tenderNeedsPaymentAccount,
+  type PosCheckoutPaymentGroup,
 } from "@/lib/pos-payments";
 import type {
   PaymentAccount,
@@ -83,6 +88,9 @@ export function PosCheckoutWorkspace({
   );
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
   const [voucherCodeInput, setVoucherCodeInput] = useState("");
+  const [paymentGroups, setPaymentGroups] = useState<
+    PosCheckoutPaymentGroup[]
+  >([]);
   const [checkoutStep, setCheckoutStep] =
     useState<PosCheckoutStep>("details");
   const [charging, setCharging] = useState(false);
@@ -99,6 +107,9 @@ export function PosCheckoutWorkspace({
       branchId: draft.branchId,
       branchName: draft.branchName,
     });
+    const groups = sanitizePaymentGroups(draft.paymentGroups, draft.lines);
+    const groupedIds = groupedVariantIdSet(groups);
+    setPaymentGroups(groups);
     setLines(
       draft.lines.map((line) => {
         const ensured = ensureCartLinePaymentFields(
@@ -106,6 +117,9 @@ export function PosCheckoutWorkspace({
           draft.paymentMethod === "retail" ? "retail" : "cash"
         );
         if (ensured.isFreebie) return ensured;
+        if (groupedIds.has(ensured.variantId)) {
+          return { ...ensured, payments: [] };
+        }
         const lineTotal =
           Math.round(ensured.unitPrice * ensured.quantity * 100) / 100;
         return {
@@ -147,6 +161,7 @@ export function PosCheckoutWorkspace({
         customer,
         appliedVoucher,
         voucherCodeInput,
+        paymentGroups,
         savedAt: Date.now(),
         ...patch,
       };
@@ -158,11 +173,39 @@ export function PosCheckoutWorkspace({
       customerType,
       draftMeta,
       lines,
+      paymentGroups,
       paymentMethod,
       saleChannel,
       voucherCodeInput,
     ]
   );
+
+  const commitLinesAndGroups = (
+    nextLines: PosCartLine[],
+    nextGroupsInput: PosCheckoutPaymentGroup[] = paymentGroups
+  ) => {
+    const sanitized = sanitizePaymentGroups(nextGroupsInput, nextLines);
+    const prevGrouped = groupedVariantIdSet(paymentGroups);
+    const nextGrouped = groupedVariantIdSet(sanitized);
+    const synced = nextLines.map((line) => {
+      const was = prevGrouped.has(line.variantId);
+      const now = nextGrouped.has(line.variantId);
+      if (now) return { ...line, payments: [] };
+      if (
+        was &&
+        !now &&
+        cartLineNeedsPayment(line) &&
+        (line.payments?.length ?? 0) === 0
+      ) {
+        const lineTotal = roundMoney(line.unitPrice * line.quantity);
+        return { ...line, payments: defaultItemPayments(lineTotal) };
+      }
+      return line;
+    });
+    setPaymentGroups(sanitized);
+    persistDraft({ lines: synced, paymentGroups: sanitized });
+    return synced;
+  };
 
   const setLineRetailPrice = (
     variantId: string,
@@ -185,8 +228,7 @@ export function PosCheckoutWorkspace({
           payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal),
         };
       });
-      persistDraft({ lines: next });
-      return next;
+      return commitLinesAndGroups(next);
     });
   };
 
@@ -203,8 +245,7 @@ export function PosCheckoutWorkspace({
           payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal),
         };
       });
-      persistDraft({ lines: next });
-      return next;
+      return commitLinesAndGroups(next);
     });
   };
 
@@ -261,7 +302,12 @@ export function PosCheckoutWorkspace({
       payments =
         noCharge || amountDue <= 0.01
           ? []
-          : resolvePaymentsFromCartLines(lines, paymentAccounts, amountDue);
+          : resolvePaymentsFromCartLines(
+              lines,
+              paymentAccounts,
+              amountDue,
+              paymentGroups
+            );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid payments");
       setCheckoutStep("details");
@@ -335,6 +381,10 @@ export function PosCheckoutWorkspace({
                     .filter((l) => !l.isFreebie)
                     .reduce((s, l) => s + l.unitPrice * l.quantity, 0)
                 );
+          const allocated = allocatedPaymentsForCartLines(
+            lines,
+            paymentGroups
+          );
 
           for (const line of lines) {
             const name = line.isFreebie
@@ -349,12 +399,14 @@ export function PosCheckoutWorkspace({
             const unitPrice = noCharge || line.isFreebie ? 0 : line.unitPrice;
             const lineTotal = unitPrice * line.quantity;
 
+            const sourcePayments =
+              allocated.get(line.variantId) ?? line.payments ?? [];
             const itemPayments =
               noCharge ||
               !cartLineNeedsPayment(line) ||
-              !(line.payments?.length > 0)
+              sourcePayments.length === 0
                 ? []
-                : line.payments
+                : sourcePayments
                     .filter(
                       (pay) =>
                         Number.isFinite(pay.amount) && pay.amount > 0.01
@@ -494,12 +546,19 @@ export function PosCheckoutWorkspace({
             if (nextMethod !== paymentMethod) {
               setPaymentMethod(nextMethod);
             }
-            persistDraft({
-              lines: next,
-              paymentMethod: nextMethod,
-            });
-            return next;
+            const synced = commitLinesAndGroups(next);
+            if (nextMethod !== paymentMethod) {
+              persistDraft({
+                lines: synced,
+                paymentMethod: nextMethod,
+              });
+            }
+            return synced;
           });
+        }}
+        paymentGroups={paymentGroups}
+        onPaymentGroupsChange={(nextGroups) => {
+          setLines((prev) => commitLinesAndGroups(prev, nextGroups));
         }}
         onCustomerTypeChange={(type) => {
           setCustomerType(type);

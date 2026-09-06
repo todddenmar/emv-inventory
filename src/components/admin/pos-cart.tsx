@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Minus, Plus, Trash2, X } from "lucide-react";
+import { Link2, Loader2, Minus, Plus, Trash2, Unlink, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,17 +31,23 @@ import {
   POS_PAYMENT_KINDS,
   accountTypeForTender,
   cartLineNeedsPayment,
+  createCheckoutPaymentGroupId,
   createItemPaymentLine,
   formatPaymentLineNote,
+  groupedVariantIdSet,
   itemPaymentsCoverLineTotal,
   moneyInputText,
   parseMoneyInput,
+  paymentGroupMerchandiseTotal,
   paymentKindLabel,
   paymentRemaining,
+  roundMoney,
+  sanitizePaymentGroups,
   sumCheckoutPaymentAmounts,
   tenderMethodLabel as paymentTenderMethodLabel,
   tenderNeedsPaymentAccount,
   isPosTenderMethod as isPaymentTenderMethod,
+  type PosCheckoutPaymentGroup,
   type PosCheckoutPaymentLine,
 } from "@/lib/pos-payments";
 import { paymentMethodName } from "@/lib/payment-methods";
@@ -137,6 +144,79 @@ function lineLabel(line: PosCartLine): string | null {
   return line.variantLabel && line.variantLabel !== "Default"
     ? line.variantLabel
     : null;
+}
+
+function CheckoutPaymentRows({
+  payments,
+  charging,
+  paymentAccounts,
+  methodLabel,
+  onEdit,
+  onRemove,
+}: {
+  payments: PosCheckoutPaymentLine[];
+  charging: boolean;
+  paymentAccounts: PaymentAccount[];
+  methodLabel: (key: string) => string;
+  onEdit: (pay: PosCheckoutPaymentLine) => void;
+  onRemove?: (payId: string) => void;
+}) {
+  if (payments.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No payments yet — click Add.
+      </p>
+    );
+  }
+
+  return (
+    <ul className="space-y-1.5">
+      {payments.map((pay) => {
+        const account =
+          tenderNeedsPaymentAccount(pay.tenderMethod) && pay.paymentAccountId
+            ? paymentAccounts.find((a) => a.id === pay.paymentAccountId)
+            : null;
+        return (
+          <li key={pay.id} className="flex items-stretch gap-1">
+            <button
+              type="button"
+              disabled={charging}
+              onClick={() => onEdit(pay)}
+              className="min-w-0 flex-1 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-muted/40 disabled:opacity-50"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {methodLabel(pay.tenderMethod)}
+                    {account ? ` · ${account.provider}` : ""}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {formatPaymentLineNote(pay) ?? paymentKindLabel(pay.kind)}
+                  </p>
+                </div>
+                <p className="shrink-0 text-sm font-semibold tabular-nums">
+                  {formatCurrency(pay.amount)}
+                </p>
+              </div>
+            </button>
+            {onRemove && payments.length > 1 ? (
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                disabled={charging}
+                className="shrink-0 self-center"
+                aria-label="Remove payment"
+                onClick={() => onRemove(pay.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 function cartTotals(
@@ -517,6 +597,8 @@ interface PosCheckoutDialogProps {
   onRetailPriceChange: (variantId: string, retailPrice: number | null) => void;
   onUnitPriceChange?: (variantId: string, unitPrice: number) => void;
   onConfirmCharge: () => void;
+  paymentGroups?: PosCheckoutPaymentGroup[];
+  onPaymentGroupsChange?: (groups: PosCheckoutPaymentGroup[]) => void;
 }
 
 export function PosCheckoutDialog({
@@ -545,6 +627,8 @@ export function PosCheckoutDialog({
   onRetailPriceChange,
   onUnitPriceChange,
   onConfirmCharge,
+  paymentGroups: paymentGroupsProp,
+  onPaymentGroupsChange,
 }: PosCheckoutDialogProps) {
   const isWholesale = saleChannel === "wholesale";
   const isPage = layout === "page";
@@ -554,8 +638,17 @@ export function PosCheckoutDialog({
       : POS_TENDER_METHODS;
   const methodLabel = (key: string) =>
     paymentMethodName(key, tenderMethods);
+  const paymentGroups = sanitizePaymentGroups(
+    paymentGroupsProp ?? [],
+    lines
+  );
+  const groupedIds = groupedVariantIdSet(paymentGroups);
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [linkSelection, setLinkSelection] = useState<string[]>([]);
   const [paymentEditor, setPaymentEditor] = useState<{
-    variantId: string;
+    target:
+      | { type: "item"; variantId: string }
+      | { type: "group"; groupId: string };
     payId: string | null;
     draft: PosCheckoutPaymentLine;
   } | null>(null);
@@ -566,28 +659,51 @@ export function PosCheckoutDialog({
   const noCharge = isNonRevenueCustomerType(customerType);
   const paidLines = lines.filter((line) => !line.isFreebie);
   const payableLines = noCharge ? [] : lines.filter(cartLineNeedsPayment);
-  const missingPaymentAccount = payableLines.some((line) =>
-    (line.payments ?? []).some((pay) => {
-      if (!tenderNeedsPaymentAccount(pay.tenderMethod)) return false;
-      const expectedType = accountTypeForTender(pay.tenderMethod);
-      return !paymentAccounts.some(
-        (account) =>
-          account.id === pay.paymentAccountId &&
-          account.isActive &&
-          expectedType != null &&
-          account.type === expectedType
-      );
-    })
+  const ungroupedPayableLines = payableLines.filter(
+    (line) => !groupedIds.has(line.variantId)
   );
-  const unbalancedItemPayments = payableLines.some((line) => {
-    const lineTotal = Math.round(line.unitPrice * line.quantity * 100) / 100;
-    return !itemPaymentsCoverLineTotal(line.payments ?? [], lineTotal);
-  });
-  const invalidItemPaymentAmount = payableLines.some(
-    (line) =>
-      !(line.payments?.length > 0) ||
-      line.payments.some((pay) => !Number.isFinite(pay.amount) || pay.amount <= 0)
-  );
+  const paymentAccountInvalid = (
+    pay: PosCheckoutPaymentLine
+  ): boolean => {
+    if (!tenderNeedsPaymentAccount(pay.tenderMethod)) return false;
+    const expectedType = accountTypeForTender(pay.tenderMethod);
+    return !paymentAccounts.some(
+      (account) =>
+        account.id === pay.paymentAccountId &&
+        account.isActive &&
+        expectedType != null &&
+        account.type === expectedType
+    );
+  };
+  const missingPaymentAccount =
+    ungroupedPayableLines.some((line) =>
+      (line.payments ?? []).some(paymentAccountInvalid)
+    ) ||
+    paymentGroups.some((group) => group.payments.some(paymentAccountInvalid));
+  const unbalancedItemPayments =
+    ungroupedPayableLines.some((line) => {
+      const lineTotal = Math.round(line.unitPrice * line.quantity * 100) / 100;
+      return !itemPaymentsCoverLineTotal(line.payments ?? [], lineTotal);
+    }) ||
+    paymentGroups.some((group) => {
+      const groupTotal = paymentGroupMerchandiseTotal(group, lines);
+      return !itemPaymentsCoverLineTotal(group.payments, groupTotal);
+    });
+  const invalidItemPaymentAmount =
+    ungroupedPayableLines.some(
+      (line) =>
+        !(line.payments?.length > 0) ||
+        line.payments.some(
+          (pay) => !Number.isFinite(pay.amount) || pay.amount <= 0
+        )
+    ) ||
+    paymentGroups.some(
+      (group) =>
+        group.payments.length === 0 ||
+        group.payments.some(
+          (pay) => !Number.isFinite(pay.amount) || pay.amount <= 0
+        )
+    );
   const missingRetail =
     !noCharge &&
     !isWholesale &&
@@ -617,6 +733,43 @@ export function PosCheckoutDialog({
       return;
     }
     onOpenChange?.(false);
+  };
+
+  const commitGroups = (nextGroups: PosCheckoutPaymentGroup[]) => {
+    onPaymentGroupsChange?.(sanitizePaymentGroups(nextGroups, lines));
+  };
+
+  const linkSelectedItems = () => {
+    if (!onPaymentGroupsChange) return;
+    const selected = [...new Set(linkSelection)].filter((id) =>
+      ungroupedPayableLines.some((line) => line.variantId === id)
+    );
+    if (selected.length < 2) return;
+    commitGroups([
+      ...paymentGroups,
+      {
+        id: createCheckoutPaymentGroupId(),
+        variantIds: selected,
+        payments: [],
+      },
+    ]);
+    setLinkPickerOpen(false);
+    setLinkSelection([]);
+  };
+
+  const unlinkGroup = (groupId: string) => {
+    commitGroups(paymentGroups.filter((group) => group.id !== groupId));
+  };
+
+  const updateGroupPayments = (
+    groupId: string,
+    nextPayments: PosCheckoutPaymentLine[]
+  ) => {
+    commitGroups(
+      paymentGroups.map((group) =>
+        group.id === groupId ? { ...group, payments: nextPayments } : group
+      )
+    );
   };
 
   const header = (
@@ -1042,16 +1195,270 @@ export function PosCheckoutDialog({
               )}
 
               <div className="space-y-3">
-                <div>
-                  <Label>Payments by item</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Set cash/retail and split payments per item. Amount due{" "}
-                    <span className="font-medium tabular-nums">
-                      {formatCurrency(amountDue)}
-                    </span>
-                    .
-                  </p>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <Label>Payments</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Split per item, or link variants to share one payment
+                      (e.g. 1 DP + 1 Home Credit). Amount due{" "}
+                      <span className="font-medium tabular-nums">
+                        {formatCurrency(amountDue)}
+                      </span>
+                      .
+                    </p>
+                  </div>
+                  {onPaymentGroupsChange &&
+                  ungroupedPayableLines.length >= 2 ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={charging}
+                      onClick={() => {
+                        setLinkSelection([]);
+                        setLinkPickerOpen(true);
+                      }}
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                      Link items
+                    </Button>
+                  ) : null}
                 </div>
+
+                {paymentGroups.length > 0 ? (
+                  <div className="space-y-3">
+                    {paymentGroups.map((group) => {
+                      const members = group.variantIds
+                        .map((id) =>
+                          payableLines.find((line) => line.variantId === id)
+                        )
+                        .filter((line): line is PosCartLine => line != null);
+                      const groupTotal = paymentGroupMerchandiseTotal(
+                        group,
+                        lines
+                      );
+                      const paidSum = sumCheckoutPaymentAmounts(
+                        group.payments
+                      );
+                      const remaining = paymentRemaining(
+                        groupTotal,
+                        group.payments
+                      );
+                      const balanced = itemPaymentsCoverLineTotal(
+                        group.payments,
+                        groupTotal
+                      );
+
+                      return (
+                        <div
+                          key={group.id}
+                          className="space-y-3 rounded-lg border p-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-medium">
+                                Linked items
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                One payment split covers all of these variants.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              disabled={charging}
+                              onClick={() => unlinkGroup(group.id)}
+                            >
+                              <Unlink className="h-3.5 w-3.5" />
+                              Unlink
+                            </Button>
+                          </div>
+
+                          <ul className="space-y-2">
+                            {members.map((line) => {
+                              const label = lineLabel(line);
+                              const lineTotal =
+                                Math.round(
+                                  line.unitPrice * line.quantity * 100
+                                ) / 100;
+                              return (
+                                <li
+                                  key={line.variantId}
+                                  className="space-y-2 rounded-md border bg-muted/20 p-2"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium">
+                                        {line.quantity}× {line.productName}
+                                      </p>
+                                      {label ? (
+                                        <p className="text-xs text-muted-foreground">
+                                          {label}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                    <p className="shrink-0 text-sm font-semibold tabular-nums">
+                                      {formatCurrency(lineTotal)}
+                                    </p>
+                                  </div>
+                                  {!isWholesale ? (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={
+                                          line.priceList === "cash"
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        disabled={charging}
+                                        onClick={() =>
+                                          onLineChange(line.variantId, {
+                                            priceList: "cash",
+                                          })
+                                        }
+                                      >
+                                        Cash {formatCurrency(line.cashPrice)}
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={
+                                          line.priceList === "retail"
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        disabled={charging}
+                                        onClick={() =>
+                                          onLineChange(line.variantId, {
+                                            priceList: "retail",
+                                          })
+                                        }
+                                      >
+                                        Retail{" "}
+                                        {line.retailPrice != null
+                                          ? formatCurrency(line.retailPrice)
+                                          : "—"}
+                                      </Button>
+                                    </div>
+                                  ) : null}
+                                  {line.priceList === "retail" &&
+                                  (line.retailPrice == null ||
+                                    line.retailPrice <= 0) ? (
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      min={0}
+                                      disabled={charging}
+                                      className="h-8"
+                                      placeholder="Enter retail unit price"
+                                      value={line.retailPrice ?? ""}
+                                      onChange={(e) => {
+                                        const raw = e.target.value;
+                                        onRetailPriceChange(
+                                          line.variantId,
+                                          raw === "" ? null : Number(raw)
+                                        );
+                                      }}
+                                    />
+                                  ) : null}
+                                </li>
+                              );
+                            })}
+                          </ul>
+
+                          <div className="grid grid-cols-3 gap-2 rounded-md border bg-muted/20 p-2 text-[11px]">
+                            <div>
+                              <p className="text-muted-foreground">Combined</p>
+                              <p className="font-semibold tabular-nums">
+                                {formatCurrency(groupTotal)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Paid</p>
+                              <p className="font-semibold tabular-nums">
+                                {formatCurrency(paidSum)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Left</p>
+                              <p
+                                className={`font-semibold tabular-nums ${
+                                  remaining > 0.01
+                                    ? "text-amber-700"
+                                    : remaining < -0.01
+                                      ? "text-destructive"
+                                      : "text-emerald-700"
+                                }`}
+                              >
+                                {formatCurrency(remaining)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                Shared payments
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={charging}
+                                onClick={() => {
+                                  const addAmount =
+                                    remaining > 0 ? remaining : 0;
+                                  setPaymentEditor({
+                                    target: {
+                                      type: "group",
+                                      groupId: group.id,
+                                    },
+                                    payId: null,
+                                    draft: createItemPaymentLine(addAmount),
+                                  });
+                                }}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                Add
+                              </Button>
+                            </div>
+                            <CheckoutPaymentRows
+                              payments={group.payments}
+                              charging={charging}
+                              paymentAccounts={paymentAccounts}
+                              methodLabel={methodLabel}
+                              onEdit={(pay) =>
+                                setPaymentEditor({
+                                  target: {
+                                    type: "group",
+                                    groupId: group.id,
+                                  },
+                                  payId: pay.id,
+                                  draft: { ...pay },
+                                })
+                              }
+                              onRemove={(payId) =>
+                                updateGroupPayments(
+                                  group.id,
+                                  group.payments.filter((p) => p.id !== payId)
+                                )
+                              }
+                            />
+                          </div>
+
+                          {!balanced ? (
+                            <p className="text-xs text-destructive">
+                              Payments must equal the linked items&apos;
+                              combined total.
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
 
                 <div
                   className={
@@ -1062,8 +1469,9 @@ export function PosCheckoutDialog({
                     <p className="text-sm text-muted-foreground md:col-span-2">
                       No payment needed — amount due is {formatCurrency(0)}.
                     </p>
-                  ) : (
-                    payableLines.map((line) => {
+                  ) : ungroupedPayableLines.length === 0 &&
+                    paymentGroups.length > 0 ? null : (
+                    ungroupedPayableLines.map((line) => {
                       const label = lineLabel(line);
                       const lineTotal =
                         Math.round(line.unitPrice * line.quantity * 100) / 100;
@@ -1074,12 +1482,6 @@ export function PosCheckoutDialog({
                         payments,
                         lineTotal
                       );
-
-                      const updatePayments = (
-                        next: PosCheckoutPaymentLine[]
-                      ) => {
-                        onLineChange(line.variantId, { payments: next });
-                      };
 
                       return (
                         <div
@@ -1218,7 +1620,10 @@ export function PosCheckoutDialog({
                                   const addAmount =
                                     remaining > 0 ? remaining : 0;
                                   setPaymentEditor({
-                                    variantId: line.variantId,
+                                    target: {
+                                      type: "item",
+                                      variantId: line.variantId,
+                                    },
                                     payId: null,
                                     draft: createItemPaymentLine(addAmount),
                                   });
@@ -1228,81 +1633,29 @@ export function PosCheckoutDialog({
                                 Add
                               </Button>
                             </div>
-
-                            {payments.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">
-                                No payments yet — click Add.
-                              </p>
-                            ) : (
-                              <ul className="space-y-1.5">
-                                {payments.map((pay) => {
-                                  const account =
-                                    tenderNeedsPaymentAccount(
-                                      pay.tenderMethod
-                                    ) && pay.paymentAccountId
-                                      ? paymentAccounts.find(
-                                          (a) => a.id === pay.paymentAccountId
-                                        )
-                                      : null;
-                                  return (
-                                    <li
-                                      key={pay.id}
-                                      className="flex items-stretch gap-1"
-                                    >
-                                      <button
-                                        type="button"
-                                        disabled={charging}
-                                        onClick={() =>
-                                          setPaymentEditor({
-                                            variantId: line.variantId,
-                                            payId: pay.id,
-                                            draft: { ...pay },
-                                          })
-                                        }
-                                        className="min-w-0 flex-1 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-muted/40 disabled:opacity-50"
-                                      >
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div className="min-w-0">
-                                            <p className="truncate text-sm font-medium">
-                                              {methodLabel(pay.tenderMethod)}
-                                              {account
-                                                ? ` · ${account.provider}`
-                                                : ""}
-                                            </p>
-                                            <p className="truncate text-xs text-muted-foreground">
-                                              {formatPaymentLineNote(pay) ??
-                                                paymentKindLabel(pay.kind)}
-                                            </p>
-                                          </div>
-                                          <p className="shrink-0 text-sm font-semibold tabular-nums">
-                                            {formatCurrency(pay.amount)}
-                                          </p>
-                                        </div>
-                                      </button>
-                                      {payments.length > 1 ? (
-                                        <Button
-                                          type="button"
-                                          size="icon-sm"
-                                          variant="ghost"
-                                          disabled={charging}
-                                          className="shrink-0 self-center"
-                                          aria-label="Remove payment"
-                                          onClick={() =>
-                                            updatePayments(
-                                              payments.filter(
-                                                (p) => p.id !== pay.id
-                                              )
-                                            )
-                                          }
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      ) : null}
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            )}
+                            <CheckoutPaymentRows
+                              payments={payments}
+                              charging={charging}
+                              paymentAccounts={paymentAccounts}
+                              methodLabel={methodLabel}
+                              onEdit={(pay) =>
+                                setPaymentEditor({
+                                  target: {
+                                    type: "item",
+                                    variantId: line.variantId,
+                                  },
+                                  payId: pay.id,
+                                  draft: { ...pay },
+                                })
+                              }
+                              onRemove={(payId) =>
+                                onLineChange(line.variantId, {
+                                  payments: payments.filter(
+                                    (p) => p.id !== payId
+                                  ),
+                                })
+                              }
+                            />
                           </div>
 
                           {!balanced ? (
@@ -1324,7 +1677,8 @@ export function PosCheckoutDialog({
                 ) : null}
                 {unbalancedItemPayments || invalidItemPaymentAmount ? (
                   <p className="text-sm text-destructive">
-                    Fix payment splits so each item is fully covered.
+                    Fix payment splits so each item or linked group is fully
+                    covered.
                   </p>
                 ) : null}
               </div>
@@ -1613,7 +1967,7 @@ export function PosCheckoutDialog({
                   </div>
                 ) : null}
                 <div className="space-y-2 border-t pt-2">
-                  <p className="text-muted-foreground">Payments by item</p>
+                  <p className="text-muted-foreground">Payments</p>
                   {noCharge ? (
                     <p className="text-sm text-muted-foreground">
                       No charge for {customerTypeLabel(customerType).toLowerCase()}.
@@ -1623,7 +1977,70 @@ export function PosCheckoutDialog({
                       No payment needed — amount due is {formatCurrency(0)}.
                     </p>
                   ) : (
-                    payableLines.map((line) => (
+                    <>
+                      {paymentGroups.map((group) => {
+                        const members = group.variantIds
+                          .map((id) =>
+                            payableLines.find((line) => line.variantId === id)
+                          )
+                          .filter((line): line is PosCartLine => line != null);
+                        return (
+                          <div key={group.id} className="space-y-1">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Linked items
+                            </p>
+                            {members.map((line) => (
+                              <div
+                                key={line.variantId}
+                                className="flex justify-between gap-2"
+                              >
+                                <span className="min-w-0 font-medium">
+                                  {line.quantity}× {line.productName}
+                                </span>
+                                <span className="shrink-0 font-medium tabular-nums">
+                                  {formatCurrency(
+                                    line.unitPrice * line.quantity
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                            {group.payments.map((pay) => {
+                              const account = pay.paymentAccountId
+                                ? paymentAccounts.find(
+                                    (a) => a.id === pay.paymentAccountId
+                                  )
+                                : null;
+                              return (
+                                <div
+                                  key={pay.id}
+                                  className="flex justify-between gap-2 pl-2 text-xs"
+                                >
+                                  <span className="min-w-0">
+                                    <span className="font-medium">
+                                      {methodLabel(pay.tenderMethod)}
+                                    </span>
+                                    {formatPaymentLineNote(pay) ? (
+                                      <span className="ml-1 font-medium text-red-700">
+                                        {formatPaymentLineNote(pay)}
+                                      </span>
+                                    ) : null}
+                                    {account ? (
+                                      <span className="block text-muted-foreground">
+                                        {paymentAccountTypeLabel(account.type)}{" "}
+                                        · {account.provider}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  <span className="shrink-0 tabular-nums">
+                                    {formatCurrency(pay.amount)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                      {ungroupedPayableLines.map((line) => (
                     <div key={line.variantId} className="space-y-1">
                       <div className="flex justify-between gap-2">
                         <span className="min-w-0 font-medium">
@@ -1672,7 +2089,8 @@ export function PosCheckoutDialog({
                         );
                       })}
                     </div>
-                  ))
+                  ))}
+                    </>
                   )}
                 </div>
                 <div className="flex justify-between gap-2">
@@ -1798,10 +2216,7 @@ export function PosCheckoutDialog({
 
   const savePaymentEditor = () => {
     if (!paymentEditor || !editorCanSave) return;
-    const { variantId, payId, draft } = paymentEditor;
-    const line = lines.find((l) => l.variantId === variantId);
-    if (!line || line.isFreebie) return;
-    const payments = line.payments ?? [];
+    const { target, payId, draft } = paymentEditor;
     const parsed = parseMoneyInput(draft.amountText);
     const amount = parsed ?? draft.amount;
     if (!Number.isFinite(amount) || amount <= 0) return;
@@ -1811,10 +2226,25 @@ export function PosCheckoutDialog({
       amountText: moneyInputText(amount),
       note: draft.note.trim(),
     };
+
+    if (target.type === "group") {
+      const group = paymentGroups.find((g) => g.id === target.groupId);
+      if (!group) return;
+      const next = payId
+        ? group.payments.map((p) => (p.id === payId ? nextPay : p))
+        : [...group.payments, nextPay];
+      updateGroupPayments(target.groupId, next);
+      setPaymentEditor(null);
+      return;
+    }
+
+    const line = lines.find((l) => l.variantId === target.variantId);
+    if (!line || line.isFreebie) return;
+    const payments = line.payments ?? [];
     const next = payId
       ? payments.map((p) => (p.id === payId ? nextPay : p))
       : [...payments, nextPay];
-    onLineChange(variantId, { payments: next });
+    onLineChange(target.variantId, { payments: next });
     setPaymentEditor(null);
   };
 
@@ -1833,8 +2263,23 @@ export function PosCheckoutDialog({
           <DialogDescription>
             {paymentEditor
               ? (() => {
+                  const target = paymentEditor.target;
+                  if (target.type === "group") {
+                    const group = paymentGroups.find(
+                      (g) => g.id === target.groupId
+                    );
+                    if (!group) return "Shared payment for linked items.";
+                    const names = group.variantIds
+                      .map((id) =>
+                        lines.find((line) => line.variantId === id)
+                      )
+                      .filter((line): line is PosCartLine => line != null)
+                      .map((line) => `${line.quantity}× ${line.productName}`)
+                      .join(", ");
+                    return names || "Shared payment for linked items.";
+                  }
                   const line = lines.find(
-                    (l) => l.variantId === paymentEditor.variantId
+                    (l) => l.variantId === target.variantId
                   );
                   if (!line) return "Enter payment details.";
                   return `${line.quantity}× ${line.productName}`;
@@ -2039,6 +2484,92 @@ export function PosCheckoutDialog({
     </Dialog>
   );
 
+  const linkPickerTotal = roundMoney(
+    ungroupedPayableLines
+      .filter((line) => linkSelection.includes(line.variantId))
+      .reduce((sum, line) => sum + line.unitPrice * line.quantity, 0)
+  );
+
+  const linkPickerDialog = (
+    <Dialog
+      open={linkPickerOpen}
+      onOpenChange={(next) => {
+        setLinkPickerOpen(next);
+        if (!next) setLinkSelection([]);
+      }}
+    >
+      <DialogContent className="sm:max-w-md" showCloseButton>
+        <DialogHeader>
+          <DialogTitle>Link items for the same payment</DialogTitle>
+          <DialogDescription>
+            Select at least two variants. Their combined total will be covered
+            by one payment split (for example 1 down payment and 1 Home Credit).
+          </DialogDescription>
+        </DialogHeader>
+        <ul className="max-h-[50dvh] space-y-1 overflow-y-auto">
+          {ungroupedPayableLines.map((line) => {
+            const checked = linkSelection.includes(line.variantId);
+            const label = lineLabel(line);
+            const lineTotal =
+              Math.round(line.unitPrice * line.quantity * 100) / 100;
+            return (
+              <li key={line.variantId}>
+                <label className="flex cursor-pointer items-start gap-3 rounded-md px-1 py-2 hover:bg-muted/40">
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(value) => {
+                      const on = value === true;
+                      setLinkSelection((prev) =>
+                        on
+                          ? [...prev, line.variantId]
+                          : prev.filter((id) => id !== line.variantId)
+                      );
+                    }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">
+                      {line.quantity}× {line.productName}
+                    </span>
+                    {label ? (
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {label}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-sm tabular-nums">
+                    {formatCurrency(lineTotal)}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-sm tabular-nums text-muted-foreground">
+          Combined {formatCurrency(linkPickerTotal)}
+        </p>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setLinkPickerOpen(false);
+              setLinkSelection([]);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={linkSelection.length < 2}
+            onClick={linkSelectedItems}
+          >
+            Link {linkSelection.length} items
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (isPage) {
     return (
       <>
@@ -2048,6 +2579,7 @@ export function PosCheckoutDialog({
           {footer}
         </div>
         {paymentEditorDialog}
+        {linkPickerDialog}
       </>
     );
   }
@@ -2071,6 +2603,7 @@ export function PosCheckoutDialog({
         </DialogContent>
       </Dialog>
       {paymentEditorDialog}
+      {linkPickerDialog}
     </>
   );
 }

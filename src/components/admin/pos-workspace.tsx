@@ -849,6 +849,7 @@ export function PosWorkspace({
       customer,
       appliedVoucher,
       voucherCodeInput,
+      paymentGroups: [],
       savedAt: Date.now(),
     });
     setMobileCartOpen(false);
