@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link2, Loader2, Minus, Plus, Trash2, Unlink, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -147,10 +155,81 @@ function lineLabel(line: PosCartLine): string | null {
     : null;
 }
 
+function usePrefersDrawer() {
+  const [prefersDrawer, setPrefersDrawer] = useState(false);
+
+  useEffect(() => {
+    const query = window.matchMedia(
+      "(max-width: 1023px), ((hover: none) and (pointer: coarse))"
+    );
+    const sync = () => setPrefersDrawer(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  return prefersDrawer;
+}
+
 function priceListCardClass(selected: boolean) {
   return cn(
-    "appearance-none rounded-md border border-border px-2.5 py-2 text-left text-foreground transition-colors",
-    selected ? "bg-muted" : "bg-background hover:bg-muted"
+    "appearance-none rounded-md border-2 bg-transparent px-2.5 py-2 text-left text-foreground transition-colors",
+    selected ? "border-foreground" : "border-border"
+  );
+}
+
+function PaymentEditorShell({
+  prefersDrawer,
+  open,
+  title,
+  description,
+  children,
+  footer,
+  onOpenChange,
+}: {
+  prefersDrawer: boolean;
+  open: boolean;
+  title: string;
+  description: string;
+  children: ReactNode;
+  footer: ReactNode;
+  onOpenChange: (open: boolean) => void;
+}) {
+  if (prefersDrawer) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-none"
+          showCloseButton
+        >
+          <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border" />
+          <SheetHeader className="border-b px-4 py-3 text-left">
+            <SheetTitle>{title}</SheetTitle>
+            <SheetDescription>{description}</SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+            {children}
+          </div>
+          <SheetFooter className="flex-row justify-end gap-2 border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {footer}
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" showCloseButton>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        {children}
+        <DialogFooter>{footer}</DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -638,6 +717,7 @@ export function PosCheckoutDialog({
   paymentGroups: paymentGroupsProp,
   onPaymentGroupsChange,
 }: PosCheckoutDialogProps) {
+  const prefersDrawer = usePrefersDrawer();
   const isWholesale = saleChannel === "wholesale";
   const isPage = layout === "page";
   const methodOptions =
@@ -1311,10 +1391,11 @@ export function PosCheckoutDialog({
                                       <Button
                                         type="button"
                                         size="sm"
-                                        variant={
+                                        variant="outline"
+                                        className={
                                           line.priceList === "cash"
-                                            ? "secondary"
-                                            : "outline"
+                                            ? "border-foreground bg-transparent"
+                                            : "bg-transparent"
                                         }
                                         disabled={charging}
                                         onClick={() =>
@@ -1328,10 +1409,11 @@ export function PosCheckoutDialog({
                                       <Button
                                         type="button"
                                         size="sm"
-                                        variant={
+                                        variant="outline"
+                                        className={
                                           line.priceList === "retail"
-                                            ? "secondary"
-                                            : "outline"
+                                            ? "border-foreground bg-transparent"
+                                            : "bg-transparent"
                                         }
                                         disabled={charging}
                                         onClick={() =>
@@ -1515,10 +1597,11 @@ export function PosCheckoutDialog({
                                 <Button
                                   type="button"
                                   size="sm"
-                                  variant={
+                                  variant="outline"
+                                  className={
                                     line.priceList === "cash"
-                                      ? "secondary"
-                                      : "outline"
+                                      ? "border-foreground bg-transparent"
+                                      : "bg-transparent"
                                   }
                                   disabled={charging}
                                   onClick={() =>
@@ -1532,10 +1615,11 @@ export function PosCheckoutDialog({
                                 <Button
                                   type="button"
                                   size="sm"
-                                  variant={
+                                  variant="outline"
+                                  className={
                                     line.priceList === "retail"
-                                      ? "secondary"
-                                      : "outline"
+                                      ? "border-foreground bg-transparent"
+                                      : "bg-transparent"
                                   }
                                   disabled={charging}
                                   onClick={() =>
@@ -2252,45 +2336,56 @@ export function PosCheckoutDialog({
     setPaymentEditor(null);
   };
 
+  const paymentEditorTitle = paymentEditor?.payId
+    ? "Edit payment"
+    : "Add payment";
+  const paymentEditorDescription = paymentEditor
+    ? (() => {
+        const target = paymentEditor.target;
+        if (target.type === "group") {
+          const group = paymentGroups.find((g) => g.id === target.groupId);
+          if (!group) return "Shared payment for linked items.";
+          const names = group.variantIds
+            .map((id) => lines.find((line) => line.variantId === id))
+            .filter((line): line is PosCartLine => line != null)
+            .map((line) => `${line.quantity}× ${line.productName}`)
+            .join(", ");
+          return names || "Shared payment for linked items.";
+        }
+        const line = lines.find((l) => l.variantId === target.variantId);
+        if (!line) return "Enter payment details.";
+        return `${line.quantity}× ${line.productName}`;
+      })()
+    : "Enter payment details.";
+
   const paymentEditorDialog = (
-    <Dialog
+    <PaymentEditorShell
+      prefersDrawer={prefersDrawer}
       open={paymentEditor != null}
+      title={paymentEditorTitle}
+      description={paymentEditorDescription}
       onOpenChange={(next) => {
         if (!next) setPaymentEditor(null);
       }}
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setPaymentEditor(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!editorCanSave}
+            onClick={savePaymentEditor}
+          >
+            Save payment
+          </Button>
+        </>
+      }
     >
-      <DialogContent className="sm:max-w-md" showCloseButton>
-        <DialogHeader>
-          <DialogTitle>
-            {paymentEditor?.payId ? "Edit payment" : "Add payment"}
-          </DialogTitle>
-          <DialogDescription>
-            {paymentEditor
-              ? (() => {
-                  const target = paymentEditor.target;
-                  if (target.type === "group") {
-                    const group = paymentGroups.find(
-                      (g) => g.id === target.groupId
-                    );
-                    if (!group) return "Shared payment for linked items.";
-                    const names = group.variantIds
-                      .map((id) =>
-                        lines.find((line) => line.variantId === id)
-                      )
-                      .filter((line): line is PosCartLine => line != null)
-                      .map((line) => `${line.quantity}× ${line.productName}`)
-                      .join(", ");
-                    return names || "Shared payment for linked items.";
-                  }
-                  const line = lines.find(
-                    (l) => l.variantId === target.variantId
-                  );
-                  if (!line) return "Enter payment details.";
-                  return `${line.quantity}× ${line.productName}`;
-                })()
-              : "Enter payment details."}
-          </DialogDescription>
-        </DialogHeader>
 
         {editorDraft ? (
           <div className="space-y-3 py-1">
@@ -2467,25 +2562,7 @@ export function PosCheckoutDialog({
             ) : null}
           </div>
         ) : null}
-
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPaymentEditor(null)}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={!editorCanSave}
-            onClick={savePaymentEditor}
-          >
-            Save payment
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </PaymentEditorShell>
   );
 
   const linkPickerTotal = roundMoney(
