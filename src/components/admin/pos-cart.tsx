@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
 import { voucherOwnerLabel } from "@/lib/firestore/vouchers";
 import {
@@ -144,6 +145,13 @@ function lineLabel(line: PosCartLine): string | null {
   return line.variantLabel && line.variantLabel !== "Default"
     ? line.variantLabel
     : null;
+}
+
+function priceListCardClass(selected: boolean) {
+  return cn(
+    "appearance-none rounded-md border border-border px-2.5 py-2 text-left text-foreground transition-colors",
+    selected ? "bg-muted" : "bg-background hover:bg-muted"
+  );
 }
 
 function CheckoutPaymentRows({
@@ -1100,11 +1108,9 @@ export function PosCheckoutDialog({
                                 priceList: "cash",
                               })
                             }
-                            className={`rounded-md border px-2.5 py-2 text-left transition-colors ${
+                            className={priceListCardClass(
                               line.priceList === "cash"
-                                ? "border-primary bg-primary/5"
-                                : "bg-muted/30 hover:bg-muted/50"
-                            }`}
+                            )}
                           >
                             <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                               Cash
@@ -1129,11 +1135,9 @@ export function PosCheckoutDialog({
                                 priceList: "retail",
                               })
                             }
-                            className={`rounded-md border px-2.5 py-2 text-left transition-colors ${
+                            className={priceListCardClass(
                               line.priceList === "retail"
-                                ? "border-primary bg-primary/5"
-                                : "bg-muted/30 hover:bg-muted/50"
-                            }`}
+                            )}
                           >
                             <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                               Retail
@@ -1309,7 +1313,7 @@ export function PosCheckoutDialog({
                                         size="sm"
                                         variant={
                                           line.priceList === "cash"
-                                            ? "default"
+                                            ? "secondary"
                                             : "outline"
                                         }
                                         disabled={charging}
@@ -1326,7 +1330,7 @@ export function PosCheckoutDialog({
                                         size="sm"
                                         variant={
                                           line.priceList === "retail"
-                                            ? "default"
+                                            ? "secondary"
                                             : "outline"
                                         }
                                         disabled={charging}
@@ -1513,7 +1517,7 @@ export function PosCheckoutDialog({
                                   size="sm"
                                   variant={
                                     line.priceList === "cash"
-                                      ? "default"
+                                      ? "secondary"
                                       : "outline"
                                   }
                                   disabled={charging}
@@ -1530,7 +1534,7 @@ export function PosCheckoutDialog({
                                   size="sm"
                                   variant={
                                     line.priceList === "retail"
-                                      ? "default"
+                                      ? "secondary"
                                       : "outline"
                                   }
                                   disabled={charging}
