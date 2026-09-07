@@ -1,9 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
-import {
-  getFirestore,
-  initializeFirestore,
-  type Firestore,
-} from "firebase/firestore";
+import { type Firestore } from "firebase/firestore";
+import { getOrInitFirestore } from "@/lib/firestore-init";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -17,11 +14,7 @@ const firebaseConfig = {
 let publicDb: Firestore | undefined;
 
 function createPublicDb(app: ReturnType<typeof initializeApp>): Firestore {
-  // Long polling is more reliable for Firestore reads in serverless runtimes.
-  if (typeof window === "undefined") {
-    return initializeFirestore(app, { experimentalForceLongPolling: true });
-  }
-  return getFirestore(app);
+  return getOrInitFirestore(app);
 }
 
 /** Firestore for public catalog reads (works on server and client). */

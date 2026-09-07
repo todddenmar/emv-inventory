@@ -1,7 +1,16 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  inMemoryPersistence,
+  browserPopupRedirectResolver,
+  type Auth,
+} from "firebase/auth";
+import { type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
+import { getOrInitFirestore } from "@/lib/firestore-init";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,6 +32,14 @@ function assertClient() {
   }
 }
 
+/** iPadOS 13+ reports as Macintosh; IndexedDB auth persistence can hang there. */
+function isIosWebKit(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  return navigator.maxTouchPoints > 1 && /Macintosh/.test(ua);
+}
+
 function getFirebaseApp(): FirebaseApp {
   assertClient();
   if (!firebaseConfig.apiKey) {
@@ -38,14 +55,24 @@ function getFirebaseApp(): FirebaseApp {
 
 export function getClientAuth(): Auth {
   if (!authInstance) {
-    authInstance = getAuth(getFirebaseApp());
+    const firebaseApp = getFirebaseApp();
+    try {
+      authInstance = initializeAuth(firebaseApp, {
+        persistence: isIosWebKit()
+          ? [browserLocalPersistence, inMemoryPersistence]
+          : [indexedDBLocalPersistence, browserLocalPersistence],
+        popupRedirectResolver: browserPopupRedirectResolver,
+      });
+    } catch {
+      authInstance = getAuth(firebaseApp);
+    }
   }
   return authInstance;
 }
 
 export function getClientDb(): Firestore {
   if (!dbInstance) {
-    dbInstance = getFirestore(getFirebaseApp());
+    dbInstance = getOrInitFirestore(getFirebaseApp());
   }
   return dbInstance;
 }
