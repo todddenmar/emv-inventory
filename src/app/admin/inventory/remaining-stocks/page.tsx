@@ -1,10 +1,11 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -12,8 +13,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -87,12 +94,12 @@ function StockCell({
 
 function CategoryBlock({
   group,
-  branch,
+  branches,
 }: {
   group: RemainingStockCategoryGroup;
-  branch: Branch;
+  branches: Branch[];
 }) {
-  const colCount = 3;
+  const colCount = 2 + branches.length;
 
   return (
     <>
@@ -122,11 +129,14 @@ function CategoryBlock({
               <TableCell className="text-muted-foreground">
                 {variant.sku || "—"}
               </TableCell>
-              <StockCell
-                amount={variant.stocks[branch.id] ?? 0}
-                assigned={variant.assigned[branch.id] === true}
-                lowStockThreshold={variant.lowStockThreshold}
-              />
+              {branches.map((branch) => (
+                <StockCell
+                  key={branch.id}
+                  amount={variant.stocks[branch.id] ?? 0}
+                  assigned={variant.assigned[branch.id] === true}
+                  lowStockThreshold={variant.lowStockThreshold}
+                />
+              ))}
             </TableRow>
           ))}
         </Fragment>
@@ -144,7 +154,7 @@ export default function RemainingStocksPage() {
   const [search, setSearch] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
-  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
@@ -162,11 +172,13 @@ export default function RemainingStocksPage() {
         setCategoryGroups(groupList);
         setProducts(productList);
         setInventory(inventoryList);
-        setSelectedBranchId((prev) =>
-          prev && branchList.some((branch) => branch.id === prev)
-            ? prev
-            : (branchList[0]?.id ?? "")
-        );
+        setSelectedBranchIds((prev) => {
+          const valid = prev.filter((id) =>
+            branchList.some((branch) => branch.id === id)
+          );
+          if (valid.length > 0) return valid;
+          return branchList[0] ? [branchList[0].id] : [];
+        });
       })
       .catch((error) => {
         console.error(error);
@@ -259,10 +271,40 @@ export default function RemainingStocksPage() {
     [pagedItems]
   );
 
-  const selectedBranch =
-    branches.find((branch) => branch.id === selectedBranchId) ??
-    branches[0] ??
-    null;
+  const selectedBranches = useMemo(
+    () => branches.filter((branch) => selectedBranchIds.includes(branch.id)),
+    [branches, selectedBranchIds]
+  );
+  const allBranchesSelected =
+    branches.length > 0 && selectedBranches.length === branches.length;
+
+  const toggleBranchColumn = (branchId: string) => {
+    setSelectedBranchIds((prev) => {
+      if (prev.includes(branchId)) {
+        if (prev.length === 1) return prev;
+        return prev.filter((id) => id !== branchId);
+      }
+      return [...prev, branchId];
+    });
+  };
+
+  const setAllBranchColumns = (checked: boolean) => {
+    if (checked) {
+      setSelectedBranchIds(branches.map((branch) => branch.id));
+      return;
+    }
+    setSelectedBranchIds(branches[0] ? [branches[0].id] : []);
+  };
+
+  const branchTriggerLabel = (() => {
+    if (selectedBranches.length === 0) return "Select branches";
+    if (allBranchesSelected && branches.length > 1) return "All branches";
+    if (selectedBranches.length === 1) {
+      const branch = selectedBranches[0];
+      return `${branch.name} (${branch.code})`;
+    }
+    return `${selectedBranches.length} of ${branches.length} branches`;
+  })();
 
   return (
     <div className="space-y-6">
@@ -277,37 +319,80 @@ export default function RemainingStocksPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Filters</CardTitle>
           <CardDescription>
-            Choose a branch, then search or filter by category.
+            Choose which branches appear as columns, then search or filter by
+            category.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <div className="flex min-w-0 flex-col gap-2">
-              <Label>Branch</Label>
-              <Select
-                value={selectedBranch?.id ?? ""}
-                onValueChange={(value) => {
-                  if (value) setSelectedBranchId(value);
-                }}
-              >
-                <SelectTrigger size="sm" className="w-full sm:w-56">
-                  <SelectValue placeholder="Select branch">
-                    {(value) => {
-                      const branch = branches.find((item) => item.id === value);
-                      return branch
-                        ? `${branch.name} (${branch.code})`
-                        : "Select branch";
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name} ({branch.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Branch columns</Label>
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-full justify-between font-normal sm:w-56"
+                      disabled={branches.length === 0}
+                    />
+                  }
+                >
+                  <span className="truncate">{branchTriggerLabel}</span>
+                  <ChevronDown className="size-4 opacity-50" />
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-72 gap-2 p-2">
+                  <div className="flex items-start gap-2 rounded-md px-1 py-1">
+                    <Checkbox
+                      id="remaining-stock-all-branches"
+                      checked={allBranchesSelected}
+                      disabled={branches.length === 0}
+                      onCheckedChange={(checked) =>
+                        setAllBranchColumns(checked === true)
+                      }
+                    />
+                    <Label
+                      htmlFor="remaining-stock-all-branches"
+                      className="cursor-pointer font-medium leading-snug"
+                    >
+                      All branches
+                    </Label>
+                  </div>
+                  <div className="max-h-64 space-y-1 overflow-y-auto border-t pt-1">
+                    {branches.map((branch) => {
+                      const checked = selectedBranchIds.includes(branch.id);
+                      const lastSelected =
+                        checked && selectedBranchIds.length === 1;
+                      return (
+                        <div
+                          key={branch.id}
+                          className="flex items-start gap-2 rounded-md px-1 py-1"
+                        >
+                          <Checkbox
+                            id={`remaining-stock-branch-${branch.id}`}
+                            checked={checked}
+                            disabled={lastSelected}
+                            onCheckedChange={() =>
+                              toggleBranchColumn(branch.id)
+                            }
+                          />
+                          <Label
+                            htmlFor={`remaining-stock-branch-${branch.id}`}
+                            className="cursor-pointer font-normal leading-snug"
+                          >
+                            <span className="font-medium">{branch.name}</span>
+                            <span className="text-muted-foreground">
+                              {" "}
+                              ({branch.code})
+                            </span>
+                          </Label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="remaining-stock-search">Search</Label>
@@ -401,7 +486,11 @@ export default function RemainingStocksPage() {
             <CardTitle className="text-base">Stock by branch</CardTitle>
             <CardDescription>
               {total} product{total === 1 ? "" : "s"}
-              {selectedBranch ? ` · ${selectedBranch.name}` : ""}
+              {selectedBranches.length === 1
+                ? ` · ${selectedBranches[0].name}`
+                : selectedBranches.length > 1
+                  ? ` · ${selectedBranches.length} branches`
+                  : ""}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -409,7 +498,7 @@ export default function RemainingStocksPage() {
               <p className="text-sm text-muted-foreground">
                 No active branches.
               </p>
-            ) : !selectedBranch ? (
+            ) : selectedBranches.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Select a branch to view remaining stocks.
               </p>
@@ -426,14 +515,19 @@ export default function RemainingStocksPage() {
                         Variant
                       </TableHead>
                       <TableHead className="min-w-[6rem]">SKU</TableHead>
-                      <TableHead className="min-w-[7rem] text-right">
-                        <span className="block truncate" title={selectedBranch.name}>
-                          {selectedBranch.name}
-                        </span>
-                        <span className="block text-xs font-normal text-muted-foreground">
-                          {selectedBranch.code}
-                        </span>
-                      </TableHead>
+                      {selectedBranches.map((branch) => (
+                        <TableHead
+                          key={branch.id}
+                          className="min-w-[7rem] text-right"
+                        >
+                          <span className="block truncate" title={branch.name}>
+                            {branch.name}
+                          </span>
+                          <span className="block text-xs font-normal text-muted-foreground">
+                            {branch.code}
+                          </span>
+                        </TableHead>
+                      ))}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -441,7 +535,7 @@ export default function RemainingStocksPage() {
                       <CategoryBlock
                         key={group.categoryId}
                         group={group}
-                        branch={selectedBranch}
+                        branches={selectedBranches}
                       />
                     ))}
                   </TableBody>
