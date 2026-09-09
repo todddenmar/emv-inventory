@@ -363,24 +363,31 @@ export default function AdminInventoryPage() {
         <>
           {lowStock.length > 0 && (
             <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-base text-amber-800 dark:text-amber-200">
-                  <AlertTriangle className="h-4 w-4" />
-                  Low stock at {activeBranch?.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {lowStock.map((row) => (
-                    <Badge key={row.id} variant="outline">
-                      {row.productName}
-                      {formatVariantLabel(row, products.find((p) => p.id === row.productId)?.options ?? []) !== "Default"
-                        ? ` (${formatVariantLabel(row, products.find((p) => p.id === row.productId)?.options ?? [])})`
-                        : ""}
-                      : {row.stock} left
-                    </Badge>
-                  ))}
+              <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2 sm:items-center">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-800 dark:text-amber-200 sm:mt-0" />
+                  <div>
+                    <p className="font-medium text-amber-800 dark:text-amber-200">
+                      {lowStock.length} variant
+                      {lowStock.length === 1 ? "" : "s"} with low stock
+                      {activeBranch ? ` at ${activeBranch.name}` : ""}
+                    </p>
+                    <p className="text-sm text-amber-800/80 dark:text-amber-200/80">
+                      At or below the category threshold.
+                    </p>
+                  </div>
                 </div>
+                {stockFilter !== "low" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 border-amber-300 bg-background text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950"
+                    onClick={() => setStockFilter("low")}
+                  >
+                    Show low stock
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
           )}
