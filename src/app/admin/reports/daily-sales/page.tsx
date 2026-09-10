@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,6 +37,8 @@ import {
 } from "@/components/ui/table";
 import { NamedAmountList } from "@/components/admin/daily-cash-controls";
 import { CashSummaryCard } from "@/components/admin/cash-summary-card";
+import { EditSalePaymentDialog } from "@/components/admin/edit-sale-payment-dialog";
+import { SaleInvoiceDialog } from "@/components/admin/sale-invoice-dialog";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { usePaymentMethods } from "@/hooks/use-payment-methods";
 import { formatDateInputLabel, shiftDateInput, toDateInputValue } from "@/lib/dates";
@@ -44,10 +52,12 @@ import { getDailyCashRecord } from "@/lib/firestore/daily-cash";
 import { getDailyExpenses } from "@/lib/firestore/daily-expenses";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { formatCurrency } from "@/lib/format";
+import { saleAmountDue } from "@/lib/pos-payments";
 import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
 export default function DailySalesReportPage() {
-  const { canViewAllBranches, assignedBranchId } = useBranchAccess();
+  const { canViewAllBranches, assignedBranchId, isElevatedAdmin } =
+    useBranchAccess();
   const { methods: paymentMethods } = usePaymentMethods();
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -57,6 +67,8 @@ export default function DailySalesReportPage() {
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [cashRecord, setCashRecord] = useState<DailyCashRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editSaleId, setEditSaleId] = useState<string | null>(null);
+  const [invoiceSaleId, setInvoiceSaleId] = useState<string | null>(null);
 
   useEffect(() => {
     getBranches(true)
@@ -261,39 +273,88 @@ export default function DailySalesReportPage() {
                         <TableHead className="w-[7.5rem]">Amount</TableHead>
                         <TableHead>Item</TableHead>
                         <TableHead className="w-[11rem]">Notes</TableHead>
+                        <TableHead className="w-14 text-right">
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {rows.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={3}
+                            colSpan={4}
                             className="py-8 text-center text-muted-foreground"
                           >
                             No sales for this day
                           </TableCell>
                         </TableRow>
                       ) : (
-                        rows.map((row) => (
-                          <TableRow key={row.key}>
-                            <TableCell className="tabular-nums font-medium">
-                              {row.omitAmount
-                                ? "—"
-                                : formatCurrency(row.amount)}
-                            </TableCell>
-                            <TableCell>{row.itemLabel}</TableCell>
-                            <TableCell>
-                              {row.paymentNote ? (
-                                <Badge
-                                  variant="outline"
-                                  className="border-red-200 text-red-700"
-                                >
-                                  {row.paymentNote}
-                                </Badge>
-                              ) : null}
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        rows.map((row) => {
+                          const sale = sales.find(
+                            (item) => item.id === row.saleId
+                          );
+                          const canEditSale =
+                            isElevatedAdmin &&
+                            sale != null &&
+                            saleAmountDue(sale) > 0.01;
+                          return (
+                            <TableRow key={row.key}>
+                              <TableCell className="tabular-nums font-medium">
+                                {row.omitAmount
+                                  ? "—"
+                                  : formatCurrency(row.amount)}
+                              </TableCell>
+                              <TableCell>{row.itemLabel}</TableCell>
+                              <TableCell>
+                                {row.paymentNote ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-red-200 text-red-700"
+                                  >
+                                    {row.paymentNote}
+                                  </Badge>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger
+                                    render={
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                      >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                        <span className="sr-only">
+                                          Actions
+                                        </span>
+                                      </Button>
+                                    }
+                                  />
+                                  <DropdownMenuContent align="end">
+                                    {isElevatedAdmin ? (
+                                      <DropdownMenuItem
+                                        disabled={!canEditSale}
+                                        onClick={() =>
+                                          setEditSaleId(row.saleId)
+                                        }
+                                      >
+                                        Edit sale
+                                      </DropdownMenuItem>
+                                    ) : null}
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        setInvoiceSaleId(row.saleId)
+                                      }
+                                    >
+                                      View invoice
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
@@ -337,6 +398,28 @@ export default function DailySalesReportPage() {
           />
         </div>
       )}
+
+      <EditSalePaymentDialog
+        sale={sales.find((sale) => sale.id === editSaleId) ?? null}
+        saleId={editSaleId}
+        open={editSaleId != null}
+        onOpenChange={(open) => {
+          if (!open) setEditSaleId(null);
+        }}
+        onUpdated={(updated) => {
+          setSales((prev) =>
+            prev.map((row) => (row.id === updated.id ? updated : row))
+          );
+        }}
+      />
+      <SaleInvoiceDialog
+        sale={sales.find((sale) => sale.id === invoiceSaleId) ?? null}
+        saleId={invoiceSaleId}
+        open={invoiceSaleId != null}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceSaleId(null);
+        }}
+      />
     </div>
   );
 }
