@@ -77,11 +77,18 @@ export async function getPosSale(id: string): Promise<PosSale | null> {
   return snap.exists() ? snap.data() : null;
 }
 
+export function isPosSaleArchived(
+  sale: Pick<PosSale, "archivedAt"> | null | undefined
+): boolean {
+  return sale?.archivedAt != null;
+}
+
 export async function getPosSales(options?: {
   branchId?: string | null;
   fromDate?: string | null;
   toDate?: string | null;
   saleChannel?: PosSaleChannel | null;
+  includeArchived?: boolean;
   max?: number;
 }): Promise<PosSale[]> {
   const ref = collection(getClientDb(), COLLECTIONS.posSales).withConverter(
@@ -99,14 +106,20 @@ export async function getPosSales(options?: {
   if (to) constraints.push(where("createdAt", "<=", to));
   constraints.push(orderBy("createdAt", "desc"), limit(max));
 
-  const applyChannelFilter = (rows: PosSale[]) => {
-    if (!options?.saleChannel) return rows;
-    return rows.filter((sale) => sale.saleChannel === options.saleChannel);
+  const applyFilters = (rows: PosSale[]) => {
+    let next = rows;
+    if (!options?.includeArchived) {
+      next = next.filter((sale) => !isPosSaleArchived(sale));
+    }
+    if (options?.saleChannel) {
+      next = next.filter((sale) => sale.saleChannel === options.saleChannel);
+    }
+    return next;
   };
 
   try {
     const snapshot = await getDocs(query(ref, ...constraints));
-    return applyChannelFilter(snapshot.docs.map((d) => d.data()));
+    return applyFilters(snapshot.docs.map((d) => d.data()));
   } catch (error) {
     console.warn("getPosSales date query failed, using fallback", error);
     const fallback: QueryConstraint[] = [];
@@ -123,7 +136,7 @@ export async function getPosSales(options?: {
         return true;
       });
     }
-    return applyChannelFilter(rows).slice(0, max);
+    return applyFilters(rows).slice(0, max);
   }
 }
 
@@ -406,6 +419,10 @@ export async function completePosSale(
       createdBy: input.createdBy,
       createdByName: input.createdByName ?? null,
       createdAt: serverTimestamp(),
+      archivedAt: null,
+      archivedBy: null,
+      archivedByName: null,
+      restockedOnArchive: false,
     });
   });
 
@@ -500,6 +517,9 @@ export async function updatePosSalePayments(
   const existing = await getPosSale(saleId);
   if (!existing) {
     throw new Error("Sale not found");
+  }
+  if (isPosSaleArchived(existing)) {
+    throw new Error("Archived sales cannot be edited");
   }
 
   const amountDue = roundMoney(existing.amountDue ?? existing.total);
@@ -608,4 +628,172 @@ export function resolveSalePaymentDrafts(options: {
       options.fallbackAccounts[index] ?? null
     )
   );
+}
+
+export interface ArchivePosSaleInput {
+  restock: boolean;
+  performedBy: string;
+  performedByName?: string | null;
+}
+
+/** Soft-void a completed sale. Optionally return sold units to branch stock. */
+export async function archivePosSale(
+  saleId: string,
+  input: ArchivePosSaleInput
+): Promise<void> {
+  if (!input.performedBy) {
+    throw new Error("Sign in to archive a sale");
+  }
+
+  const db = getClientDb();
+  const saleDoc = doc(db, COLLECTIONS.posSales, saleId);
+  const saleRef = saleDoc.withConverter(posSaleConverter);
+
+  await runTransaction(db, async (tx) => {
+    const saleSnap = await tx.get(saleRef);
+    if (!saleSnap.exists()) {
+      throw new Error("Sale not found");
+    }
+    const sale = saleSnap.data();
+    if (isPosSaleArchived(sale)) {
+      throw new Error("Sale is already archived");
+    }
+
+    const restockRows: Array<{
+      invRef: ReturnType<typeof doc>;
+      productId: string;
+      variantId: string;
+      productName: string;
+      quantity: number;
+      previousStock: number;
+      newStock: number;
+      exists: boolean;
+    }> = [];
+
+    if (input.restock) {
+      const qtyByVariant = new Map<
+        string,
+        { productId: string; productName: string; quantity: number }
+      >();
+      for (const item of sale.items) {
+        if (!item.variantId || item.quantity <= 0) continue;
+        const current = qtyByVariant.get(item.variantId);
+        if (current) {
+          current.quantity += item.quantity;
+        } else {
+          qtyByVariant.set(item.variantId, {
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+          });
+        }
+      }
+
+      for (const [variantId, row] of qtyByVariant) {
+        const invRef = doc(
+          db,
+          COLLECTIONS.branchInventory,
+          inventoryDocId(sale.branchId, variantId)
+        );
+        const snap = await tx.get(invRef);
+        const previousStock = snap.exists()
+          ? Number((snap.data() as { stock?: number }).stock ?? 0)
+          : 0;
+        restockRows.push({
+          invRef,
+          productId: row.productId,
+          variantId,
+          productName: row.productName,
+          quantity: row.quantity,
+          previousStock,
+          newStock: previousStock + row.quantity,
+          exists: snap.exists(),
+        });
+      }
+    }
+
+    let voucherRef: ReturnType<typeof doc> | null = null;
+    let nextRemaining = 0;
+    let nextStatus: Voucher["status"] = "active";
+    let restoreVoucher = false;
+
+    if (sale.voucherId && (sale.voucherAmountApplied ?? 0) > 0) {
+      voucherRef = doc(db, COLLECTIONS.vouchers, sale.voucherId);
+      const voucherSnap = await tx.get(voucherRef);
+      if (voucherSnap.exists()) {
+        const voucherData = voucherSnap.data() as {
+          remainingAmount?: number;
+          initialAmount?: number;
+          status?: string;
+        };
+        if (voucherData.status !== "void") {
+          const applied = roundMoney(sale.voucherAmountApplied);
+          const remaining = Number(voucherData.remainingAmount ?? 0);
+          const initial = Number(
+            voucherData.initialAmount ?? remaining + applied
+          );
+          nextRemaining = roundMoney(
+            Math.min(initial, Math.max(0, remaining + applied))
+          );
+          nextStatus = nextRemaining <= 0 ? "depleted" : "active";
+          restoreVoucher = true;
+        }
+      }
+    }
+
+    const saleLabel = `Sale ${sale.id.slice(-6).toUpperCase()}`;
+
+    for (const row of restockRows) {
+      if (row.exists) {
+        tx.update(row.invRef, {
+          stock: row.newStock,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        tx.set(row.invRef, {
+          branchId: sale.branchId,
+          productId: row.productId,
+          variantId: row.variantId,
+          stock: row.newStock,
+          lowStockThreshold: 5,
+          isSelling: true,
+          cashPrice: null,
+          retailPrice: null,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      tx.set(doc(collection(db, COLLECTIONS.inventoryLogs)), {
+        branchId: sale.branchId,
+        branchName: sale.branchName,
+        productId: row.productId,
+        variantId: row.variantId,
+        productName: row.productName,
+        delta: row.quantity,
+        previousStock: row.previousStock,
+        newStock: row.newStock,
+        reason: "pos_sale_restock",
+        referenceId: sale.id,
+        referenceLabel: `${saleLabel} restock`,
+        performedBy: input.performedBy,
+        performedByName: input.performedByName ?? null,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    if (voucherRef && restoreVoucher) {
+      tx.update(voucherRef, {
+        remainingAmount: nextRemaining,
+        status: nextStatus,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    tx.update(saleDoc, {
+      archivedAt: serverTimestamp(),
+      archivedBy: input.performedBy,
+      archivedByName: input.performedByName ?? null,
+      restockedOnArchive: input.restock,
+    });
+  });
 }

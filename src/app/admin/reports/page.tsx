@@ -54,6 +54,7 @@ import {
 import { getBranches } from "@/lib/firestore/branches";
 import {
   getInventoryLogs,
+  inventoryLogLinksToSale,
   inventoryLogReasonLabel,
 } from "@/lib/firestore/inventory-logs";
 import { sumClosingCash } from "@/lib/daily-sales-report";
@@ -63,6 +64,7 @@ import { getPaymentMethods } from "@/lib/firestore/payment-methods";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
+import { ArchiveSaleButton } from "@/components/admin/archive-sale-dialog";
 import { EditSalePaymentButton } from "@/components/admin/edit-sale-payment-dialog";
 import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -1109,16 +1111,29 @@ export default function AdminReportsPage() {
                             <div className="flex justify-end">
                               <SaleInvoiceButton sale={sale} />
                               {isElevatedAdmin ? (
-                                <EditSalePaymentButton
-                                  sale={sale}
-                                  onUpdated={(updated) => {
-                                    setSales((prev) =>
-                                      prev.map((row) =>
-                                        row.id === updated.id ? updated : row
-                                      )
-                                    );
-                                  }}
-                                />
+                                <>
+                                  <EditSalePaymentButton
+                                    sale={sale}
+                                    onUpdated={(updated) => {
+                                      setSales((prev) =>
+                                        prev.map((row) =>
+                                          row.id === updated.id ? updated : row
+                                        )
+                                      );
+                                    }}
+                                  />
+                                  <ArchiveSaleButton
+                                    sale={sale}
+                                    onArchived={(id) => {
+                                      setSales((prev) =>
+                                        prev.filter((row) => row.id !== id)
+                                      );
+                                      setPrevSales((prev) =>
+                                        prev.filter((row) => row.id !== id)
+                                      );
+                                    }}
+                                  />
+                                </>
                               ) : null}
                             </div>
                           </TableCell>
@@ -1225,7 +1240,7 @@ export default function AdminReportsPage() {
                             {log.previousStock} → {log.newStock}
                           </TableCell>
                           <TableCell className="text-right">
-                            {log.reason === "pos_sale" && log.referenceId ? (
+                            {inventoryLogLinksToSale(log.reason) && log.referenceId ? (
                               <SaleInvoiceButton saleId={log.referenceId} />
                             ) : null}
                           </TableCell>

@@ -569,7 +569,11 @@ function DocsSections({
               Click a <strong>Stock movements</strong> row to see each product
               change and who performed it.
             </li>
-            <li>Open a receipt invoice from Recent receipts when needed.</li>
+            <li>
+              On Daily sales, elevated admins can edit tenders and archive a
+              mistaken sale. Archiving drops it from totals; restock is on by
+              default. Open a receipt invoice from Recent receipts when needed.
+            </li>
           </ul>
         </Section>
       ) : null}
@@ -642,8 +646,9 @@ function DocsSections({
             <div>
               <dt className="font-semibold text-[#12141a]">Inventory log</dt>
               <dd>
-                An automatic record every time quantity changes: sale, supplier
-                stock in, transfer in/out, or manual adjustment.
+                An automatic record every time quantity changes: sale, sale
+                restock, supplier stock in, transfer in/out, or manual
+                adjustment.
               </dd>
             </div>
             <div>

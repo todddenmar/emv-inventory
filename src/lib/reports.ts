@@ -232,6 +232,7 @@ export function summarizeStockMovements(
 ): StockMovementSummary[] {
   const order: InventoryLogReason[] = [
     "pos_sale",
+    "pos_sale_restock",
     "supplier_stock_in",
     "transfer_in",
     "transfer_out",

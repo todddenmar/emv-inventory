@@ -676,6 +676,10 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       createdBy: sale.createdBy,
       createdByName: sale.createdByName,
       createdAt: sale.createdAt,
+      archivedAt: sale.archivedAt,
+      archivedBy: sale.archivedBy,
+      archivedByName: sale.archivedByName,
+      restockedOnArchive: sale.restockedOnArchive,
     };
   },
   fromFirestore(
@@ -866,6 +870,11 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       createdBy: data.createdBy,
       createdByName: data.createdByName ?? null,
       createdAt: toDate(data.createdAt),
+      archivedAt: data.archivedAt ? toDate(data.archivedAt) : null,
+      archivedBy: typeof data.archivedBy === "string" ? data.archivedBy : null,
+      archivedByName:
+        typeof data.archivedByName === "string" ? data.archivedByName : null,
+      restockedOnArchive: data.restockedOnArchive === true,
     };
   },
 };

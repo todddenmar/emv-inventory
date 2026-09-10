@@ -23,6 +23,7 @@ import { TablePagination } from "@/components/admin/table-pagination";
 import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import {
   getInventoryLogs,
+  inventoryLogLinksToSale,
   inventoryLogReasonLabel,
 } from "@/lib/firestore/inventory-logs";
 import { formatDate } from "@/lib/format";
@@ -144,7 +145,7 @@ export function InventoryActivityFeed({
                         {log.previousStock} → {log.newStock}
                       </TableCell>
                       <TableCell className="text-right">
-                        {log.reason === "pos_sale" && log.referenceId ? (
+                        {inventoryLogLinksToSale(log.reason) && log.referenceId ? (
                           <SaleInvoiceButton saleId={log.referenceId} />
                         ) : null}
                       </TableCell>

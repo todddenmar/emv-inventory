@@ -255,7 +255,13 @@ async function resetSales(
       "reason",
       "pos_sale"
     );
-    return sales + saleLogs;
+    const restockLogs = await deleteWhereEquals(
+      db,
+      COLLECTIONS.inventoryLogs,
+      "reason",
+      "pos_sale_restock"
+    );
+    return sales + saleLogs + restockLogs;
   }
 
   const saleIds = await collectIdsWhereEquals(

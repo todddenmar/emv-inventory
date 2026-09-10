@@ -47,6 +47,7 @@ import { getCategories } from "@/lib/firestore/categories";
 import { getCategoryGroups } from "@/lib/firestore/category-groups";
 import {
   getInventoryLogs,
+  inventoryLogLinksToSale,
   inventoryLogReasonLabel,
 } from "@/lib/firestore/inventory-logs";
 import { getProducts } from "@/lib/firestore/products";
@@ -69,6 +70,7 @@ const REASON_OPTIONS: { value: ReasonFilter; label: string }[] = [
   { value: "all", label: "All activities" },
   { value: "manual_adjustment", label: "Manual adjustment" },
   { value: "pos_sale", label: "Sale" },
+  { value: "pos_sale_restock", label: "Sale restock" },
   { value: "supplier_stock_in", label: "Supplier stock in" },
   { value: "transfer_in", label: "Transfer in" },
   { value: "transfer_out", label: "Transfer out" },
@@ -492,7 +494,7 @@ export default function AdminAdjustmentHistoryPage() {
                           {log.previousStock} → {log.newStock}
                         </TableCell>
                         <TableCell className="text-right">
-                          {log.reason === "pos_sale" && log.referenceId ? (
+                          {inventoryLogLinksToSale(log.reason) && log.referenceId ? (
                             <SaleInvoiceButton saleId={log.referenceId} />
                           ) : null}
                         </TableCell>

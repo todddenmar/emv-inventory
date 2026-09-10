@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getPosSale } from "@/lib/firestore/pos-sales";
+import { getPosSale, isPosSaleArchived } from "@/lib/firestore/pos-sales";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { tenderMethodLabel, formatPaymentLineNote, paymentKindLabel } from "@/lib/pos-payments";
@@ -114,6 +114,9 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
         <Badge variant="outline" className="font-mono text-[10px]">
           {sale.id.slice(0, 8)}…
         </Badge>
+        {isPosSaleArchived(sale) ? (
+          <Badge variant="destructive">Archived</Badge>
+        ) : null}
         <span className="text-sm text-muted-foreground">
           {formatDate(sale.createdAt)}
         </span>

@@ -160,7 +160,13 @@ export function inventoryLogReasonLabel(reason: InventoryLogReason): string {
       return "Transfer in";
     case "pos_sale":
       return "Sale";
+    case "pos_sale_restock":
+      return "Sale restock";
     case "supplier_stock_in":
       return "Supplier stock in";
   }
+}
+
+export function inventoryLogLinksToSale(reason: InventoryLogReason): boolean {
+  return reason === "pos_sale" || reason === "pos_sale_restock";
 }

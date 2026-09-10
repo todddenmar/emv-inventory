@@ -181,6 +181,7 @@ export type InventoryLogReason =
   | "transfer_out"
   | "transfer_in"
   | "pos_sale"
+  | "pos_sale_restock"
   | "supplier_stock_in";
 
 export interface InventoryLog {
@@ -424,6 +425,12 @@ export interface PosSale {
   createdBy: string;
   createdByName: string | null;
   createdAt: Date;
+  /** When set, the sale is excluded from reports and till totals. */
+  archivedAt: Date | null;
+  archivedBy: string | null;
+  archivedByName: string | null;
+  /** True when units were returned to branch stock at archive time. */
+  restockedOnArchive: boolean;
 }
 
 /** Day/branch expense row for the daily sales report. */

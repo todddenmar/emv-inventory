@@ -16,6 +16,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ArchiveSaleDialog } from "@/components/admin/archive-sale-dialog";
 import { NamedAmountList } from "@/components/admin/daily-cash-controls";
 import { CashSummaryCard } from "@/components/admin/cash-summary-card";
 import { EditSalePaymentDialog } from "@/components/admin/edit-sale-payment-dialog";
@@ -69,6 +71,7 @@ export default function DailySalesReportPage() {
   const [loading, setLoading] = useState(true);
   const [editSaleId, setEditSaleId] = useState<string | null>(null);
   const [invoiceSaleId, setInvoiceSaleId] = useState<string | null>(null);
+  const [archiveSaleId, setArchiveSaleId] = useState<string | null>(null);
 
   useEffect(() => {
     getBranches(true)
@@ -349,6 +352,19 @@ export default function DailySalesReportPage() {
                                     >
                                       View invoice
                                     </DropdownMenuItem>
+                                    {isElevatedAdmin ? (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          variant="destructive"
+                                          onClick={() =>
+                                            setArchiveSaleId(row.saleId)
+                                          }
+                                        >
+                                          Archive sale
+                                        </DropdownMenuItem>
+                                      </>
+                                    ) : null}
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </TableCell>
@@ -418,6 +434,17 @@ export default function DailySalesReportPage() {
         open={invoiceSaleId != null}
         onOpenChange={(open) => {
           if (!open) setInvoiceSaleId(null);
+        }}
+      />
+      <ArchiveSaleDialog
+        sale={sales.find((sale) => sale.id === archiveSaleId) ?? null}
+        saleId={archiveSaleId}
+        open={archiveSaleId != null}
+        onOpenChange={(open) => {
+          if (!open) setArchiveSaleId(null);
+        }}
+        onArchived={(id) => {
+          setSales((prev) => prev.filter((row) => row.id !== id));
         }}
       />
     </div>
