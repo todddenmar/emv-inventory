@@ -40,8 +40,8 @@ import {
   POS_PAYMENT_KINDS,
   accountTypeForTender,
   cartLineNeedsPayment,
-  createCheckoutPaymentGroupId,
   createItemPaymentLine,
+  createLinkedPaymentGroup,
   formatPaymentLineNote,
   groupedVariantIdSet,
   itemPaymentsCoverLineTotal,
@@ -832,15 +832,9 @@ export function PosCheckoutDialog({
     const selected = [...new Set(linkSelection)].filter((id) =>
       ungroupedPayableLines.some((line) => line.variantId === id)
     );
-    if (selected.length < 2) return;
-    commitGroups([
-      ...paymentGroups,
-      {
-        id: createCheckoutPaymentGroupId(),
-        variantIds: selected,
-        payments: [],
-      },
-    ]);
+    const group = createLinkedPaymentGroup(selected, lines);
+    if (!group) return;
+    commitGroups([...paymentGroups, group]);
     setLinkPickerOpen(false);
     setLinkSelection([]);
   };
@@ -1283,8 +1277,8 @@ export function PosCheckoutDialog({
                   <div>
                     <Label>Payments</Label>
                     <p className="text-xs text-muted-foreground">
-                      Split per item, or link variants to share one payment
-                      (e.g. 1 DP + 1 Home Credit). Amount due{" "}
+                      Items share one payment by default. Unlink to split per
+                      item, or link a subset. Amount due{" "}
                       <span className="font-medium tabular-nums">
                         {formatCurrency(amountDue)}
                       </span>
@@ -1299,7 +1293,9 @@ export function PosCheckoutDialog({
                       variant="outline"
                       disabled={charging}
                       onClick={() => {
-                        setLinkSelection([]);
+                        setLinkSelection(
+                          ungroupedPayableLines.map((line) => line.variantId)
+                        );
                         setLinkPickerOpen(true);
                       }}
                     >
@@ -2583,8 +2579,9 @@ export function PosCheckoutDialog({
         <DialogHeader>
           <DialogTitle>Link items for the same payment</DialogTitle>
           <DialogDescription>
-            Select at least two variants. Their combined total will be covered
-            by one payment split (for example 1 down payment and 1 Home Credit).
+            Select at least two variants to share one payment split (for
+            example 1 down payment and 1 Home Credit). Unlinked items stay on
+            their own payments.
           </DialogDescription>
         </DialogHeader>
         <ul className="max-h-[50dvh] space-y-1 overflow-y-auto">

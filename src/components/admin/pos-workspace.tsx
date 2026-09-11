@@ -79,6 +79,7 @@ import {
 import {
   defaultCartLinePayment,
   defaultItemPayments,
+  defaultPaymentGroupsForLines,
   ensureCartLinePaymentFields,
   syncPaymentsToLineTotal,
 } from "@/lib/pos-payments";
@@ -839,17 +840,18 @@ export function PosWorkspace({
 
   const openCheckout = () => {
     if (cart.length === 0 || !activeBranch) return;
+    const lines = cart.map((line) => ensureCartLinePaymentFields(line));
     savePosCheckoutDraft({
       saleChannel,
       branchId: activeBranch.id,
       branchName: activeBranch.name,
-      lines: cart.map((line) => ensureCartLinePaymentFields(line)),
+      lines,
       paymentMethod,
       customerType,
       customer,
       appliedVoucher,
       voucherCodeInput,
-      paymentGroups: [],
+      paymentGroups: defaultPaymentGroupsForLines(lines),
       savedAt: Date.now(),
     });
     setMobileCartOpen(false);

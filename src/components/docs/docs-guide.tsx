@@ -467,6 +467,11 @@ function DocsSections({
             <li>Only variants assigned to the branch assortment appear.</li>
             <li>Checkout writes a sale and reduces stock (logged as a sale).</li>
             <li>
+              At checkout, paid items share one payment by default. Unlink to
+              pay each item separately, or link a subset for a shared split
+              (for example one down payment plus Home Credit).
+            </li>
+            <li>
               At checkout, set <strong>Customer type</strong> to{" "}
               <strong>Walk in</strong>, <strong>Reservation</strong>,{" "}
               <strong>Delivery</strong>, <strong>Warranty</strong>, or{" "}

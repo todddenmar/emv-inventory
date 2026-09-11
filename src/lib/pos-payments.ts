@@ -446,6 +446,50 @@ export function paymentGroupMerchandiseTotal(
   );
 }
 
+export function createLinkedPaymentGroup(
+  variantIds: string[],
+  lines: CartLineForPayment[]
+): PosCheckoutPaymentGroup | null {
+  const payable = new Set(
+    lines.filter(cartLineNeedsPayment).map((line) => line.variantId)
+  );
+  const ids = [...new Set(variantIds)].filter((id) => payable.has(id));
+  if (ids.length < 2) return null;
+  const group: PosCheckoutPaymentGroup = {
+    id: createCheckoutPaymentGroupId(),
+    variantIds: ids,
+    payments: [],
+  };
+  return {
+    ...group,
+    payments: defaultItemPayments(paymentGroupMerchandiseTotal(group, lines)),
+  };
+}
+
+/** One shared payment group covering every payable cart line (2+ items). */
+export function defaultPaymentGroupsForLines(
+  lines: CartLineForPayment[]
+): PosCheckoutPaymentGroup[] {
+  const group = createLinkedPaymentGroup(
+    lines.filter(cartLineNeedsPayment).map((line) => line.variantId),
+    lines
+  );
+  return group ? [group] : [];
+}
+
+export function syncPaymentGroupsToLineTotals(
+  groups: PosCheckoutPaymentGroup[],
+  lines: CartLineForPayment[]
+): PosCheckoutPaymentGroup[] {
+  return groups.map((group) => ({
+    ...group,
+    payments: syncPaymentsToLineTotal(
+      group.payments,
+      paymentGroupMerchandiseTotal(group, lines)
+    ),
+  }));
+}
+
 function assertPositivePayments(payments: PosCheckoutPaymentLine[]) {
   if (!payments || payments.length === 0) {
     throw new Error("Add at least one payment for each item or linked group");

@@ -45,6 +45,7 @@ import {
   roundMoney,
   sanitizePaymentGroups,
   snapshotPaymentAccount,
+  syncPaymentGroupsToLineTotals,
   syncPaymentsToLineTotal,
   tenderNeedsPaymentAccount,
   type PosCheckoutPaymentGroup,
@@ -184,7 +185,10 @@ export function PosCheckoutWorkspace({
     nextLines: PosCartLine[],
     nextGroupsInput: PosCheckoutPaymentGroup[] = paymentGroups
   ) => {
-    const sanitized = sanitizePaymentGroups(nextGroupsInput, nextLines);
+    const sanitized = syncPaymentGroupsToLineTotals(
+      sanitizePaymentGroups(nextGroupsInput, nextLines),
+      nextLines
+    );
     const prevGrouped = groupedVariantIdSet(paymentGroups);
     const nextGrouped = groupedVariantIdSet(sanitized);
     const synced = nextLines.map((line) => {
