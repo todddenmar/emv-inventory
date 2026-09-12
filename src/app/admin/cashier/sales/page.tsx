@@ -15,6 +15,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -46,18 +53,33 @@ import {
   isNonRevenueCustomerType,
   posCustomerTypeLabel,
 } from "@/lib/pos-customer-type";
-import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
+import type {
+  Branch,
+  DailyCashRecord,
+  DailyExpense,
+  PosSale,
+  PosSaleChannel,
+} from "@/types";
+
+type SaleChannelFilter = "all" | PosSaleChannel;
 
 export default function CashierSalesPage() {
   const { assignedBranchId } = useBranchAccess();
   const { methods: paymentMethods } = usePaymentMethods();
   const [date, setDate] = useState(() => toDateInputValue());
+  const [saleChannel, setSaleChannel] =
+    useState<SaleChannelFilter>("shop");
   const [branch, setBranch] = useState<Branch | null>(null);
   const [sales, setSales] = useState<PosSale[]>([]);
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [cashRecord, setCashRecord] = useState<DailyCashRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+
+  const supportsWholesale = branch?.supportsWholesale === true;
+  const channelFilter =
+    saleChannel === "all" ? null : saleChannel;
+  const isWholesaleOnly = saleChannel === "wholesale";
 
   useEffect(() => {
     if (!assignedBranchId) {
@@ -68,6 +90,12 @@ export default function CashierSalesPage() {
       .then(setBranch)
       .catch(console.error);
   }, [assignedBranchId]);
+
+  useEffect(() => {
+    if (!supportsWholesale && saleChannel === "wholesale") {
+      setSaleChannel("shop");
+    }
+  }, [supportsWholesale, saleChannel]);
 
   const load = useCallback(async () => {
     if (!assignedBranchId) {
@@ -80,26 +108,40 @@ export default function CashierSalesPage() {
 
     setLoading(true);
     try {
-      const [saleRows, expenseRows, cashRow] = await Promise.all([
-        getPosSales({
+      if (isWholesaleOnly) {
+        const saleRows = await getPosSales({
           branchId: assignedBranchId,
           fromDate: date,
           toDate: date,
+          saleChannel: "wholesale",
           max: 2000,
-        }),
-        getDailyExpenses({ branchId: assignedBranchId, date }),
-        getDailyCashRecord(assignedBranchId, date),
-      ]);
-      setSales(saleRows);
-      setExpenses(expenseRows);
-      setCashRecord(cashRow);
+        });
+        setSales(saleRows);
+        setExpenses([]);
+        setCashRecord(null);
+      } else {
+        const [saleRows, expenseRows, cashRow] = await Promise.all([
+          getPosSales({
+            branchId: assignedBranchId,
+            fromDate: date,
+            toDate: date,
+            saleChannel: channelFilter,
+            max: 2000,
+          }),
+          getDailyExpenses({ branchId: assignedBranchId, date }),
+          getDailyCashRecord(assignedBranchId, date),
+        ]);
+        setSales(saleRows);
+        setExpenses(expenseRows);
+        setCashRecord(cashRow);
+      }
     } catch (error) {
       console.error(error);
       toast.error("Failed to load sales");
     } finally {
       setLoading(false);
     }
-  }, [assignedBranchId, date]);
+  }, [assignedBranchId, date, channelFilter, isWholesaleOnly]);
 
   useEffect(() => {
     void load();
@@ -107,18 +149,20 @@ export default function CashierSalesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [date]);
+  }, [date, saleChannel]);
 
-  const cashAddsTotal = sumDailyCashAdds(cashRecord?.additions ?? []);
+  const cashAddsTotal = isWholesaleOnly
+    ? 0
+    : sumDailyCashAdds(cashRecord?.additions ?? []);
   const summary = useMemo(
     () =>
       summarizeDailySalesReport({
         sales,
-        expenses,
+        expenses: isWholesaleOnly ? [] : expenses,
         cashAddsTotal,
         paymentMethods,
       }),
-    [sales, expenses, cashAddsTotal, paymentMethods]
+    [sales, expenses, cashAddsTotal, paymentMethods, isWholesaleOnly]
   );
 
   const {
@@ -145,41 +189,70 @@ export default function CashierSalesPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Sales history</h1>
         <p className="text-muted-foreground">
-          Shop and wholesale receipts for your branch till ·{" "}
-          {formatDateInputLabel(date)}
+          Receipts for your branch · {formatDateInputLabel(date)}
         </p>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="cashier-sales-date">Date</Label>
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Previous date"
-            onClick={() => setDate(shiftDateInput(date, -1))}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1 space-y-2">
+          <Label htmlFor="cashier-sales-date">Date</Label>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Previous date"
+              onClick={() => setDate(shiftDateInput(date, -1))}
+            >
+              <ChevronLeft />
+            </Button>
+            <Input
+              id="cashier-sales-date"
+              type="date"
+              value={date}
+              max={toDateInputValue()}
+              onChange={(e) => setDate(e.target.value || date)}
+              className="h-8 flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Next date"
+              disabled={date >= toDateInputValue()}
+              onClick={() => setDate(shiftDateInput(date, 1))}
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+        </div>
+        <div className="w-full space-y-2 sm:w-44">
+          <Label>Sale channel</Label>
+          <Select
+            value={saleChannel}
+            onValueChange={(value) =>
+              setSaleChannel((value as SaleChannelFilter) ?? "shop")
+            }
           >
-            <ChevronLeft />
-          </Button>
-          <Input
-            id="cashier-sales-date"
-            type="date"
-            value={date}
-            max={toDateInputValue()}
-            onChange={(e) => setDate(e.target.value || date)}
-            className="h-8 flex-1"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Next date"
-            disabled={date >= toDateInputValue()}
-            onClick={() => setDate(shiftDateInput(date, 1))}
-          >
-            <ChevronRight />
-          </Button>
+            <SelectTrigger size="sm" className="w-full">
+              <SelectValue>
+                {(value) => {
+                  if (value === "wholesale") return "Wholesale";
+                  if (value === "all") return "All channels";
+                  return "Shop";
+                }}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="shop">Shop</SelectItem>
+              {supportsWholesale ? (
+                <SelectItem value="wholesale">Wholesale</SelectItem>
+              ) : null}
+              {supportsWholesale ? (
+                <SelectItem value="all">All channels</SelectItem>
+              ) : null}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -202,6 +275,11 @@ export default function CashierSalesPage() {
           <CardTitle className="text-base">Receipts</CardTitle>
           <CardDescription>
             {total} receipt{total === 1 ? "" : "s"} · {formatDateInputLabel(date)}
+            {saleChannel === "wholesale"
+              ? " · wholesale"
+              : saleChannel === "shop"
+                ? " · shop"
+                : ""}
           </CardDescription>
         </CardHeader>
         <CardContent>
