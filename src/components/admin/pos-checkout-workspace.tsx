@@ -22,6 +22,7 @@ import {
   isVoucherRedeemable,
 } from "@/lib/firestore/vouchers";
 import { formatCurrency } from "@/lib/format";
+import { formatDateInputLabel, saleCreatedAtForDate } from "@/lib/dates";
 import {
   isNonRevenueCustomerType,
   posCustomerTypeLabel,
@@ -36,11 +37,14 @@ import {
   type PosCheckoutDraft,
 } from "@/lib/pos-checkout-draft";
 import {
+  dailySalesReportPath,
+  lockedPosPath,
+  type PosSaleLock,
+} from "@/lib/pos-sale-lock";
+import {
   allocatedPaymentsForCartLines,
   cartLineNeedsPayment,
-  defaultItemPayments,
   ensureCartLinePaymentFields,
-  groupedVariantIdSet,
   resolvePaymentsFromCartLines,
   roundMoney,
   sanitizePaymentGroups,
@@ -62,12 +66,17 @@ import type {
 
 export function PosCheckoutWorkspace({
   saleChannel,
+  saleLock = null,
 }: {
   saleChannel: PosSaleChannel;
+  saleLock?: PosSaleLock | null;
 }) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const homePath = posHomePath(saleChannel);
+  const homePath = saleLock ? lockedPosPath(saleLock) : posHomePath(saleChannel);
+  const afterSalePath = saleLock
+    ? dailySalesReportPath(saleLock)
+    : homePath;
   const isWholesale = saleChannel === "wholesale";
 
   const [loading, setLoading] = useState(true);
@@ -97,7 +106,7 @@ export function PosCheckoutWorkspace({
   const [charging, setCharging] = useState(false);
 
   useEffect(() => {
-    const draft = loadPosCheckoutDraft(saleChannel);
+    const draft = loadPosCheckoutDraft(saleChannel, saleLock);
     if (!draft) {
       toast.error("Cart is empty — return to POS to continue");
       router.replace(homePath);
@@ -108,8 +117,10 @@ export function PosCheckoutWorkspace({
       branchId: draft.branchId,
       branchName: draft.branchName,
     });
-    const groups = sanitizePaymentGroups(draft.paymentGroups, draft.lines);
-    const groupedIds = groupedVariantIdSet(groups);
+    const groups = syncPaymentGroupsToLineTotals(
+      sanitizePaymentGroups(draft.paymentGroups, draft.lines),
+      draft.lines
+    );
     setPaymentGroups(groups);
     setLines(
       draft.lines.map((line) => {
@@ -117,16 +128,7 @@ export function PosCheckoutWorkspace({
           line,
           draft.paymentMethod === "retail" ? "retail" : "cash"
         );
-        if (ensured.isFreebie) return ensured;
-        if (groupedIds.has(ensured.variantId)) {
-          return { ...ensured, payments: [] };
-        }
-        const lineTotal =
-          Math.round(ensured.unitPrice * ensured.quantity * 100) / 100;
-        return {
-          ...ensured,
-          payments: syncPaymentsToLineTotal(ensured.payments, lineTotal),
-        };
+        return { ...ensured, payments: [] };
       })
     );
     setPaymentMethod(draft.paymentMethod);
@@ -142,7 +144,7 @@ export function PosCheckoutWorkspace({
     getPaymentMethods({ activeOnly: true })
       .then(setTenderMethods)
       .catch(console.error);
-  }, [saleChannel, homePath, router]);
+  }, [saleChannel, homePath, router, saleLock?.branchId, saleLock?.saleDate]);
 
   const amountDue = useMemo(
     () => draftAmountDue({ lines, appliedVoucher }),
@@ -166,7 +168,7 @@ export function PosCheckoutWorkspace({
         savedAt: Date.now(),
         ...patch,
       };
-      savePosCheckoutDraft(next);
+      savePosCheckoutDraft(next, saleLock);
     },
     [
       appliedVoucher,
@@ -177,6 +179,8 @@ export function PosCheckoutWorkspace({
       paymentGroups,
       paymentMethod,
       saleChannel,
+      saleLock?.branchId,
+      saleLock?.saleDate,
       voucherCodeInput,
     ]
   );
@@ -189,23 +193,7 @@ export function PosCheckoutWorkspace({
       sanitizePaymentGroups(nextGroupsInput, nextLines),
       nextLines
     );
-    const prevGrouped = groupedVariantIdSet(paymentGroups);
-    const nextGrouped = groupedVariantIdSet(sanitized);
-    const synced = nextLines.map((line) => {
-      const was = prevGrouped.has(line.variantId);
-      const now = nextGrouped.has(line.variantId);
-      if (now) return { ...line, payments: [] };
-      if (
-        was &&
-        !now &&
-        cartLineNeedsPayment(line) &&
-        (line.payments?.length ?? 0) === 0
-      ) {
-        const lineTotal = roundMoney(line.unitPrice * line.quantity);
-        return { ...line, payments: defaultItemPayments(lineTotal) };
-      }
-      return line;
-    });
+    const synced = nextLines.map((line) => ({ ...line, payments: [] }));
     setPaymentGroups(sanitized);
     persistDraft({ lines: synced, paymentGroups: sanitized });
     return synced;
@@ -283,6 +271,10 @@ export function PosCheckoutWorkspace({
 
   const handleCharge = async () => {
     if (!user || !draftMeta || lines.length === 0) return;
+    if (saleLock && draftMeta.branchId !== saleLock.branchId) {
+      toast.error("This checkout is locked to another branch");
+      return;
+    }
 
     const noCharge = isNonRevenueCustomerType(customerType);
 
@@ -454,15 +446,18 @@ export function PosCheckoutWorkspace({
         })(),
         createdBy: user.uid,
         createdByName: user.displayName ?? user.email,
+        soldAt: saleLock
+          ? saleCreatedAtForDate(saleLock.saleDate)
+          : undefined,
       });
 
-      clearPosCheckoutDraft(saleChannel);
+      clearPosCheckoutDraft(saleChannel, saleLock);
       toast.success(
         noCharge
           ? `${posCustomerTypeLabel(customerType)} recorded`
           : "Sale completed"
       );
-      router.replace(homePath);
+      router.replace(afterSalePath);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sale failed");
     } finally {
@@ -485,6 +480,9 @@ export function PosCheckoutWorkspace({
           <h1 className="text-2xl font-bold tracking-tight">Checkout</h1>
           <p className="text-muted-foreground">
             {isWholesale ? "Wholesale" : "Shop"} · {draftMeta.branchName}
+            {saleLock
+              ? ` · ${formatDateInputLabel(saleLock.saleDate)}`
+              : ""}
           </p>
         </div>
         <p className="text-sm tabular-nums text-muted-foreground sm:text-right">
@@ -502,6 +500,16 @@ export function PosCheckoutWorkspace({
           )}
         </p>
       </div>
+      {saleLock ? (
+        <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+          This sale is recorded for{" "}
+          <span className="font-medium">
+            {formatDateInputLabel(saleLock.saleDate)}
+          </span>{" "}
+          at <span className="font-medium">{draftMeta.branchName}</span>. Date
+          and branch cannot be changed.
+        </p>
+      ) : null}
       <PosCheckoutDialog
         layout="page"
         onBack={() => router.push(homePath)}

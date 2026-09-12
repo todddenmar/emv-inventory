@@ -8,6 +8,7 @@ import {
   type PosCheckoutPaymentGroup,
 } from "@/lib/pos-payments";
 import { parsePosCustomerType } from "@/lib/pos-customer-type";
+import type { PosSaleLock } from "@/lib/pos-sale-lock";
 import type {
   PosPaymentMethod,
   PosSaleChannel,
@@ -29,7 +30,13 @@ export interface PosCheckoutDraft {
   savedAt: number;
 }
 
-function draftKey(saleChannel: PosSaleChannel): string {
+function draftKey(
+  saleChannel: PosSaleChannel,
+  lock?: PosSaleLock | null
+): string {
+  if (lock) {
+    return `emv-pos-checkout:${saleChannel}:${lock.branchId}:${lock.saleDate}`;
+  }
   return `emv-pos-checkout:${saleChannel}`;
 }
 
@@ -57,10 +64,13 @@ export function draftAmountDue(draft: {
   return Math.max(0, subtotal - voucherAppliedAmount(draft.appliedVoucher, subtotal));
 }
 
-export function savePosCheckoutDraft(draft: PosCheckoutDraft): void {
+export function savePosCheckoutDraft(
+  draft: PosCheckoutDraft,
+  lock?: PosSaleLock | null
+): void {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(
-    draftKey(draft.saleChannel),
+    draftKey(draft.saleChannel, lock),
     JSON.stringify({
       ...draft,
       savedAt: Date.now(),
@@ -69,10 +79,11 @@ export function savePosCheckoutDraft(draft: PosCheckoutDraft): void {
 }
 
 export function loadPosCheckoutDraft(
-  saleChannel: PosSaleChannel
+  saleChannel: PosSaleChannel,
+  lock?: PosSaleLock | null
 ): PosCheckoutDraft | null {
   if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(draftKey(saleChannel));
+  const raw = sessionStorage.getItem(draftKey(saleChannel, lock));
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as PosCheckoutDraft;
@@ -95,6 +106,10 @@ export function loadPosCheckoutDraft(
       } as Voucher;
     }
 
+    if (lock && parsed.branchId !== lock.branchId) {
+      return null;
+    }
+
     return {
       ...parsed,
       customerType: parsePosCustomerType(parsed.customerType),
@@ -109,9 +124,12 @@ export function loadPosCheckoutDraft(
   }
 }
 
-export function clearPosCheckoutDraft(saleChannel: PosSaleChannel): void {
+export function clearPosCheckoutDraft(
+  saleChannel: PosSaleChannel,
+  lock?: PosSaleLock | null
+): void {
   if (typeof window === "undefined") return;
-  sessionStorage.removeItem(draftKey(saleChannel));
+  sessionStorage.removeItem(draftKey(saleChannel, lock));
 }
 
 export function posHomePath(saleChannel: PosSaleChannel): string {

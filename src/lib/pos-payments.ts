@@ -55,7 +55,7 @@ export interface PosCheckoutPaymentLine {
   note: string;
 }
 
-/** Linked cart variants that share one payment split (checkout draft only). */
+/** Cart lines that share one payment split (checkout draft only). */
 export interface PosCheckoutPaymentGroup {
   id: string;
   variantIds: string[];
@@ -389,48 +389,43 @@ export function normalizeCheckoutPaymentLine(
   };
 }
 
-export function groupedVariantIdSet(
-  groups: PosCheckoutPaymentGroup[] | null | undefined
-): Set<string> {
-  const ids = new Set<string>();
-  for (const group of groups ?? []) {
-    for (const variantId of group.variantIds) ids.add(variantId);
-  }
-  return ids;
-}
-
 export function sanitizePaymentGroups(
   groups: PosCheckoutPaymentGroup[] | null | undefined,
   lines: CartLineForPayment[]
 ): PosCheckoutPaymentGroup[] {
-  const payableIds = new Set(
-    lines.filter(cartLineNeedsPayment).map((line) => line.variantId)
-  );
-  const used = new Set<string>();
-  const next: PosCheckoutPaymentGroup[] = [];
+  const payableIds = lines
+    .filter(cartLineNeedsPayment)
+    .map((line) => line.variantId);
+  if (payableIds.length === 0) return [];
 
-  for (const group of groups ?? []) {
-    const variantIds = [...new Set(group.variantIds)].filter((id) => {
-      if (!payableIds.has(id) || used.has(id)) return false;
-      return true;
-    });
-    if (variantIds.length < 2) continue;
-    for (const id of variantIds) used.add(id);
-    next.push({
-      id: group.id || createCheckoutPaymentGroupId(),
-      variantIds,
-      payments: Array.isArray(group.payments)
-        ? group.payments.map((pay) =>
-            normalizeCheckoutPaymentLine({
-              ...pay,
-              tenderMethod: pay.tenderMethod ?? "cash",
-            })
+  const source =
+    (groups ?? []).find(
+      (group) => Array.isArray(group.payments) && group.payments.length > 0
+    ) ?? (groups ?? [])[0];
+
+  const payments =
+    Array.isArray(source?.payments) && source.payments.length > 0
+      ? source.payments.map((pay) =>
+          normalizeCheckoutPaymentLine({
+            ...pay,
+            tenderMethod: pay.tenderMethod ?? "cash",
+          })
+        )
+      : defaultItemPayments(
+          roundMoney(
+            lines
+              .filter(cartLineNeedsPayment)
+              .reduce((sum, line) => sum + cartLineMerchandiseTotal(line), 0)
           )
-        : [],
-    });
-  }
+        );
 
-  return next;
+  return [
+    {
+      id: source?.id || createCheckoutPaymentGroupId(),
+      variantIds: payableIds,
+      payments,
+    },
+  ];
 }
 
 export function paymentGroupMerchandiseTotal(
@@ -446,35 +441,11 @@ export function paymentGroupMerchandiseTotal(
   );
 }
 
-export function createLinkedPaymentGroup(
-  variantIds: string[],
-  lines: CartLineForPayment[]
-): PosCheckoutPaymentGroup | null {
-  const payable = new Set(
-    lines.filter(cartLineNeedsPayment).map((line) => line.variantId)
-  );
-  const ids = [...new Set(variantIds)].filter((id) => payable.has(id));
-  if (ids.length < 2) return null;
-  const group: PosCheckoutPaymentGroup = {
-    id: createCheckoutPaymentGroupId(),
-    variantIds: ids,
-    payments: [],
-  };
-  return {
-    ...group,
-    payments: defaultItemPayments(paymentGroupMerchandiseTotal(group, lines)),
-  };
-}
-
-/** One shared payment group covering every payable cart line (2+ items). */
+/** One shared payment group covering every payable cart line. */
 export function defaultPaymentGroupsForLines(
   lines: CartLineForPayment[]
 ): PosCheckoutPaymentGroup[] {
-  const group = createLinkedPaymentGroup(
-    lines.filter(cartLineNeedsPayment).map((line) => line.variantId),
-    lines
-  );
-  return group ? [group] : [];
+  return sanitizePaymentGroups(undefined, lines);
 }
 
 export function syncPaymentGroupsToLineTotals(
@@ -492,7 +463,7 @@ export function syncPaymentGroupsToLineTotals(
 
 function assertPositivePayments(payments: PosCheckoutPaymentLine[]) {
   if (!payments || payments.length === 0) {
-    throw new Error("Add at least one payment for each item or linked group");
+    throw new Error("Add at least one payment for the cart");
   }
   for (const pay of payments) {
     if (!Number.isFinite(pay.amount) || pay.amount <= 0) {
@@ -568,8 +539,8 @@ export function allocatedPaymentsForCartLines(
 }
 
 /**
- * Flatten group + per-item payment splits into sale-level payments.
- * Linked groups emit their payments once. If a voucher reduces amountDue,
+ * Flatten cart payment splits into sale-level payments.
+ * The cart emits one shared group. If a voucher reduces amountDue,
  * every split is scaled proportionally.
  */
 export function resolvePaymentsFromCartLines(
@@ -594,7 +565,6 @@ export function resolvePaymentsFromCartLines(
   }
 
   const groups = sanitizePaymentGroups(paymentGroups, paid);
-  const groupedIds = groupedVariantIdSet(groups);
 
   type Draft = {
     tenderMethod: PosTenderMethod;
@@ -609,32 +579,9 @@ export function resolvePaymentsFromCartLines(
     const groupTotal = paymentGroupMerchandiseTotal(group, paid);
     assertPositivePayments(group.payments);
     if (!itemPaymentsCoverLineTotal(group.payments, groupTotal)) {
-      throw new Error(
-        "Linked items' payments must equal those items' combined total"
-      );
+      throw new Error("Payments must equal the cart merchandise total");
     }
     for (const pay of group.payments) {
-      drafts.push({
-        tenderMethod: pay.tenderMethod,
-        amount: pay.amount,
-        paymentAccountId: pay.paymentAccountId,
-        kind: parsePosPaymentKind(pay.kind),
-        note: pay.note.trim(),
-      });
-    }
-  }
-
-  for (const line of paid) {
-    if (groupedIds.has(line.variantId)) continue;
-    const lineTotal = cartLineMerchandiseTotal(line);
-    if (!line.payments || line.payments.length === 0) {
-      throw new Error("Add at least one payment for each item");
-    }
-    assertPositivePayments(line.payments);
-    if (!itemPaymentsCoverLineTotal(line.payments, lineTotal)) {
-      throw new Error("Each item's payments must equal that item's line total");
-    }
-    for (const pay of line.payments) {
       drafts.push({
         tenderMethod: pay.tenderMethod,
         amount: pay.amount,

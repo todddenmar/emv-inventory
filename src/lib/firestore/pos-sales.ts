@@ -8,6 +8,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  Timestamp,
   updateDoc,
   where,
   type QueryConstraint,
@@ -68,6 +69,8 @@ export interface CompletePosSaleInput {
   items: PosSaleItem[];
   createdBy: string;
   createdByName?: string | null;
+  /** When set, the sale is dated to this instant instead of the server time. */
+  soldAt?: Date | null;
 }
 
 export async function getPosSale(id: string): Promise<PosSale | null> {
@@ -138,6 +141,16 @@ export async function getPosSales(options?: {
     }
     return applyFilters(rows).slice(0, max);
   }
+}
+
+function resolveSaleCreatedAt(soldAt?: Date | null) {
+  if (!(soldAt instanceof Date) || Number.isNaN(soldAt.getTime())) {
+    return serverTimestamp();
+  }
+  if (soldAt.getTime() > Date.now() + 60_000) {
+    throw new Error("Sale date cannot be in the future");
+  }
+  return Timestamp.fromDate(soldAt);
 }
 
 export async function completePosSale(
@@ -418,7 +431,7 @@ export async function completePosSale(
       itemCount,
       createdBy: input.createdBy,
       createdByName: input.createdByName ?? null,
-      createdAt: serverTimestamp(),
+      createdAt: resolveSaleCreatedAt(input.soldAt),
       archivedAt: null,
       archivedBy: null,
       archivedByName: null,

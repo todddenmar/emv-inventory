@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, MoreHorizontal } from "lucide-react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChevronLeft, ChevronRight, Loader2, MoreHorizontal, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/ui/link-button";
 import {
   Card,
   CardContent,
@@ -43,7 +45,7 @@ import { EditSalePaymentDialog } from "@/components/admin/edit-sale-payment-dial
 import { SaleInvoiceDialog } from "@/components/admin/sale-invoice-dialog";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { usePaymentMethods } from "@/hooks/use-payment-methods";
-import { formatDateInputLabel, shiftDateInput, toDateInputValue } from "@/lib/dates";
+import { formatDateInputLabel, isDateInputValue, shiftDateInput, toDateInputValue } from "@/lib/dates";
 import {
   flattenDailySalesRows,
   sumDailyCashAdds,
@@ -55,16 +57,27 @@ import { getDailyExpenses } from "@/lib/firestore/daily-expenses";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { formatCurrency } from "@/lib/format";
 import { saleAmountDue } from "@/lib/pos-payments";
+import { lockedPosPath } from "@/lib/pos-sale-lock";
 import type { Branch, DailyCashRecord, DailyExpense, PosSale } from "@/types";
 
-export default function DailySalesReportPage() {
+function DailySalesReportPageInner() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { canViewAllBranches, assignedBranchId, isElevatedAdmin } =
     useBranchAccess();
   const { methods: paymentMethods } = usePaymentMethods();
 
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState("");
-  const [date, setDate] = useState(() => toDateInputValue());
+  const [selectedBranchId, setSelectedBranchId] = useState(
+    () => searchParams.get("branch")?.trim() ?? ""
+  );
+  const [date, setDate] = useState(() => {
+    const urlDate = searchParams.get("date");
+    const today = toDateInputValue();
+    if (isDateInputValue(urlDate) && urlDate <= today) return urlDate;
+    return today;
+  });
   const [sales, setSales] = useState<PosSale[]>([]);
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [cashRecord, setCashRecord] = useState<DailyCashRecord | null>(null);
@@ -78,7 +91,7 @@ export default function DailySalesReportPage() {
       .then((list) => {
         setBranches(list);
         setSelectedBranchId((prev) => {
-          if (prev) return prev;
+          if (prev && list.some((b) => b.id === prev)) return prev;
           if (assignedBranchId && list.some((b) => b.id === assignedBranchId)) {
             return assignedBranchId;
           }
@@ -102,6 +115,21 @@ export default function DailySalesReportPage() {
     () => branches.find((b) => b.id === scopeBranchId) ?? null,
     [branches, scopeBranchId]
   );
+
+  const newSaleHref =
+    isElevatedAdmin && scopeBranchId
+      ? lockedPosPath({ branchId: scopeBranchId, saleDate: date })
+      : null;
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    next.set("date", date);
+    if (scopeBranchId) next.set("branch", scopeBranchId);
+    const nextQs = next.toString();
+    const currentQs = searchParams.toString();
+    if (nextQs === currentQs) return;
+    router.replace(`${pathname}?${nextQs}`);
+  }, [date, scopeBranchId, pathname, router, searchParams]);
 
   const load = useCallback(async () => {
     if (!scopeBranchId) {
@@ -250,6 +278,12 @@ export default function DailySalesReportPage() {
               </div>
             </div>
           )}
+          {newSaleHref ? (
+            <LinkButton href={newSaleHref} className="sm:self-end">
+              <ShoppingCart />
+              New sale
+            </LinkButton>
+          ) : null}
         </div>
       </div>
 
@@ -289,6 +323,7 @@ export default function DailySalesReportPage() {
                             className="py-8 text-center text-muted-foreground"
                           >
                             No sales for this day
+                            {newSaleHref ? ". Use New sale to add one." : ""}
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -448,6 +483,21 @@ export default function DailySalesReportPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function DailySalesReportPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          Loading report...
+        </div>
+      }
+    >
+      <DailySalesReportPageInner />
+    </Suspense>
   );
 }
 

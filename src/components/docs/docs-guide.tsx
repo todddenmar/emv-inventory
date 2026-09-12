@@ -467,9 +467,9 @@ function DocsSections({
             <li>Only variants assigned to the branch assortment appear.</li>
             <li>Checkout writes a sale and reduces stock (logged as a sale).</li>
             <li>
-              At checkout, paid items share one payment by default. Unlink to
-              pay each item separately, or link a subset for a shared split
-              (for example one down payment plus Home Credit).
+              At checkout, paid items share one cart payment. You can still
+              split that payment (for example one down payment plus Home
+              Credit). Freebies and no-charge receipts do not need a tender.
             </li>
             <li>
               At checkout, set <strong>Customer type</strong> to{" "}
@@ -578,6 +578,11 @@ function DocsSections({
               On Daily sales, elevated admins can edit tenders and archive a
               mistaken sale. Archiving drops it from totals; restock is on by
               default. Open a receipt invoice from Recent receipts when needed.
+            </li>
+            <li>
+              <strong>New sale</strong> on Daily sales opens POS locked to that
+              date and branch. The receipt is recorded on the selected day;
+              stock still comes from that branch.
             </li>
           </ul>
         </Section>

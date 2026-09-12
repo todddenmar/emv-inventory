@@ -1,3 +1,45 @@
+const DATE_INPUT_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True when `value` is a real local calendar day `YYYY-MM-DD`. */
+export function isDateInputValue(
+  value: string | null | undefined
+): value is string {
+  if (!value || !DATE_INPUT_RE.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return (
+    date.getFullYear() === y &&
+    date.getMonth() === m - 1 &&
+    date.getDate() === d
+  );
+}
+
+/**
+ * Clock time on `saleDate`. Today uses `now`. Past days keep today's time of
+ * day so several backdated sales still sort. Future dates are rejected by
+ * callers — this function clamps them to `now`.
+ */
+export function saleCreatedAtForDate(
+  saleDate: string,
+  now: Date = new Date()
+): Date {
+  if (!isDateInputValue(saleDate)) return now;
+  const today = toDateInputValue(now);
+  if (saleDate >= today) return now;
+  const start = startOfLocalDay(saleDate);
+  const dated = new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate(),
+    now.getHours(),
+    now.getMinutes(),
+    now.getSeconds(),
+    now.getMilliseconds()
+  );
+  const end = endOfLocalDay(saleDate);
+  return dated > end ? end : dated;
+}
+
 /** Local calendar date as `YYYY-MM-DD` for `<input type="date">`. */
 export function toDateInputValue(date: Date = new Date()): string {
   const y = date.getFullYear();

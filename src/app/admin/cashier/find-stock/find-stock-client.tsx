@@ -14,6 +14,8 @@ import { getBranches } from "@/lib/firestore/branches";
 import { getAllBranchInventory } from "@/lib/firestore/inventory";
 import { getProducts } from "@/lib/firestore/products";
 import { createTransferRequest } from "@/lib/firestore/transfer-requests";
+import { formatCurrency } from "@/lib/format";
+import { resolveVariantPrices } from "@/lib/product-pricing";
 import { formatVariantLabel } from "@/lib/product-variants";
 import type { Branch, BranchInventory, Product, ProductVariant } from "@/types";
 
@@ -108,17 +110,35 @@ export default function FindStockPage() {
 
   const branchStocks = useMemo(() => {
     if (!selected) return [];
-    const byBranch = new Map<string, number>();
+    const byBranch = new Map<
+      string,
+      { stock: number; inventory: BranchInventory | null }
+    >();
     for (const row of inventory) {
       if (row.variantId !== selected.variant.id) continue;
-      byBranch.set(row.branchId, (byBranch.get(row.branchId) ?? 0) + row.stock);
+      const current = byBranch.get(row.branchId);
+      if (current) {
+        current.stock += row.stock;
+        if (!current.inventory) current.inventory = row;
+      } else {
+        byBranch.set(row.branchId, { stock: row.stock, inventory: row });
+      }
     }
     return branches
-      .map((branch) => ({
-        branch,
-        stock: byBranch.get(branch.id) ?? 0,
-        isMine: branch.id === assignedBranchId,
-      }))
+      .map((branch) => {
+        const row = byBranch.get(branch.id);
+        const prices = resolveVariantPrices(
+          selected.variant,
+          row?.inventory ?? null
+        );
+        return {
+          branch,
+          stock: row?.stock ?? 0,
+          cashPrice: prices.price,
+          retailPrice: prices.retailPrice,
+          isMine: branch.id === assignedBranchId,
+        };
+      })
       .sort((a, b) => {
         if (a.isMine !== b.isMine) return a.isMine ? -1 : 1;
         return b.stock - a.stock;
@@ -246,7 +266,9 @@ export default function FindStockPage() {
                   ? `${selected.product.name} — ${selected.label}`
                   : selected.product.name}
               </p>
-              <p className="text-xs text-muted-foreground">Stock by branch</p>
+              <p className="text-xs text-muted-foreground">
+                Stock and prices by branch
+              </p>
             </div>
             <Button
               type="button"
@@ -262,7 +284,8 @@ export default function FindStockPage() {
           </div>
 
           <ul className="space-y-2">
-            {branchStocks.map(({ branch, stock, isMine }) => (
+            {branchStocks.map(
+              ({ branch, stock, cashPrice, retailPrice, isMine }) => (
               <li key={branch.id} className="space-y-2 rounded-lg border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
@@ -276,6 +299,16 @@ export default function FindStockPage() {
                     <span className="tabular-nums font-semibold">{stock}</span>
                   </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Cash {formatCurrency(cashPrice)}
+                  </span>
+                  {" · "}
+                  <span className="font-medium text-foreground">
+                    Retail{" "}
+                    {retailPrice != null ? formatCurrency(retailPrice) : "—"}
+                  </span>
+                </p>
 
                 {!isMine && stock > 0 ? (
                   <div className="flex flex-wrap items-center gap-2">

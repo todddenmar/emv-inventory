@@ -77,6 +77,13 @@ import {
   savePosCheckoutDraft,
 } from "@/lib/pos-checkout-draft";
 import {
+  dailySalesReportPath,
+  lockedPosCheckoutPath,
+  type PosSaleLock,
+} from "@/lib/pos-sale-lock";
+import { formatDateInputLabel } from "@/lib/dates";
+import { LinkButton } from "@/components/ui/link-button";
+import {
   defaultCartLinePayment,
   defaultItemPayments,
   defaultPaymentGroupsForLines,
@@ -118,17 +125,22 @@ function resolveWholesaleUnitPrice(
 
 export function PosWorkspace({
   saleChannel = "shop",
+  saleLock = null,
 }: {
   saleChannel?: PosSaleChannel;
+  saleLock?: PosSaleLock | null;
 }) {
   const isWholesale = saleChannel === "wholesale";
-  const { isElevatedAdmin, assignedBranchId, isCashier } = useBranchAccess();
+  const { isElevatedAdmin, assignedBranchId, isCashier, canAccessBranch } =
+    useBranchAccess();
   const { catalogImageSource } = useAppSettings();
   const router = useRouter();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedBranchId, setSelectedBranchId] = useState("");
+  const [selectedBranchId, setSelectedBranchId] = useState(
+    () => saleLock?.branchId ?? ""
+  );
   const [inventory, setInventory] = useState<BranchInventory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] =
     useState(ALL_CATEGORIES_ID);
@@ -170,9 +182,17 @@ export function PosWorkspace({
     title: string;
   } | null>(null);
 
-  const activeBranchId = isElevatedAdmin
-    ? selectedBranchId
-    : assignedBranchId ?? "";
+  const lockDenied = Boolean(
+    saleLock && !canAccessBranch(saleLock.branchId)
+  );
+
+  const activeBranchId = saleLock
+    ? lockDenied
+      ? ""
+      : saleLock.branchId
+    : isElevatedAdmin
+      ? selectedBranchId
+      : assignedBranchId ?? "";
 
   const activeBranch = branches.find((b) => b.id === activeBranchId);
 
@@ -192,12 +212,15 @@ export function PosWorkspace({
         const activeCats = cats.filter((c) => !c.isArchived);
         setCategories(activeCats);
 
-        const initialBranch = isElevatedAdmin
-          ? branchList[0]?.id ?? ""
-          : assignedBranchId &&
-              branchList.some((b) => b.id === assignedBranchId)
-            ? assignedBranchId
-            : branchList[0]?.id ?? "";
+        const initialBranch =
+          saleLock && branchList.some((b) => b.id === saleLock.branchId)
+            ? saleLock.branchId
+            : isElevatedAdmin
+              ? branchList[0]?.id ?? ""
+              : assignedBranchId &&
+                  branchList.some((b) => b.id === assignedBranchId)
+                ? assignedBranchId
+                : branchList[0]?.id ?? "";
         setSelectedBranchId(initialBranch);
         setSelectedCategoryId(ALL_CATEGORIES_ID);
         // Warm all-products cache for freebie alternate picking.
@@ -218,7 +241,7 @@ export function PosWorkspace({
     }
 
     bootstrap();
-  }, [isElevatedAdmin, assignedBranchId, isWholesale]);
+  }, [isElevatedAdmin, assignedBranchId, isWholesale, saleLock?.branchId]);
 
   useEffect(() => {
     if (!activeBranchId) {
@@ -239,7 +262,7 @@ export function PosWorkspace({
     setAlternateFreebies([]);
     setFreebieShortfall(null);
 
-    const draft = loadPosCheckoutDraft(saleChannel);
+    const draft = loadPosCheckoutDraft(saleChannel, saleLock);
     if (draft && draft.branchId === activeBranchId && draft.lines.length > 0) {
       setCart(draft.lines);
       setPaymentMethod(draft.paymentMethod);
@@ -255,7 +278,7 @@ export function PosWorkspace({
       setAppliedVoucher(null);
       setVoucherCodeInput("");
     }
-  }, [activeBranchId, saleChannel]);
+  }, [activeBranchId, saleChannel, saleLock?.branchId, saleLock?.saleDate]);
 
   const resetSaleExtras = () => {
     setCustomer(emptyPosCustomerDraft());
@@ -721,7 +744,7 @@ export function PosWorkspace({
   const clearCart = () => {
     setCart([]);
     resetSaleExtras();
-    clearPosCheckoutDraft(saleChannel);
+    clearPosCheckoutDraft(saleChannel, saleLock);
   };
 
   const handleContinueWithoutFreebie = () => {
@@ -838,24 +861,46 @@ export function PosWorkspace({
     );
   }
 
+  if (saleLock && (lockDenied || !activeBranch)) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          {lockDenied
+            ? "You cannot record a sale for this branch."
+            : "That branch is not available."}
+        </p>
+        <LinkButton href={dailySalesReportPath(saleLock)} variant="outline">
+          Back to daily sales
+        </LinkButton>
+      </div>
+    );
+  }
+
   const openCheckout = () => {
     if (cart.length === 0 || !activeBranch) return;
     const lines = cart.map((line) => ensureCartLinePaymentFields(line));
-    savePosCheckoutDraft({
-      saleChannel,
-      branchId: activeBranch.id,
-      branchName: activeBranch.name,
-      lines,
-      paymentMethod,
-      customerType,
-      customer,
-      appliedVoucher,
-      voucherCodeInput,
-      paymentGroups: defaultPaymentGroupsForLines(lines),
-      savedAt: Date.now(),
-    });
+    savePosCheckoutDraft(
+      {
+        saleChannel,
+        branchId: activeBranch.id,
+        branchName: activeBranch.name,
+        lines,
+        paymentMethod,
+        customerType,
+        customer,
+        appliedVoucher,
+        voucherCodeInput,
+        paymentGroups: defaultPaymentGroupsForLines(lines),
+        savedAt: Date.now(),
+      },
+      saleLock
+    );
     setMobileCartOpen(false);
-    router.push(posCheckoutPath(saleChannel));
+    router.push(
+      saleLock
+        ? lockedPosCheckoutPath(saleLock)
+        : posCheckoutPath(saleChannel)
+    );
   };
 
   const cartPanel = (
@@ -904,10 +949,17 @@ export function PosWorkspace({
           </h1>
           <p className="text-sm text-muted-foreground">
             {activeBranch?.name ?? "Select a branch"}
+            {saleLock
+              ? ` · ${formatDateInputLabel(saleLock.saleDate)}`
+              : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {isElevatedAdmin && (
+        <div className="flex flex-wrap items-center gap-2">
+          {saleLock ? (
+            <LinkButton href={dailySalesReportPath(saleLock)} variant="outline">
+              Back to daily sales
+            </LinkButton>
+          ) : isElevatedAdmin ? (
             <Select
               value={selectedBranchId}
               onValueChange={(v) => setSelectedBranchId(v ?? "")}
@@ -925,9 +977,22 @@ export function PosWorkspace({
                 ))}
               </SelectContent>
             </Select>
-          )}
+          ) : null}
         </div>
       </div>
+      {saleLock ? (
+        <div className="border-b bg-muted/40 px-4 py-2 text-sm">
+          This sale is recorded for{" "}
+          <span className="font-medium">
+            {formatDateInputLabel(saleLock.saleDate)}
+          </span>{" "}
+          at{" "}
+          <span className="font-medium">
+            {activeBranch?.name ?? "this branch"}
+          </span>
+          . Date and branch cannot be changed.
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
