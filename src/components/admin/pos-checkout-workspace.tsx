@@ -73,9 +73,11 @@ export function PosCheckoutWorkspace({
 }) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const homePath = saleLock ? lockedPosPath(saleLock) : posHomePath(saleChannel);
+  const homePath = saleLock
+    ? lockedPosPath(saleLock, saleChannel)
+    : posHomePath(saleChannel);
   const afterSalePath = saleLock
-    ? dailySalesReportPath(saleLock)
+    ? dailySalesReportPath(saleLock, saleChannel)
     : homePath;
   const isWholesale = saleChannel === "wholesale";
 

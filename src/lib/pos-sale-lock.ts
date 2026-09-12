@@ -2,6 +2,7 @@ import {
   isDateInputValue,
   toDateInputValue,
 } from "@/lib/dates";
+import type { PosSaleChannel } from "@/types";
 
 export type PosSaleLock = {
   branchId: string;
@@ -35,14 +36,33 @@ export function posSaleLockQuery(lock: PosSaleLock): string {
   return params.toString();
 }
 
-export function lockedPosPath(lock: PosSaleLock): string {
-  return `/admin/pos?${posSaleLockQuery(lock)}`;
+export function lockedPosPath(
+  lock: PosSaleLock,
+  saleChannel: PosSaleChannel = "shop"
+): string {
+  const base =
+    saleChannel === "wholesale" ? "/admin/wholesale" : "/admin/pos";
+  return `${base}?${posSaleLockQuery(lock)}`;
 }
 
-export function lockedPosCheckoutPath(lock: PosSaleLock): string {
-  return `/admin/pos/checkout?${posSaleLockQuery(lock)}`;
+export function lockedPosCheckoutPath(
+  lock: PosSaleLock,
+  saleChannel: PosSaleChannel = "shop"
+): string {
+  const base =
+    saleChannel === "wholesale"
+      ? "/admin/wholesale/checkout"
+      : "/admin/pos/checkout";
+  return `${base}?${posSaleLockQuery(lock)}`;
 }
 
-export function dailySalesReportPath(lock: PosSaleLock): string {
-  return `/admin/reports/daily-sales?${posSaleLockQuery(lock)}`;
+export function dailySalesReportPath(
+  lock: PosSaleLock,
+  saleChannel: PosSaleChannel = "shop"
+): string {
+  const base =
+    saleChannel === "wholesale"
+      ? "/admin/reports/daily-wholesale"
+      : "/admin/reports/daily-sales";
+  return `${base}?${posSaleLockQuery(lock)}`;
 }

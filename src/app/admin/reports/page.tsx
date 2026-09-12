@@ -232,7 +232,7 @@ export default function AdminReportsPage() {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState("all");
   const [selectedSaleChannel, setSelectedSaleChannel] =
-    useState<SaleChannelFilter>("all");
+    useState<SaleChannelFilter>("shop");
   const [mode, setMode] = useState<RangeMode>(initial.mode);
   const [preset, setPreset] = useState<Preset>("today");
   const [fromDate, setFromDate] = useState(initial.fromDate);

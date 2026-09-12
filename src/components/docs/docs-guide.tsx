@@ -568,21 +568,28 @@ function DocsSections({
           </p>
           <ul className="list-disc space-y-2 pl-5">
             <li>
-              Filter by branch (admins/owners), sale channel, and categories.
+              Filter by branch (admins/owners), sale channel (Shop / Wholesale /
+              All), and categories. Overview defaults to shop so wholesale does
+              not mix into the normal report.
             </li>
             <li>
               Click a <strong>Stock movements</strong> row to see each product
               change and who performed it.
             </li>
             <li>
-              On Daily sales, elevated admins can edit tenders and archive a
-              mistaken sale. Archiving drops it from totals; restock is on by
-              default. Open a receipt invoice from Recent receipts when needed.
+              <strong>Daily sales</strong> is shop only (with expenses and cash
+              summary). <strong>Daily wholesale</strong> lists wholesale
+              receipts for the day.
             </li>
             <li>
-              <strong>New sale</strong> on Daily sales opens POS locked to that
-              date and branch. The receipt is recorded on the selected day;
-              stock still comes from that branch.
+              On either daily page, elevated admins can edit tenders and archive
+              a mistaken sale. Archiving drops it from totals; restock is on by
+              default. Open a receipt invoice when needed.
+            </li>
+            <li>
+              <strong>New sale</strong> opens POS locked to that date and
+              branch (shop or wholesale matching the page). The receipt is
+              recorded on the selected day.
             </li>
           </ul>
         </Section>

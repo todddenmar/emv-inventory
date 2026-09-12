@@ -1,6 +1,7 @@
 import {
   BarChart3,
   ClipboardList,
+  PackageOpen,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,6 +23,12 @@ export const reportsNavItems: ReportsNavItem[] = [
     href: "/admin/reports/daily-sales",
     label: "Daily sales",
     icon: ClipboardList,
-    description: "Day cash record, expenses, and itemized sales",
+    description: "Shop day cash record, expenses, and itemized sales",
+  },
+  {
+    href: "/admin/reports/daily-wholesale",
+    label: "Daily wholesale",
+    icon: PackageOpen,
+    description: "Wholesale receipts for the selected day",
   },
 ];

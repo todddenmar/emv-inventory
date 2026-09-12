@@ -869,8 +869,11 @@ export function PosWorkspace({
             ? "You cannot record a sale for this branch."
             : "That branch is not available."}
         </p>
-        <LinkButton href={dailySalesReportPath(saleLock)} variant="outline">
-          Back to daily sales
+        <LinkButton
+          href={dailySalesReportPath(saleLock, saleChannel)}
+          variant="outline"
+        >
+          Back to daily {isWholesale ? "wholesale" : "sales"}
         </LinkButton>
       </div>
     );
@@ -898,7 +901,7 @@ export function PosWorkspace({
     setMobileCartOpen(false);
     router.push(
       saleLock
-        ? lockedPosCheckoutPath(saleLock)
+        ? lockedPosCheckoutPath(saleLock, saleChannel)
         : posCheckoutPath(saleChannel)
     );
   };
@@ -956,8 +959,11 @@ export function PosWorkspace({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {saleLock ? (
-            <LinkButton href={dailySalesReportPath(saleLock)} variant="outline">
-              Back to daily sales
+            <LinkButton
+              href={dailySalesReportPath(saleLock, saleChannel)}
+              variant="outline"
+            >
+              Back to daily {isWholesale ? "wholesale" : "sales"}
             </LinkButton>
           ) : isElevatedAdmin ? (
             <Select
