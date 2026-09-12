@@ -189,11 +189,13 @@ export function PosCheckoutWorkspace({
 
   const commitLinesAndGroups = (
     nextLines: PosCartLine[],
-    nextGroupsInput: PosCheckoutPaymentGroup[] = paymentGroups
+    nextGroupsInput: PosCheckoutPaymentGroup[] = paymentGroups,
+    options?: { resizeSingle?: boolean }
   ) => {
     const sanitized = syncPaymentGroupsToLineTotals(
       sanitizePaymentGroups(nextGroupsInput, nextLines),
-      nextLines
+      nextLines,
+      options
     );
     const synced = nextLines.map((line) => ({ ...line, payments: [] }));
     setPaymentGroups(sanitized);
@@ -219,10 +221,12 @@ export function PosCheckoutWorkspace({
           ...line,
           retailPrice: nextRetail,
           unitPrice,
-          payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal),
+          payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal, {
+            resizeSingle: true,
+          }),
         };
       });
-      return commitLinesAndGroups(next);
+      return commitLinesAndGroups(next, paymentGroups, { resizeSingle: true });
     });
   };
 
@@ -236,10 +240,12 @@ export function PosCheckoutWorkspace({
         return {
           ...line,
           unitPrice: nextPrice,
-          payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal),
+          payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal, {
+            resizeSingle: true,
+          }),
         };
       });
-      return commitLinesAndGroups(next);
+      return commitLinesAndGroups(next, paymentGroups, { resizeSingle: true });
     });
   };
 
@@ -544,7 +550,8 @@ export function PosCheckoutWorkspace({
                   unitPrice,
                   payments: syncPaymentsToLineTotal(
                     patch.payments ?? line.payments ?? [],
-                    lineTotal
+                    lineTotal,
+                    { resizeSingle: true }
                   ),
                 };
               }
@@ -560,7 +567,11 @@ export function PosCheckoutWorkspace({
             if (nextMethod !== paymentMethod) {
               setPaymentMethod(nextMethod);
             }
-            const synced = commitLinesAndGroups(next);
+            const synced = commitLinesAndGroups(
+              next,
+              paymentGroups,
+              patch.priceList ? { resizeSingle: true } : undefined
+            );
             if (nextMethod !== paymentMethod) {
               persistDraft({
                 lines: synced,

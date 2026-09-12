@@ -43,6 +43,7 @@ import {
   parseMoneyInput,
   paymentKindLabel,
   paymentRemaining,
+  roundMoney,
   saleAmountDue,
   salePaymentLineToCheckout,
   shouldEditSalePaymentsByItem,
@@ -249,6 +250,15 @@ export function EditSalePaymentDialog({
       (account) => account.id === editorDraft?.paymentAccountId
     );
   const editorCanSave = editorAmountValid && editorAccountValid && !saving;
+
+  const editorHalfBase =
+    lineEditor == null
+      ? 0
+      : lineEditor.scope === "sale"
+        ? amountDue
+        : (itemDrafts.find((row) => row.index === lineEditor.scope)
+            ?.targetAmount ?? 0);
+  const editorHalfAmount = roundMoney(editorHalfBase / 2);
 
   const patchEditorDraft = (patch: Partial<PosCheckoutPaymentLine>) => {
     setLineEditor((prev) =>
@@ -506,6 +516,19 @@ export function EditSalePaymentDialog({
             </p>
           ) : lineEditor && editorDraft ? (
             <div className="space-y-3">
+              {editorDraft.kind === "half_payment" && editorHalfBase > 0.01 ? (
+                <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                  Half of total{" "}
+                  <span className="font-medium tabular-nums">
+                    {formatCurrency(editorHalfBase)}
+                  </span>{" "}
+                  is{" "}
+                  <span className="font-semibold tabular-nums">
+                    {formatCurrency(editorHalfAmount)}
+                  </span>
+                  .
+                </p>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-pay-method">Method</Label>
@@ -608,7 +631,8 @@ export function EditSalePaymentDialog({
                   <Input
                     id="edit-pay-note"
                     placeholder={
-                      editorDraft.kind === "down_payment"
+                      editorDraft.kind === "down_payment" ||
+                      editorDraft.kind === "half_payment"
                         ? "e.g. PAID"
                         : "Optional"
                     }

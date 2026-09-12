@@ -346,6 +346,7 @@ export interface PosSalePaymentAccount {
 /** How this tender line applies to the sale. */
 export type PosPaymentKind =
   | "full"
+  | "half_payment"
   | "down_payment"
   | "balance"
   | "other";

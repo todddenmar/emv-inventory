@@ -18,6 +18,7 @@ export const POS_TENDER_METHODS: PosTenderMethod[] =
 
 export const POS_PAYMENT_KINDS: PosPaymentKind[] = [
   "full",
+  "half_payment",
   "down_payment",
   "balance",
   "other",
@@ -82,6 +83,7 @@ export function tenderMethodLabel(method: PosTenderMethod): string {
 export function isPosPaymentKind(value: unknown): value is PosPaymentKind {
   return (
     value === "full" ||
+    value === "half_payment" ||
     value === "down_payment" ||
     value === "balance" ||
     value === "other"
@@ -94,6 +96,8 @@ export function parsePosPaymentKind(value: unknown): PosPaymentKind {
 
 export function paymentKindLabel(kind: PosPaymentKind): string {
   switch (kind) {
+    case "half_payment":
+      return "Half payment";
     case "down_payment":
       return "Down payment";
     case "balance":
@@ -108,6 +112,8 @@ export function paymentKindLabel(kind: PosPaymentKind): string {
 /** Short badge text for reports / notes (e.g. DP, BAL). */
 export function paymentKindShortLabel(kind: PosPaymentKind): string | null {
   switch (kind) {
+    case "half_payment":
+      return "HALF";
     case "down_payment":
       return "DP";
     case "balance":
@@ -328,10 +334,16 @@ export function ensureCartLinePaymentFields<
   };
 }
 
-/** If exactly one payment, keep it covering the line total. */
+/**
+ * Keep payment drafts usable when a line total changes.
+ * Empty payments get a default covering the total.
+ * Pass `resizeSingle: true` after qty/price edits so a lone tender follows the
+ * new total. Payment editors should omit it so half/partial amounts are kept.
+ */
 export function syncPaymentsToLineTotal(
   payments: PosCheckoutPaymentLine[],
-  lineTotal: number
+  lineTotal: number,
+  options?: { resizeSingle?: boolean }
 ): PosCheckoutPaymentLine[] {
   const total = Math.max(0, roundMoney(lineTotal));
   if (total <= PAYMENT_AMOUNT_TOLERANCE) {
@@ -340,7 +352,7 @@ export function syncPaymentsToLineTotal(
   if (payments.length === 0) {
     return defaultItemPayments(total);
   }
-  if (payments.length === 1) {
+  if (payments.length === 1 && options?.resizeSingle) {
     const only = payments[0];
     return [
       {
@@ -450,13 +462,15 @@ export function defaultPaymentGroupsForLines(
 
 export function syncPaymentGroupsToLineTotals(
   groups: PosCheckoutPaymentGroup[],
-  lines: CartLineForPayment[]
+  lines: CartLineForPayment[],
+  options?: { resizeSingle?: boolean }
 ): PosCheckoutPaymentGroup[] {
   return groups.map((group) => ({
     ...group,
     payments: syncPaymentsToLineTotal(
       group.payments,
-      paymentGroupMerchandiseTotal(group, lines)
+      paymentGroupMerchandiseTotal(group, lines),
+      options
     ),
   }));
 }
@@ -763,8 +777,16 @@ export function itemStoredPaymentTotal(item: PosSaleItem): number {
   return 0;
 }
 
-/** True when per-item tenders already cover amount due and should be edited in place. */
+/** Prefer sale-level edits when the receipt has a shared payment split. */
 export function shouldEditSalePaymentsByItem(sale: PosSale): boolean {
+  const amountDue = roundMoney(sale.amountDue ?? sale.total);
+  if (
+    Array.isArray(sale.payments) &&
+    sale.payments.length > 0 &&
+    paymentsCoverAmountDue(amountDue, sale.payments)
+  ) {
+    return false;
+  }
   const paid = sale.items.filter(
     (item) => itemStoredPaymentTotal(item) > PAYMENT_AMOUNT_TOLERANCE
   );
@@ -772,7 +794,6 @@ export function shouldEditSalePaymentsByItem(sale: PosSale): boolean {
   const sum = roundMoney(
     paid.reduce((total, item) => total + itemStoredPaymentTotal(item), 0)
   );
-  const amountDue = roundMoney(sale.amountDue ?? sale.total);
   return Math.abs(sum - amountDue) <= PAYMENT_AMOUNT_TOLERANCE;
 }
 

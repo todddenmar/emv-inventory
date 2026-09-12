@@ -2018,6 +2018,7 @@ export function PosCheckoutDialog({
         return names || "Shared payment for the cart.";
       })()
     : "Enter payment details.";
+  const halfPaymentAmount = roundMoney(amountDue / 2);
 
   const paymentEditorDialog = (
     <PaymentEditorShell
@@ -2050,6 +2051,19 @@ export function PosCheckoutDialog({
 
         {editorDraft ? (
           <div className="space-y-3 py-1">
+            {editorDraft.kind === "half_payment" && amountDue > 0.01 ? (
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                Half of total{" "}
+                <span className="font-medium tabular-nums">
+                  {formatCurrency(amountDue)}
+                </span>{" "}
+                is{" "}
+                <span className="font-semibold tabular-nums">
+                  {formatCurrency(halfPaymentAmount)}
+                </span>
+                .
+              </p>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="pay-editor-method">Method</Label>
@@ -2152,11 +2166,12 @@ export function PosCheckoutDialog({
                 <Label htmlFor="pay-editor-note">Note</Label>
                 <Input
                   id="pay-editor-note"
-                  placeholder={
-                    editorDraft.kind === "down_payment"
-                      ? "e.g. PAID"
-                      : "Optional"
-                  }
+                    placeholder={
+                      editorDraft.kind === "down_payment" ||
+                      editorDraft.kind === "half_payment"
+                        ? "e.g. PAID"
+                        : "Optional"
+                    }
                   value={editorDraft.note}
                   onChange={(e) =>
                     patchEditorDraft({ note: e.target.value })

@@ -614,12 +614,22 @@ export async function updatePosSalePayments(
   }
 
   const primary = payments[0] ?? null;
+  const nextItems =
+    items ??
+    existing.items.map((item) => ({
+      ...item,
+      payments: [] as PosPaymentLine[],
+      tenderMethod: null,
+      paymentAccount: null,
+      kind: null,
+      note: null,
+    }));
 
   await updateDoc(doc(getClientDb(), COLLECTIONS.posSales, saleId), {
     payments,
     tenderMethod: primary?.tenderMethod ?? existing.tenderMethod,
     paymentAccount: primary?.paymentAccount ?? null,
-    ...(items ? { items } : {}),
+    items: nextItems,
   });
 
   const updated = await getPosSale(saleId);

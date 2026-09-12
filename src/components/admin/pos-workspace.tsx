@@ -554,10 +554,7 @@ export function PosWorkspace({
                   ...line,
                   quantity,
                   maxStock: stock,
-                  payments: syncPaymentsToLineTotal(
-                    line.payments ?? [],
-                    lineTotal
-                  ),
+                  payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal, { resizeSingle: true }),
                 };
               })()
             : line
@@ -627,10 +624,7 @@ export function PosWorkspace({
                 ...line,
                 quantity,
                 maxStock: stock,
-                payments: syncPaymentsToLineTotal(
-                  line.payments ?? [],
-                  lineTotal
-                ),
+                payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal, { resizeSingle: true }),
               };
             })()
           : line
@@ -657,10 +651,7 @@ export function PosWorkspace({
               return {
                 ...line,
                 quantity,
-                payments: syncPaymentsToLineTotal(
-                  line.payments ?? [],
-                  lineTotal
-                ),
+                payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal, { resizeSingle: true }),
               };
             })()
           : line
@@ -695,10 +686,7 @@ export function PosWorkspace({
                 ...line,
                 quantity: nextQty,
                 maxStock: stock,
-                payments: syncPaymentsToLineTotal(
-                  line.payments ?? [],
-                  lineTotal
-                ),
+                payments: syncPaymentsToLineTotal(line.payments ?? [], lineTotal, { resizeSingle: true }),
               };
             })()
           : line

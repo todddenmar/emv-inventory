@@ -730,6 +730,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
         amount,
         paymentAccount: lineAccount,
         kind:
+          row.kind === "half_payment" ||
           row.kind === "down_payment" ||
           row.kind === "balance" ||
           row.kind === "other"
@@ -806,6 +807,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
             }
           : null;
         const kind =
+          item.kind === "half_payment" ||
           item.kind === "down_payment" ||
           item.kind === "balance" ||
           item.kind === "other" ||
