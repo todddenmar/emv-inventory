@@ -1715,7 +1715,7 @@ export function PosCheckoutDialog({
                       <p className="text-xs text-muted-foreground">
                         {appliedVoucher &&
                         !requiresPosCustomerDetails(customerType)
-                          ? "Required when redeeming a voucher"
+                          ? "Customer name is required when redeeming a voucher"
                           : `Required for ${customerTypeLabel(customerType).toLowerCase()}`}
                       </p>
                     </div>
@@ -1734,58 +1734,68 @@ export function PosCheckoutDialog({
                           }
                         />
                       </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="pos-customer-mobile" className="text-xs">
-                          Mobile
-                        </Label>
-                        <Input
-                          id="pos-customer-mobile"
-                          type="tel"
-                          value={customer.mobile}
-                          disabled={charging}
-                          placeholder="09…"
-                          onChange={(e) =>
-                            onCustomerChange({ mobile: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="pos-customer-email" className="text-xs">
-                          Email
-                        </Label>
-                        <Input
-                          id="pos-customer-email"
-                          type="email"
-                          value={customer.email}
-                          disabled={charging}
-                          placeholder="Optional"
-                          onChange={(e) =>
-                            onCustomerChange({ email: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label
-                          htmlFor="pos-customer-address"
-                          className="text-xs"
-                        >
-                          Address
-                        </Label>
-                        <Textarea
-                          id="pos-customer-address"
-                          value={customer.address}
-                          disabled={charging}
-                          placeholder={
-                            customerType === "delivery"
-                              ? "Delivery address"
-                              : "Optional contact address"
-                          }
-                          rows={2}
-                          onChange={(e) =>
-                            onCustomerChange({ address: e.target.value })
-                          }
-                        />
-                      </div>
+                      {requiresPosCustomerDetails(customerType) ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor="pos-customer-mobile"
+                              className="text-xs"
+                            >
+                              Mobile
+                            </Label>
+                            <Input
+                              id="pos-customer-mobile"
+                              type="tel"
+                              value={customer.mobile}
+                              disabled={charging}
+                              placeholder="09…"
+                              onChange={(e) =>
+                                onCustomerChange({ mobile: e.target.value })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor="pos-customer-email"
+                              className="text-xs"
+                            >
+                              Email
+                            </Label>
+                            <Input
+                              id="pos-customer-email"
+                              type="email"
+                              value={customer.email}
+                              disabled={charging}
+                              placeholder="Optional"
+                              onChange={(e) =>
+                                onCustomerChange({ email: e.target.value })
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor="pos-customer-address"
+                              className="text-xs"
+                            >
+                              Address
+                            </Label>
+                            <Textarea
+                              id="pos-customer-address"
+                              value={customer.address}
+                              disabled={charging}
+                              placeholder={
+                                customerType === "delivery"
+                                  ? "Delivery address"
+                                  : "Optional contact address"
+                              }
+                              rows={2}
+                              onChange={(e) =>
+                                onCustomerChange({ address: e.target.value })
+                              }
+                            />
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                     {missingCustomerName ? (
                       <p className="text-sm text-destructive">

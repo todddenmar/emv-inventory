@@ -27,6 +27,9 @@ export function isOwnerAllowedPath(pathname: string): boolean {
   if (pathname === "/admin/reports" || pathname.startsWith("/admin/reports/")) {
     return true;
   }
+  if (pathname === "/admin/sales" || pathname.startsWith("/admin/sales/")) {
+    return true;
+  }
   // Stock levels and remaining-stocks guide — not nested tools (stock-in, transfers, etc.).
   if (pathname === "/admin/inventory") {
     return true;
@@ -56,6 +59,7 @@ export function isOwnerNavHref(href: string): boolean {
   return (
     href === "/admin" ||
     href === "/admin/reports" ||
+    href === "/admin/sales" ||
     href === "/admin/inventory" ||
     href === "/admin/inventory/remaining-stocks" ||
     href === "/admin/price-changes" ||
