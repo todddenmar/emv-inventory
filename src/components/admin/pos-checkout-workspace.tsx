@@ -251,7 +251,9 @@ export function PosCheckoutWorkspace({
       {
         ...options,
         targetTotal: due,
-        resizeSingle: options?.resizeSingle ?? true,
+        // Default false so payment editor amount edits are kept.
+        // Pass resizeSingle: true when qty/price/voucher changes should resize.
+        resizeSingle: options?.resizeSingle ?? false,
       }
     );
     const synced = nextLines.map((line) => ({ ...line, payments: [] }));
@@ -694,7 +696,9 @@ export function PosCheckoutWorkspace({
         }}
         paymentGroups={paymentGroups}
         onPaymentGroupsChange={(nextGroups) => {
-          setLines((prev) => commitLinesAndGroups(prev, nextGroups));
+          setLines((prev) =>
+            commitLinesAndGroups(prev, nextGroups, { resizeSingle: false })
+          );
         }}
         onCustomerTypeChange={(type) => {
           setCustomerType(type);
