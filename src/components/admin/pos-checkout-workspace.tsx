@@ -18,6 +18,7 @@ import { getPaymentMethods } from "@/lib/firestore/payment-methods";
 import { completePosSale } from "@/lib/firestore/pos-sales";
 import { setVariantRetailPrices } from "@/lib/firestore/products";
 import {
+  computeVoucherAppliedAmount,
   getVoucherByCode,
   isVoucherRedeemable,
 } from "@/lib/firestore/vouchers";
@@ -99,6 +100,9 @@ export function PosCheckoutWorkspace({
     emptyPosCustomerDraft
   );
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
+  const [voucherAppliedOverride, setVoucherAppliedOverride] = useState<
+    number | null
+  >(null);
   const [voucherCodeInput, setVoucherCodeInput] = useState("");
   const [paymentGroups, setPaymentGroups] = useState<
     PosCheckoutPaymentGroup[]
@@ -119,9 +123,17 @@ export function PosCheckoutWorkspace({
       branchId: draft.branchId,
       branchName: draft.branchName,
     });
+    const due = isNonRevenueCustomerType(draft.customerType)
+      ? 0
+      : draftAmountDue({
+          lines: draft.lines,
+          appliedVoucher: draft.appliedVoucher,
+          voucherAppliedOverride: draft.voucherAppliedOverride ?? null,
+        });
     const groups = syncPaymentGroupsToLineTotals(
       sanitizePaymentGroups(draft.paymentGroups, draft.lines),
-      draft.lines
+      draft.lines,
+      { resizeSingle: true, targetTotal: due }
     );
     setPaymentGroups(groups);
     setLines(
@@ -137,6 +149,7 @@ export function PosCheckoutWorkspace({
     setCustomerType(draft.customerType);
     setCustomer(draft.customer);
     setAppliedVoucher(draft.appliedVoucher);
+    setVoucherAppliedOverride(draft.voucherAppliedOverride ?? null);
     setVoucherCodeInput(draft.voucherCodeInput);
     setLoading(false);
 
@@ -149,8 +162,13 @@ export function PosCheckoutWorkspace({
   }, [saleChannel, homePath, router, saleLock?.branchId, saleLock?.saleDate]);
 
   const amountDue = useMemo(
-    () => draftAmountDue({ lines, appliedVoucher }),
-    [lines, appliedVoucher]
+    () =>
+      draftAmountDue({
+        lines,
+        appliedVoucher,
+        voucherAppliedOverride,
+      }),
+    [lines, appliedVoucher, voucherAppliedOverride]
   );
 
   const persistDraft = useCallback(
@@ -165,6 +183,7 @@ export function PosCheckoutWorkspace({
         customerType,
         customer,
         appliedVoucher,
+        voucherAppliedOverride,
         voucherCodeInput,
         paymentGroups,
         savedAt: Date.now(),
@@ -183,19 +202,57 @@ export function PosCheckoutWorkspace({
       saleChannel,
       saleLock?.branchId,
       saleLock?.saleDate,
+      voucherAppliedOverride,
       voucherCodeInput,
     ]
+  );
+
+  const syncGroupsToDue = useCallback(
+    (
+      nextLines: PosCartLine[],
+      nextGroups: PosCheckoutPaymentGroup[],
+      voucher: Voucher | null,
+      override: number | null,
+      type: PosCustomerType = customerType
+    ) => {
+      const due = isNonRevenueCustomerType(type)
+        ? 0
+        : draftAmountDue({
+            lines: nextLines,
+            appliedVoucher: voucher,
+            voucherAppliedOverride: override,
+          });
+      return syncPaymentGroupsToLineTotals(
+        sanitizePaymentGroups(nextGroups, nextLines),
+        nextLines,
+        { resizeSingle: true, targetTotal: due }
+      );
+    },
+    [customerType]
   );
 
   const commitLinesAndGroups = (
     nextLines: PosCartLine[],
     nextGroupsInput: PosCheckoutPaymentGroup[] = paymentGroups,
-    options?: { resizeSingle?: boolean }
+    options?: { resizeSingle?: boolean; targetTotal?: number }
   ) => {
+    const due =
+      options?.targetTotal ??
+      (isNonRevenueCustomerType(customerType)
+        ? 0
+        : draftAmountDue({
+            lines: nextLines,
+            appliedVoucher,
+            voucherAppliedOverride,
+          }));
     const sanitized = syncPaymentGroupsToLineTotals(
       sanitizePaymentGroups(nextGroupsInput, nextLines),
       nextLines,
-      options
+      {
+        ...options,
+        targetTotal: due,
+        resizeSingle: options?.resizeSingle ?? true,
+      }
     );
     const synced = nextLines.map((line) => ({ ...line, payments: [] }));
     setPaymentGroups(sanitized);
@@ -252,8 +309,35 @@ export function PosCheckoutWorkspace({
   const handleApplyVoucherId = (voucherId: string | null) => {
     if (!voucherId) {
       setAppliedVoucher(null);
-      persistDraft({ appliedVoucher: null });
+      setVoucherAppliedOverride(null);
+      const nextGroups = syncGroupsToDue(
+        lines,
+        paymentGroups,
+        null,
+        null
+      );
+      setPaymentGroups(nextGroups);
+      persistDraft({
+        appliedVoucher: null,
+        voucherAppliedOverride: null,
+        paymentGroups: nextGroups,
+      });
     }
+  };
+
+  const handleVoucherAppliedOverrideChange = (amount: number | null) => {
+    setVoucherAppliedOverride(amount);
+    const nextGroups = syncGroupsToDue(
+      lines,
+      paymentGroups,
+      appliedVoucher,
+      amount
+    );
+    setPaymentGroups(nextGroups);
+    persistDraft({
+      voucherAppliedOverride: amount,
+      paymentGroups: nextGroups,
+    });
   };
 
   const handleApplyVoucherCode = async () => {
@@ -265,9 +349,28 @@ export function PosCheckoutWorkspace({
         toast.error("Invalid or unusable voucher");
         return;
       }
+      const subtotal = lines.reduce(
+        (sum, line) =>
+          sum + (line.isFreebie ? 0 : line.unitPrice * line.quantity),
+        0
+      );
+      const applied = computeVoucherAppliedAmount(voucher, subtotal);
       setAppliedVoucher(voucher);
+      setVoucherAppliedOverride(applied);
       setVoucherCodeInput("");
-      persistDraft({ appliedVoucher: voucher, voucherCodeInput: "" });
+      const nextGroups = syncGroupsToDue(
+        lines,
+        paymentGroups,
+        voucher,
+        applied
+      );
+      setPaymentGroups(nextGroups);
+      persistDraft({
+        appliedVoucher: voucher,
+        voucherAppliedOverride: applied,
+        voucherCodeInput: "",
+        paymentGroups: nextGroups,
+      });
       toast.success(
         `Applied ${voucher.name ? `${voucher.name} (${voucher.code})` : voucher.code}`
       );
@@ -327,6 +430,12 @@ export function PosCheckoutWorkspace({
       return;
     }
 
+    if (appliedVoucher && !customer.name.trim()) {
+      toast.error("Enter customer name when using a voucher");
+      setCheckoutStep("details");
+      return;
+    }
+
     setCharging(true);
     try {
       const retailToPersist = noCharge || isWholesale
@@ -367,12 +476,13 @@ export function PosCheckoutWorkspace({
         payments,
         customerType,
         customer:
-          requiresPosCustomerDetails(customerType)
+          requiresPosCustomerDetails(customerType) || appliedVoucher
             ? normalizePosCustomer(customer)
             : null,
         resellerId: noCharge ? null : (appliedVoucher?.resellerId ?? null),
         resellerName: noCharge ? null : (appliedVoucher?.resellerName ?? null),
         voucherId: noCharge ? null : (appliedVoucher?.id ?? null),
+        voucherAmountApplied: noCharge ? null : voucherAppliedOverride,
         items: (() => {
           const items: PosSaleItem[] = [];
           const scale =
@@ -531,6 +641,7 @@ export function PosCheckoutWorkspace({
         customerType={customerType}
         customer={customer}
         appliedVoucher={appliedVoucher}
+        voucherAppliedOverride={voucherAppliedOverride}
         voucherCodeInput={voucherCodeInput}
         charging={charging}
         onLineChange={(variantId, patch) => {
@@ -596,6 +707,7 @@ export function PosCheckoutWorkspace({
           }
         }}
         onApplyVoucherId={handleApplyVoucherId}
+        onVoucherAppliedOverrideChange={handleVoucherAppliedOverrideChange}
         onVoucherCodeInputChange={(code) => {
           setVoucherCodeInput(code);
           persistDraft({ voucherCodeInput: code });

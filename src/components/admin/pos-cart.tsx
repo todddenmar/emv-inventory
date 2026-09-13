@@ -33,7 +33,12 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
-import { voucherOwnerLabel } from "@/lib/firestore/vouchers";
+import {
+  clampVoucherAppliedAmount,
+  computeVoucherAppliedAmount,
+  parseVoucherDiscountType,
+  voucherOwnerLabel,
+} from "@/lib/firestore/vouchers";
 import {
   POS_TENDER_METHODS as PAYMENT_TENDER_METHODS,
   POS_PAYMENT_KINDS,
@@ -44,7 +49,6 @@ import {
   itemPaymentsCoverLineTotal,
   moneyInputText,
   parseMoneyInput,
-  paymentGroupMerchandiseTotal,
   paymentKindLabel,
   paymentRemaining,
   roundMoney,
@@ -305,20 +309,25 @@ function CheckoutPaymentRows({
 
 function cartTotals(
   lines: PosCartLine[],
-  appliedVoucher: Voucher | null
-): { itemCount: number; subtotal: number; voucherApplied: number; amountDue: number } {
+  appliedVoucher: Voucher | null,
+  voucherAppliedOverride: number | null = null
+): { itemCount: number; subtotal: number; voucherApplied: number; amountDue: number; voucherMax: number } {
   const itemCount = lines.reduce((sum, line) => sum + line.quantity, 0);
   const subtotal = lines.reduce(
     (sum, line) => sum + line.unitPrice * line.quantity,
     0
   );
-  const voucherApplied = appliedVoucher
-    ? Math.min(appliedVoucher.remainingAmount, subtotal)
-    : 0;
+  const voucherMax = computeVoucherAppliedAmount(appliedVoucher, subtotal);
+  const voucherApplied = clampVoucherAppliedAmount(
+    appliedVoucher,
+    subtotal,
+    voucherAppliedOverride
+  );
   return {
     itemCount,
     subtotal,
     voucherApplied,
+    voucherMax,
     amountDue: Math.max(0, subtotal - voucherApplied),
   };
 }
@@ -662,6 +671,7 @@ interface PosCheckoutDialogProps {
   customerType: PosCustomerType;
   customer: PosCustomerDraft;
   appliedVoucher: Voucher | null;
+  voucherAppliedOverride: number | null;
   voucherCodeInput: string;
   charging: boolean;
   onLineChange: (
@@ -675,6 +685,7 @@ interface PosCheckoutDialogProps {
   ) => void;
   onCustomerTypeChange: (type: PosCustomerType) => void;
   onApplyVoucherId: (voucherId: string | null) => void;
+  onVoucherAppliedOverrideChange: (amount: number | null) => void;
   onVoucherCodeInputChange: (code: string) => void;
   onApplyVoucherCode: () => void;
   onCustomerChange: (patch: Partial<PosCustomerDraft>) => void;
@@ -700,11 +711,13 @@ export function PosCheckoutDialog({
   customerType,
   customer,
   appliedVoucher,
+  voucherAppliedOverride,
   voucherCodeInput,
   charging,
   onLineChange,
   onCustomerTypeChange,
   onApplyVoucherId,
+  onVoucherAppliedOverrideChange,
   onVoucherCodeInputChange,
   onApplyVoucherCode,
   onCustomerChange,
@@ -732,10 +745,46 @@ export function PosCheckoutDialog({
     payId: string | null;
     draft: PosCheckoutPaymentLine;
   } | null>(null);
-  const { itemCount, subtotal, voucherApplied, amountDue } = cartTotals(
-    lines,
-    appliedVoucher
+  const { itemCount, subtotal, voucherApplied, voucherMax, amountDue } =
+    cartTotals(lines, appliedVoucher, voucherAppliedOverride);
+  const [voucherLessText, setVoucherLessText] = useState(() =>
+    moneyInputText(voucherApplied)
   );
+  useEffect(() => {
+    setVoucherLessText(moneyInputText(voucherApplied));
+  }, [appliedVoucher?.id]);
+  useEffect(() => {
+    if (
+      appliedVoucher &&
+      voucherAppliedOverride != null &&
+      voucherAppliedOverride > voucherMax + 0.0001
+    ) {
+      onVoucherAppliedOverrideChange(voucherMax);
+      setVoucherLessText(moneyInputText(voucherMax));
+    }
+  }, [
+    appliedVoucher,
+    onVoucherAppliedOverrideChange,
+    voucherAppliedOverride,
+    voucherMax,
+  ]);
+
+  const commitVoucherLess = (raw: string) => {
+    const parsed = parseMoneyInput(raw);
+    if (parsed == null) {
+      onVoucherAppliedOverrideChange(voucherMax);
+      setVoucherLessText(moneyInputText(voucherMax));
+      return;
+    }
+    const clamped = clampVoucherAppliedAmount(
+      appliedVoucher,
+      subtotal,
+      parsed
+    );
+    onVoucherAppliedOverrideChange(clamped);
+    setVoucherLessText(moneyInputText(clamped));
+  };
+
   const noCharge = isNonRevenueCustomerType(customerType);
   const paidLines = lines.filter((line) => !line.isFreebie);
   const payableLines = noCharge ? [] : lines.filter(cartLineNeedsPayment);
@@ -758,11 +807,11 @@ export function PosCheckoutDialog({
   const unbalancedItemPayments =
     !noCharge &&
     paymentGroups.some((group) => {
-      const groupTotal = paymentGroupMerchandiseTotal(group, lines);
-      return !itemPaymentsCoverLineTotal(group.payments, groupTotal);
+      return !itemPaymentsCoverLineTotal(group.payments, amountDue);
     });
   const invalidItemPaymentAmount =
     !noCharge &&
+    amountDue > 0.01 &&
     paymentGroups.some(
       (group) =>
         group.payments.length === 0 ||
@@ -776,7 +825,9 @@ export function PosCheckoutDialog({
     paidLines.some(
       (line) => line.priceList === "retail" && line.retailPrice == null
     );
-  const showCustomerForm = requiresPosCustomerDetails(customerType);
+  const showCustomerForm =
+    requiresPosCustomerDetails(customerType) ||
+    (!noCharge && appliedVoucher != null);
   const customerSummary = showCustomerForm
     ? normalizePosCustomer(customer)
     : null;
@@ -1261,10 +1312,7 @@ export function PosCheckoutDialog({
                           payableLines.find((line) => line.variantId === id)
                         )
                         .filter((line): line is PosCartLine => line != null);
-                      const groupTotal = paymentGroupMerchandiseTotal(
-                        group,
-                        lines
-                      );
+                      const groupTotal = amountDue;
                       const paidSum = sumCheckoutPaymentAmounts(
                         group.payments
                       );
@@ -1470,7 +1518,8 @@ export function PosCheckoutDialog({
 
                           {!balanced ? (
                             <p className="text-xs text-destructive">
-                              Payments must equal the cart merchandise total.
+                              Payments must equal the amount due
+                              {voucherApplied > 0 ? " after voucher" : ""}.
                             </p>
                           ) : null}
                         </div>
@@ -1493,7 +1542,7 @@ export function PosCheckoutDialog({
                 ) : null}
                 {unbalancedItemPayments || invalidItemPaymentAmount ? (
                   <p className="text-sm text-destructive">
-                    Fix payment splits so the cart is fully covered.
+                    Fix payment splits so the amount due is fully covered.
                   </p>
                 ) : null}
               </div>
@@ -1555,7 +1604,7 @@ export function PosCheckoutDialog({
                   </Button>
                 </div>
                 {appliedVoucher ? (
-                  <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                  <div className="space-y-2 rounded-md border bg-muted/40 px-3 py-2 text-xs">
                     <p className="font-medium">
                       {appliedVoucher.name
                         ? `${appliedVoucher.name} · ${appliedVoucher.code}`
@@ -1567,9 +1616,54 @@ export function PosCheckoutDialog({
                       </p>
                     ) : null}
                     <p className="text-muted-foreground">
-                      {voucherOwnerLabel(appliedVoucher)} · remaining{" "}
-                      {formatCurrency(appliedVoucher.remainingAmount)}
+                      {voucherOwnerLabel(appliedVoucher)}
+                      {parseVoucherDiscountType(appliedVoucher.discountType) ===
+                      "percent"
+                        ? ` · ${appliedVoucher.discountValue}% less (max −${formatCurrency(voucherMax)})`
+                        : ` · less up to ${formatCurrency(appliedVoucher.discountValue)}`}
                     </p>
+                    <div className="space-y-1">
+                      <Label
+                        htmlFor="pos-voucher-less"
+                        className="text-xs font-medium"
+                      >
+                        Less amount
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">−</span>
+                        <Input
+                          id="pos-voucher-less"
+                          inputMode="decimal"
+                          disabled={charging}
+                          className="h-8 font-mono tabular-nums"
+                          value={voucherLessText}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+                            setVoucherLessText(raw);
+                            const parsed = parseMoneyInput(raw);
+                            if (parsed == null) return;
+                            onVoucherAppliedOverrideChange(
+                              clampVoucherAppliedAmount(
+                                appliedVoucher,
+                                subtotal,
+                                parsed
+                              )
+                            );
+                          }}
+                          onBlur={() => commitVoucherLess(voucherLessText)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              commitVoucherLess(voucherLessText);
+                            }
+                          }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Max {formatCurrency(voucherMax)}
+                      </p>
+                    </div>
                     <Button
                       type="button"
                       variant="ghost"
@@ -1619,7 +1713,10 @@ export function PosCheckoutDialog({
                     <div>
                       <Label>Customer details</Label>
                       <p className="text-xs text-muted-foreground">
-                        Required for {customerTypeLabel(customerType).toLowerCase()}
+                        {appliedVoucher &&
+                        !requiresPosCustomerDetails(customerType)
+                          ? "Required when redeeming a voucher"
+                          : `Required for ${customerTypeLabel(customerType).toLowerCase()}`}
                       </p>
                     </div>
                     <div className="grid gap-2">
@@ -1924,12 +2021,39 @@ export function PosCheckoutDialog({
                     {formatCurrency(subtotal)}
                   </span>
                 </div>
-                {voucherApplied > 0 ? (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Voucher</span>
-                    <span className="tabular-nums">
-                      −{formatCurrency(voucherApplied)}
-                    </span>
+                {appliedVoucher && !noCharge ? (
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <Label
+                      htmlFor="pos-voucher-less-review"
+                      className="text-muted-foreground"
+                    >
+                      Voucher less
+                    </Label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-muted-foreground">−</span>
+                      <Input
+                        id="pos-voucher-less-review"
+                        inputMode="decimal"
+                        disabled={charging}
+                        className="h-8 w-28 text-right font-mono tabular-nums"
+                        value={voucherLessText}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+                          setVoucherLessText(raw);
+                          const parsed = parseMoneyInput(raw);
+                          if (parsed == null) return;
+                          onVoucherAppliedOverrideChange(
+                            clampVoucherAppliedAmount(
+                              appliedVoucher,
+                              subtotal,
+                              parsed
+                            )
+                          );
+                        }}
+                        onBlur={() => commitVoucherLess(voucherLessText)}
+                      />
+                    </div>
                   </div>
                 ) : null}
                 <div className="flex items-baseline justify-between border-t pt-2">

@@ -182,7 +182,8 @@ export type InventoryLogReason =
   | "transfer_in"
   | "pos_sale"
   | "pos_sale_restock"
-  | "supplier_stock_in";
+  | "supplier_stock_in"
+  | "reseller_transfer_out";
 
 export interface InventoryLog {
   id: string;
@@ -432,6 +433,10 @@ export interface PosSale {
   archivedByName: string | null;
   /** True when units were returned to branch stock at archive time. */
   restockedOnArchive: boolean;
+  /** When reseller commission for this voucher sale was marked sent. */
+  resellerCommissionSentAt: Date | null;
+  resellerCommissionSentBy: string | null;
+  resellerCommissionSentByName: string | null;
 }
 
 /** Day/branch expense row for the daily sales report. */
@@ -489,15 +494,23 @@ export interface Reseller {
 
 export type VoucherStatus = "active" | "depleted" | "void";
 
+/** How the voucher reduces the cart total. */
+export type VoucherDiscountType = "amount" | "percent";
+
 export interface Voucher {
   id: string;
   code: string;
   name: string;
   description: string;
-  /** Null = walk-in / unassigned prepaid credit. */
+  /** Null = walk-in / unassigned. */
   resellerId: string | null;
   resellerName: string | null;
+  /** Fixed peso less, or percent less (1–100). Reusable until voided. */
+  discountType: VoucherDiscountType;
+  discountValue: number;
+  /** Legacy face value mirror of discountValue for amount vouchers. */
   initialAmount: number;
+  /** Legacy field; amount vouchers no longer deplete a balance. */
   remainingAmount: number;
   status: VoucherStatus;
   expiresAt: Date | null;
@@ -505,6 +518,24 @@ export interface Voucher {
   createdByName: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** One redemption of a voucher at checkout (customer who used it). */
+export interface VoucherRedemption {
+  id: string;
+  voucherId: string;
+  voucherCode: string;
+  saleId: string;
+  branchId: string;
+  branchName: string;
+  amountApplied: number;
+  customerName: string | null;
+  customerMobile: string | null;
+  customerEmail: string | null;
+  customerAddress: string | null;
+  redeemedBy: string;
+  redeemedByName: string | null;
+  createdAt: Date;
 }
 
 export interface SupplierStockInItem {
@@ -521,6 +552,28 @@ export interface SupplierStockIn {
   vendorId: string;
   vendorName: string;
   items: SupplierStockInItem[];
+  itemCount: number;
+  notes: string | null;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+}
+
+export interface ResellerTransferItem {
+  productId: string;
+  variantId: string;
+  productName: string;
+  quantity: number;
+}
+
+/** Stock issued from a branch to a reseller (one-way out). */
+export interface ResellerTransfer {
+  id: string;
+  branchId: string;
+  branchName: string;
+  resellerId: string;
+  resellerName: string;
+  items: ResellerTransferItem[];
   itemCount: number;
   notes: string | null;
   createdBy: string;

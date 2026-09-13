@@ -74,6 +74,7 @@ const REASON_OPTIONS: { value: ReasonFilter; label: string }[] = [
   { value: "supplier_stock_in", label: "Supplier stock in" },
   { value: "transfer_in", label: "Transfer in" },
   { value: "transfer_out", label: "Transfer out" },
+  { value: "reseller_transfer_out", label: "Reseller transfer" },
 ];
 
 function applyPreset(preset: Preset): {

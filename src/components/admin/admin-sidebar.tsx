@@ -14,6 +14,8 @@ import {
   BarChart3,
   Tag,
   PackageOpen,
+  Ticket,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -35,6 +37,18 @@ export const adminNavItems = [
     href: "/admin/reports",
     label: "Reports",
     icon: BarChart3,
+    masterOnly: false,
+  },
+  {
+    href: "/admin/voucher-sales",
+    label: "Voucher sales",
+    icon: Ticket,
+    masterOnly: false,
+  },
+  {
+    href: "/admin/resellers",
+    label: "Resellers",
+    icon: Users,
     masterOnly: false,
   },
   {

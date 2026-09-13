@@ -4,6 +4,7 @@ import {
   LayoutGrid,
   PackagePlus,
   Scale,
+  Truck,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
@@ -55,5 +56,11 @@ export const inventoryNavItems: InventoryNavItem[] = [
     label: "Transfers",
     icon: ArrowRightLeft,
     description: "Move stock between branches",
+  },
+  {
+    href: "/admin/inventory/reseller-transfers",
+    label: "Reseller transfers",
+    icon: Truck,
+    description: "Issue stock from a branch to a reseller",
   },
 ];

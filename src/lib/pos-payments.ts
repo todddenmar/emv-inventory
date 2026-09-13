@@ -463,16 +463,22 @@ export function defaultPaymentGroupsForLines(
 export function syncPaymentGroupsToLineTotals(
   groups: PosCheckoutPaymentGroup[],
   lines: CartLineForPayment[],
-  options?: { resizeSingle?: boolean }
+  options?: { resizeSingle?: boolean; targetTotal?: number }
 ): PosCheckoutPaymentGroup[] {
-  return groups.map((group) => ({
-    ...group,
-    payments: syncPaymentsToLineTotal(
-      group.payments,
-      paymentGroupMerchandiseTotal(group, lines),
-      options
-    ),
-  }));
+  const override =
+    options?.targetTotal != null && Number.isFinite(options.targetTotal)
+      ? roundMoney(Math.max(0, options.targetTotal))
+      : null;
+  return groups.map((group) => {
+    const total =
+      override != null
+        ? override
+        : paymentGroupMerchandiseTotal(group, lines);
+    return {
+      ...group,
+      payments: syncPaymentsToLineTotal(group.payments, total, options),
+    };
+  });
 }
 
 function assertPositivePayments(payments: PosCheckoutPaymentLine[]) {
@@ -554,8 +560,7 @@ export function allocatedPaymentsForCartLines(
 
 /**
  * Flatten cart payment splits into sale-level payments.
- * The cart emits one shared group. If a voucher reduces amountDue,
- * every split is scaled proportionally.
+ * Payment amounts on the cart must already equal amountDue (post-voucher).
  */
 export function resolvePaymentsFromCartLines(
   lines: CartLineForPayment[],
@@ -571,13 +576,6 @@ export function resolvePaymentsFromCartLines(
     throw new Error("Add at least one paid item");
   }
 
-  const merchandise = roundMoney(
-    paid.reduce((sum, line) => sum + cartLineMerchandiseTotal(line), 0)
-  );
-  if (merchandise <= PAYMENT_AMOUNT_TOLERANCE) {
-    throw new Error("Merchandise total must be greater than 0");
-  }
-
   const groups = sanitizePaymentGroups(paymentGroups, paid);
 
   type Draft = {
@@ -590,10 +588,9 @@ export function resolvePaymentsFromCartLines(
   const drafts: Draft[] = [];
 
   for (const group of groups) {
-    const groupTotal = paymentGroupMerchandiseTotal(group, paid);
     assertPositivePayments(group.payments);
-    if (!itemPaymentsCoverLineTotal(group.payments, groupTotal)) {
-      throw new Error("Payments must equal the cart merchandise total");
+    if (!itemPaymentsCoverLineTotal(group.payments, amountDue)) {
+      throw new Error("Payments must equal the amount due");
     }
     for (const pay of group.payments) {
       drafts.push({
@@ -606,7 +603,6 @@ export function resolvePaymentsFromCartLines(
     }
   }
 
-  const scale = amountDue / merchandise;
   const resolved: PosPaymentLine[] = [];
   let allocated = 0;
 
@@ -637,7 +633,7 @@ export function resolvePaymentsFromCartLines(
     if (i === drafts.length - 1) {
       amount = roundMoney(amountDue - allocated);
     } else {
-      amount = roundMoney(draft.amount * scale);
+      amount = roundMoney(draft.amount);
       allocated = roundMoney(allocated + amount);
     }
 

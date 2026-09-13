@@ -30,6 +30,7 @@ import type {
   ProductSpec,
   ProductVariant,
   Reseller,
+  ResellerTransfer,
   SupplierStockIn,
   Vendor,
   Voucher,
@@ -680,6 +681,9 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       archivedBy: sale.archivedBy,
       archivedByName: sale.archivedByName,
       restockedOnArchive: sale.restockedOnArchive,
+      resellerCommissionSentAt: sale.resellerCommissionSentAt,
+      resellerCommissionSentBy: sale.resellerCommissionSentBy,
+      resellerCommissionSentByName: sale.resellerCommissionSentByName,
     };
   },
   fromFirestore(
@@ -877,6 +881,17 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       archivedByName:
         typeof data.archivedByName === "string" ? data.archivedByName : null,
       restockedOnArchive: data.restockedOnArchive === true,
+      resellerCommissionSentAt: data.resellerCommissionSentAt
+        ? toDate(data.resellerCommissionSentAt)
+        : null,
+      resellerCommissionSentBy:
+        typeof data.resellerCommissionSentBy === "string"
+          ? data.resellerCommissionSentBy
+          : null,
+      resellerCommissionSentByName:
+        typeof data.resellerCommissionSentByName === "string"
+          ? data.resellerCommissionSentByName
+          : null,
     };
   },
 };
@@ -993,6 +1008,8 @@ export const voucherConverter: FirestoreDataConverter<Voucher> = {
       description: voucher.description,
       resellerId: voucher.resellerId,
       resellerName: voucher.resellerName,
+      discountType: voucher.discountType,
+      discountValue: voucher.discountValue,
       initialAmount: voucher.initialAmount,
       remainingAmount: voucher.remainingAmount,
       status: voucher.status,
@@ -1012,6 +1029,13 @@ export const voucherConverter: FirestoreDataConverter<Voucher> = {
       data.status === "void" || data.status === "depleted"
         ? data.status
         : "active";
+    const discountType =
+      data.discountType === "percent" ? "percent" : "amount";
+    const initialAmount = Number(data.initialAmount ?? 0);
+    const discountValue = Number(
+      data.discountValue ??
+        (discountType === "percent" ? 0 : initialAmount)
+    );
     return {
       id: snapshot.id,
       code: String(data.code ?? "").toUpperCase(),
@@ -1019,7 +1043,9 @@ export const voucherConverter: FirestoreDataConverter<Voucher> = {
       description: String(data.description ?? "").trim(),
       resellerId: data.resellerId ?? null,
       resellerName: data.resellerName ?? null,
-      initialAmount: Number(data.initialAmount ?? 0),
+      discountType,
+      discountValue,
+      initialAmount,
       remainingAmount: Number(data.remainingAmount ?? 0),
       status,
       expiresAt: data.expiresAt ? toDate(data.expiresAt) : null,
@@ -1058,6 +1084,48 @@ export const supplierStockInConverter: FirestoreDataConverter<SupplierStockIn> =
       branchName: data.branchName ?? "",
       vendorId: data.vendorId,
       vendorName: data.vendorName ?? "",
+      items: rawItems.map((item) => ({
+        productId: item.productId,
+        variantId: item.variantId,
+        productName: item.productName,
+        quantity: item.quantity,
+      })),
+      itemCount: data.itemCount ?? 0,
+      notes: data.notes ?? null,
+      createdBy: data.createdBy,
+      createdByName: data.createdByName ?? null,
+      createdAt: toDate(data.createdAt),
+    };
+  },
+};
+
+export const resellerTransferConverter: FirestoreDataConverter<ResellerTransfer> = {
+  toFirestore(entry: ResellerTransfer): DocumentData {
+    return {
+      branchId: entry.branchId,
+      branchName: entry.branchName,
+      resellerId: entry.resellerId,
+      resellerName: entry.resellerName,
+      items: entry.items,
+      itemCount: entry.itemCount,
+      notes: entry.notes,
+      createdBy: entry.createdBy,
+      createdByName: entry.createdByName,
+      createdAt: entry.createdAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): ResellerTransfer {
+    const data = snapshot.data(options);
+    const rawItems = (data.items ?? []) as ResellerTransfer["items"];
+    return {
+      id: snapshot.id,
+      branchId: data.branchId,
+      branchName: data.branchName ?? "",
+      resellerId: data.resellerId,
+      resellerName: data.resellerName ?? "",
       items: rawItems.map((item) => ({
         productId: item.productId,
         variantId: item.variantId,

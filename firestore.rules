@@ -314,6 +314,15 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /physicalResellerTransfers/{transferId} {
+      allow read: if isStaff() &&
+        (canReadAllBranches() || resource.data.branchId == managerBranchId());
+      allow create: if isStaff() &&
+        request.resource.data.branchId != null &&
+        canAccessBranch(request.resource.data.branchId);
+      allow update, delete: if false;
+    }
+
     match /physicalResellers/{resellerId} {
       allow read: if isStaff();
       allow create, update: if isStaff();
@@ -336,6 +345,12 @@ service cloud.firestore {
       allow read: if isStaff();
       allow create, update: if isStaff();
       allow delete: if false;
+    }
+
+    match /physicalVoucherRedemptions/{redemptionId} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update, delete: if false;
     }
 
     match /physicalPricePromotions/{promotionId} {

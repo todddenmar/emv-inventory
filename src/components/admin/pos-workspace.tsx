@@ -149,7 +149,6 @@ export function PosWorkspace({
   );
   const [loadingBootstrap, setLoadingBootstrap] = useState(true);
   const [loadingCategory, setLoadingCategory] = useState(false);
-  const [categorySearch, setCategorySearch] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [cart, setCart] = useState<PosCartLine[]>([]);
@@ -323,16 +322,6 @@ export function PosWorkspace({
   }, [selectedCategoryId, loadCategory]);
 
   const categoryProducts = categoryCache[selectedCategoryId] ?? [];
-
-  const filteredCategories = useMemo(() => {
-    const q = categorySearch.trim().toLowerCase();
-    if (!q) return categories;
-    return categories.filter(
-      (category) =>
-        category.name.toLowerCase().includes(q) ||
-        category.tags.some((tag) => tag.toLowerCase().includes(q))
-    );
-  }, [categories, categorySearch]);
 
   const sellingVariants = useMemo(
     () => mergeSellingVariantsWithInventory(categoryProducts, inventory),
@@ -880,6 +869,7 @@ export function PosWorkspace({
         customerType,
         customer,
         appliedVoucher,
+        voucherAppliedOverride: null,
         voucherCodeInput,
         paymentGroups: defaultPaymentGroupsForLines(lines),
         savedAt: Date.now(),
@@ -991,15 +981,6 @@ export function PosWorkspace({
       <div className="flex min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="space-y-3 border-b px-4 py-3">
-            <div className="relative max-w-md">
-              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search categories..."
-                value={categorySearch}
-                onChange={(e) => setCategorySearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
               <Button
                 type="button"
@@ -1017,14 +998,8 @@ export function PosWorkspace({
               >
                 All categories
               </Button>
-              {filteredCategories.length === 0 ? (
-                categorySearch.trim() ? (
-                  <p className="py-1 text-sm text-muted-foreground">
-                    No categories match “{categorySearch.trim()}”.
-                  </p>
-                ) : null
-              ) : (
-                filteredCategories.map((category) => {
+              {categories.length === 0 ? null : (
+                categories.map((category) => {
                   const active = category.id === selectedCategoryId;
                   return (
                     <Button

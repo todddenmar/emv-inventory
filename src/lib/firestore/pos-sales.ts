@@ -66,6 +66,8 @@ export interface CompletePosSaleInput {
   resellerId?: string | null;
   resellerName?: string | null;
   voucherId?: string | null;
+  /** Manual less amount; clamped to voucher entitlement when provided. */
+  voucherAmountApplied?: number | null;
   items: PosSaleItem[];
   createdBy: string;
   createdByName?: string | null;
@@ -141,6 +143,72 @@ export async function getPosSales(options?: {
     }
     return applyFilters(rows).slice(0, max);
   }
+}
+
+export function isVoucherSale(
+  sale: Pick<PosSale, "voucherId" | "voucherAmountApplied">
+): boolean {
+  return Boolean(sale.voucherId) && (sale.voucherAmountApplied ?? 0) > 0;
+}
+
+export async function getVoucherSales(options?: {
+  branchId?: string | null;
+  voucherId?: string | null;
+  resellerId?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
+  includeArchived?: boolean;
+  max?: number;
+}): Promise<PosSale[]> {
+  const rows = await getPosSales({
+    branchId: options?.branchId,
+    fromDate: options?.fromDate,
+    toDate: options?.toDate,
+    includeArchived: options?.includeArchived,
+    max: options?.max ?? 1000,
+  });
+  return rows.filter((sale) => {
+    if (!isVoucherSale(sale)) return false;
+    if (options?.voucherId && sale.voucherId !== options.voucherId) return false;
+    if (options?.resellerId && sale.resellerId !== options.resellerId) {
+      return false;
+    }
+    return true;
+  });
+}
+
+export async function markResellerCommissionSent(
+  saleId: string,
+  input: { performedBy: string; performedByName?: string | null }
+): Promise<void> {
+  if (!input.performedBy) {
+    throw new Error("Sign in to mark commission sent");
+  }
+  const sale = await getPosSale(saleId);
+  if (!sale) throw new Error("Sale not found");
+  if (!isVoucherSale(sale)) throw new Error("Not a voucher sale");
+  if (!sale.resellerId) {
+    throw new Error("This sale has no linked reseller");
+  }
+  if (sale.resellerCommissionSentAt) return;
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.posSales, saleId), {
+    resellerCommissionSentAt: serverTimestamp(),
+    resellerCommissionSentBy: input.performedBy,
+    resellerCommissionSentByName: input.performedByName ?? null,
+  });
+}
+
+export async function clearResellerCommissionSent(saleId: string): Promise<void> {
+  const sale = await getPosSale(saleId);
+  if (!sale) throw new Error("Sale not found");
+  if (!sale.resellerCommissionSentAt) return;
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.posSales, saleId), {
+    resellerCommissionSentAt: null,
+    resellerCommissionSentBy: null,
+    resellerCommissionSentByName: null,
+  });
 }
 
 function resolveSaleCreatedAt(soldAt?: Date | null) {
@@ -291,10 +359,11 @@ export async function completePosSale(
     let voucherId: string | null = null;
     let voucherCode: string | null = null;
     let voucherRef: ReturnType<typeof doc> | null = null;
-    let nextRemaining = 0;
-    let nextStatus: Voucher["status"] = "active";
 
     if (!noCharge && input.voucherId) {
+      if (!input.customer?.name?.trim()) {
+        throw new Error("Customer name is required when using a voucher");
+      }
       voucherRef = doc(db, COLLECTIONS.vouchers, input.voucherId);
       const voucherSnap = await tx.get(voucherRef);
       if (!voucherSnap.exists()) {
@@ -304,6 +373,8 @@ export async function completePosSale(
         code?: string;
         resellerId?: string | null;
         remainingAmount?: number;
+        discountType?: string;
+        discountValue?: number;
         status?: string;
         expiresAt?: { toDate?: () => Date } | Date | null;
       };
@@ -315,6 +386,15 @@ export async function completePosSale(
           : new Date(voucherData.expiresAt as Date)
         : null;
 
+      const discountType =
+        voucherData.discountType === "percent" ? "percent" : "amount";
+      const discountValue = Number(
+        voucherData.discountValue ??
+          (discountType === "amount"
+            ? voucherData.remainingAmount ?? 0
+            : 0)
+      );
+
       const voucherLike: Voucher = {
         id: voucherSnap.id,
         code: String(voucherData.code ?? "").toUpperCase(),
@@ -322,6 +402,8 @@ export async function completePosSale(
         description: "",
         resellerId: voucherData.resellerId ?? null,
         resellerName: null,
+        discountType,
+        discountValue,
         initialAmount: 0,
         remainingAmount: Number(voucherData.remainingAmount ?? 0),
         status:
@@ -346,14 +428,27 @@ export async function completePosSale(
         throw new Error("Voucher does not belong to the selected reseller");
       }
 
-      voucherAmountApplied = Math.min(voucherLike.remainingAmount, total);
+      if (discountType === "percent") {
+        const pct = Math.min(100, Math.max(0, discountValue));
+        const maxApplied = roundMoney((total * pct) / 100);
+        const requested = input.voucherAmountApplied;
+        voucherAmountApplied =
+          requested != null && Number.isFinite(requested)
+            ? roundMoney(Math.min(maxApplied, Math.max(0, requested)))
+            : maxApplied;
+      } else {
+        const maxApplied = Math.min(
+          Math.max(0, discountValue),
+          total
+        );
+        const requested = input.voucherAmountApplied;
+        voucherAmountApplied =
+          requested != null && Number.isFinite(requested)
+            ? roundMoney(Math.min(maxApplied, Math.max(0, requested)))
+            : roundMoney(maxApplied);
+      }
       voucherId = voucherSnap.id;
       voucherCode = voucherLike.code;
-      nextRemaining = Math.max(
-        0,
-        voucherLike.remainingAmount - voucherAmountApplied
-      );
-      nextStatus = nextRemaining <= 0 ? "depleted" : "active";
     }
 
     const amountDue = Math.max(0, total - voucherAmountApplied);
@@ -400,10 +495,21 @@ export async function completePosSale(
     }
 
     if (voucherRef && voucherAmountApplied > 0) {
-      tx.update(voucherRef, {
-        remainingAmount: nextRemaining,
-        status: nextStatus,
-        updatedAt: serverTimestamp(),
+      const customer = input.customer;
+      tx.set(doc(collection(db, COLLECTIONS.voucherRedemptions)), {
+        voucherId,
+        voucherCode,
+        saleId,
+        branchId: input.branchId,
+        branchName: input.branchName,
+        amountApplied: voucherAmountApplied,
+        customerName: customer?.name?.trim() || null,
+        customerMobile: customer?.mobile?.trim() || null,
+        customerEmail: customer?.email?.trim() || null,
+        customerAddress: customer?.address?.trim() || null,
+        redeemedBy: input.createdBy,
+        redeemedByName: input.createdByName ?? null,
+        createdAt: serverTimestamp(),
       });
     }
 
@@ -417,7 +523,7 @@ export async function completePosSale(
       payments,
       customerType,
       customer:
-        requiresPosCustomerDetails(customerType)
+        requiresPosCustomerDetails(customerType) || voucherId
           ? (input.customer ?? null)
           : null,
       resellerId: noCharge ? null : (input.resellerId ?? null),
@@ -735,35 +841,6 @@ export async function archivePosSale(
       }
     }
 
-    let voucherRef: ReturnType<typeof doc> | null = null;
-    let nextRemaining = 0;
-    let nextStatus: Voucher["status"] = "active";
-    let restoreVoucher = false;
-
-    if (sale.voucherId && (sale.voucherAmountApplied ?? 0) > 0) {
-      voucherRef = doc(db, COLLECTIONS.vouchers, sale.voucherId);
-      const voucherSnap = await tx.get(voucherRef);
-      if (voucherSnap.exists()) {
-        const voucherData = voucherSnap.data() as {
-          remainingAmount?: number;
-          initialAmount?: number;
-          status?: string;
-        };
-        if (voucherData.status !== "void") {
-          const applied = roundMoney(sale.voucherAmountApplied);
-          const remaining = Number(voucherData.remainingAmount ?? 0);
-          const initial = Number(
-            voucherData.initialAmount ?? remaining + applied
-          );
-          nextRemaining = roundMoney(
-            Math.min(initial, Math.max(0, remaining + applied))
-          );
-          nextStatus = nextRemaining <= 0 ? "depleted" : "active";
-          restoreVoucher = true;
-        }
-      }
-    }
-
     const saleLabel = `Sale ${sale.id.slice(-6).toUpperCase()}`;
 
     for (const row of restockRows) {
@@ -801,14 +878,6 @@ export async function archivePosSale(
         performedBy: input.performedBy,
         performedByName: input.performedByName ?? null,
         createdAt: serverTimestamp(),
-      });
-    }
-
-    if (voucherRef && restoreVoucher) {
-      tx.update(voucherRef, {
-        remainingAmount: nextRemaining,
-        status: nextStatus,
-        updatedAt: serverTimestamp(),
       });
     }
 

@@ -25,6 +25,8 @@ export interface PosCheckoutDraft {
   customerType: PosCustomerType;
   customer: PosCustomerDraft;
   appliedVoucher: Voucher | null;
+  /** Manual less amount; null = use full voucher entitlement. */
+  voucherAppliedOverride: number | null;
   voucherCodeInput: string;
   paymentGroups: PosCheckoutPaymentGroup[];
   savedAt: number;
@@ -40,6 +42,8 @@ function draftKey(
   return `emv-pos-checkout:${saleChannel}`;
 }
 
+import { clampVoucherAppliedAmount } from "@/lib/firestore/vouchers";
+
 function merchandiseSubtotal(lines: PosCartLine[]): number {
   return lines.reduce(
     (sum, line) =>
@@ -48,20 +52,18 @@ function merchandiseSubtotal(lines: PosCartLine[]): number {
   );
 }
 
-function voucherAppliedAmount(
-  voucher: Voucher | null,
-  subtotal: number
-): number {
-  if (!voucher) return 0;
-  return Math.min(Math.max(0, voucher.remainingAmount), subtotal);
-}
-
 export function draftAmountDue(draft: {
   lines: PosCartLine[];
   appliedVoucher: Voucher | null;
+  voucherAppliedOverride?: number | null;
 }): number {
   const subtotal = merchandiseSubtotal(draft.lines);
-  return Math.max(0, subtotal - voucherAppliedAmount(draft.appliedVoucher, subtotal));
+  const voucherApplied = clampVoucherAppliedAmount(
+    draft.appliedVoucher,
+    subtotal,
+    draft.voucherAppliedOverride
+  );
+  return Math.max(0, subtotal - voucherApplied);
 }
 
 export function savePosCheckoutDraft(
@@ -98,8 +100,18 @@ export function loadPosCheckoutDraft(
     }
     if (parsed.appliedVoucher) {
       const v = parsed.appliedVoucher;
+      const discountType =
+        v.discountType === "percent" ? "percent" : "amount";
+      const initialAmount = Number(v.initialAmount ?? 0);
       parsed.appliedVoucher = {
         ...v,
+        discountType,
+        discountValue: Number(
+          v.discountValue ??
+            (discountType === "percent" ? 0 : initialAmount)
+        ),
+        initialAmount,
+        remainingAmount: Number(v.remainingAmount ?? 0),
         createdAt: v.createdAt ? new Date(v.createdAt) : new Date(),
         updatedAt: v.updatedAt ? new Date(v.updatedAt) : new Date(),
         expiresAt: v.expiresAt ? new Date(v.expiresAt) : null,
@@ -110,8 +122,18 @@ export function loadPosCheckoutDraft(
       return null;
     }
 
+    const overrideRaw = (parsed as { voucherAppliedOverride?: unknown })
+      .voucherAppliedOverride;
+    const voucherAppliedOverride =
+      overrideRaw == null || overrideRaw === ""
+        ? null
+        : Number.isFinite(Number(overrideRaw))
+          ? Number(overrideRaw)
+          : null;
+
     return {
       ...parsed,
+      voucherAppliedOverride,
       customerType: parsePosCustomerType(parsed.customerType),
       lines: parsed.lines.map((line) => ensureCartLinePaymentFields(line)),
       paymentGroups: sanitizePaymentGroups(
