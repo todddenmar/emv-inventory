@@ -103,7 +103,7 @@ function applyPreset(preset: Preset): {
 }
 
 export default function AdminAdjustmentHistoryPage() {
-  const { isElevatedAdmin, assignedBranchId } = useBranchAccess();
+  const { canViewAllBranches, assignedBranchId } = useBranchAccess();
   const initial = applyPreset("today");
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -122,7 +122,7 @@ export default function AdminAdjustmentHistoryPage() {
   const [toDate, setToDate] = useState(initial.toDate);
   const [page, setPage] = useState(1);
 
-  const scopeBranchId = isElevatedAdmin
+  const scopeBranchId = canViewAllBranches
     ? selectedBranchId === "all"
       ? null
       : selectedBranchId
@@ -148,15 +148,15 @@ export default function AdminAdjustmentHistoryPage() {
         setCategories(categoryList);
         setCategoryGroups(groupList);
         setProducts(productList);
-        if (!isElevatedAdmin && assignedBranchId) {
+        if (!canViewAllBranches && assignedBranchId) {
           setSelectedBranchId(assignedBranchId);
         }
       })
       .catch(console.error);
-  }, [isElevatedAdmin, assignedBranchId]);
+  }, [canViewAllBranches, assignedBranchId]);
 
   const load = useCallback(async () => {
-    if (!isElevatedAdmin && !assignedBranchId) {
+    if (!canViewAllBranches && !assignedBranchId) {
       setLogs([]);
       setLoading(false);
       return;
@@ -171,7 +171,6 @@ export default function AdminAdjustmentHistoryPage() {
     try {
       const rows = await getInventoryLogs({
         branchId: scopeBranchId,
-        max: 500,
         fromDate: effectiveFrom,
         toDate: effectiveTo,
       });
@@ -186,7 +185,7 @@ export default function AdminAdjustmentHistoryPage() {
     assignedBranchId,
     effectiveFrom,
     effectiveTo,
-    isElevatedAdmin,
+    canViewAllBranches,
     mode,
     scopeBranchId,
   ]);
@@ -376,7 +375,7 @@ export default function AdminAdjustmentHistoryPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-md"
             />
-            {isElevatedAdmin && (
+            {canViewAllBranches && (
               <Select
                 value={selectedBranchId}
                 onValueChange={(v) => setSelectedBranchId(v ?? "all")}

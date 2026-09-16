@@ -4,8 +4,10 @@ import {
   limit,
   orderBy,
   query,
+  startAfter,
   where,
   type QueryConstraint,
+  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
@@ -21,6 +23,10 @@ export {
   startOfLocalDay,
   endOfLocalDay,
 } from "@/lib/dates";
+
+const PAGE_SIZE = 500;
+/** Safety cap when loading a date range (busy POS days can exceed hundreds). */
+const RANGE_FETCH_CAP = 10_000;
 
 export function isInventoryLogOnDate(
   log: InventoryLog,
@@ -55,6 +61,108 @@ function resolveLogRange(options?: {
   return null;
 }
 
+function logsCollection() {
+  return collection(getClientDb(), COLLECTIONS.inventoryLogs).withConverter(
+    inventoryLogConverter
+  );
+}
+
+async function fetchInventoryLogPages(options: {
+  branchId?: string | null;
+  range: { from: Date; to: Date } | null;
+  max: number;
+}): Promise<InventoryLog[]> {
+  const ref = logsCollection();
+  const rows: InventoryLog[] = [];
+  let cursor: QueryDocumentSnapshot | null = null;
+
+  while (rows.length < options.max) {
+    const pageLimit = Math.min(PAGE_SIZE, options.max - rows.length);
+    const constraints: QueryConstraint[] = [];
+
+    if (options.branchId) {
+      constraints.push(where("branchId", "==", options.branchId));
+    }
+    if (options.range) {
+      constraints.push(where("createdAt", ">=", options.range.from));
+      constraints.push(where("createdAt", "<=", options.range.to));
+    }
+    constraints.push(orderBy("createdAt", "desc"));
+    if (cursor) {
+      constraints.push(startAfter(cursor));
+    }
+    constraints.push(limit(pageLimit));
+
+    const snapshot = await getDocs(query(ref, ...constraints));
+    if (snapshot.empty) break;
+
+    for (const docSnap of snapshot.docs) {
+      rows.push(docSnap.data());
+    }
+    cursor = snapshot.docs[snapshot.docs.length - 1] ?? null;
+    if (snapshot.docs.length < pageLimit) break;
+  }
+
+  return rows;
+}
+
+async function fetchInventoryLogsFallback(options: {
+  branchId?: string | null;
+  range: { from: Date; to: Date } | null;
+  max: number;
+}): Promise<InventoryLog[]> {
+  const ref = logsCollection();
+  const rows: InventoryLog[] = [];
+  let cursor: QueryDocumentSnapshot | null = null;
+  // Without a range index, walk recent logs until we fill the date window or hit cap.
+  const scanCap = options.range
+    ? Math.max(options.max * 4, RANGE_FETCH_CAP)
+    : options.max;
+
+  while (rows.length < options.max) {
+    const pageLimit = Math.min(PAGE_SIZE, scanCap - rows.length);
+    if (pageLimit <= 0) break;
+
+    const constraints: QueryConstraint[] = [];
+    if (options.branchId) {
+      constraints.push(where("branchId", "==", options.branchId));
+    }
+    constraints.push(orderBy("createdAt", "desc"));
+    if (cursor) {
+      constraints.push(startAfter(cursor));
+    }
+    constraints.push(limit(pageLimit));
+
+    const snapshot = await getDocs(query(ref, ...constraints));
+    if (snapshot.empty) break;
+
+    for (const docSnap of snapshot.docs) {
+      const log = docSnap.data();
+      if (options.range) {
+        if (log.createdAt < options.range.from) {
+          // Further pages are older; stop scanning.
+          return rows.slice(0, options.max);
+        }
+        if (log.createdAt > options.range.to) {
+          continue;
+        }
+      }
+      rows.push(log);
+      if (rows.length >= options.max) break;
+    }
+
+    cursor = snapshot.docs[snapshot.docs.length - 1] ?? null;
+    if (snapshot.docs.length < pageLimit) break;
+
+    if (options.range) {
+      const oldest = snapshot.docs[snapshot.docs.length - 1]?.data();
+      if (oldest && oldest.createdAt < options.range.from) break;
+    }
+  }
+
+  return rows.slice(0, options.max);
+}
+
 export async function getInventoryLogs(options?: {
   branchId?: string | null;
   max?: number;
@@ -63,47 +171,24 @@ export async function getInventoryLogs(options?: {
   fromDate?: string | null;
   toDate?: string | null;
 }): Promise<InventoryLog[]> {
-  const ref = collection(getClientDb(), COLLECTIONS.inventoryLogs).withConverter(
-    inventoryLogConverter
-  );
-  const max = options?.max ?? 50;
   const range = resolveLogRange(options);
-  const constraints: QueryConstraint[] = [];
-
-  if (options?.branchId) {
-    constraints.push(where("branchId", "==", options.branchId));
-  }
-
-  if (range) {
-    constraints.push(where("createdAt", ">=", range.from));
-    constraints.push(where("createdAt", "<=", range.to));
-  }
-
-  constraints.push(orderBy("createdAt", "desc"), limit(max));
+  // Date-scoped pages need all matching rows; uncapped feeds stay small.
+  const max = options?.max ?? (range ? RANGE_FETCH_CAP : 50);
 
   try {
-    const snapshot = await getDocs(query(ref, ...constraints));
-    return snapshot.docs.map((d) => d.data());
+    return await fetchInventoryLogPages({
+      branchId: options?.branchId,
+      range,
+      max,
+    });
   } catch (error) {
-    // Fallback when a composite index is missing: fetch recent + filter locally.
+    // Fallback when a composite index is missing: scan recent + filter locally.
     console.warn("getInventoryLogs date query failed, using fallback", error);
-    const fallbackConstraints: QueryConstraint[] = [];
-    if (options?.branchId) {
-      fallbackConstraints.push(where("branchId", "==", options.branchId));
-    }
-    fallbackConstraints.push(
-      orderBy("createdAt", "desc"),
-      limit(range ? Math.max(max * 10, 500) : max)
-    );
-    const snapshot = await getDocs(query(ref, ...fallbackConstraints));
-    let rows = snapshot.docs.map((d) => d.data());
-    if (range) {
-      rows = rows.filter(
-        (log) =>
-          log.createdAt >= range.from && log.createdAt <= range.to
-      );
-    }
-    return rows.slice(0, max);
+    return fetchInventoryLogsFallback({
+      branchId: options?.branchId,
+      range,
+      max,
+    });
   }
 }
 
@@ -116,30 +201,46 @@ export async function getVariantInventoryLogs(options: {
   fromDate?: string | null;
   toDate?: string | null;
 }): Promise<InventoryLog[]> {
-  const ref = collection(getClientDb(), COLLECTIONS.inventoryLogs).withConverter(
-    inventoryLogConverter
-  );
+  const ref = logsCollection();
   const max = options.max ?? 50;
   const range = resolveLogRange(options);
 
   try {
-    const constraints: QueryConstraint[] = [
-      where("branchId", "==", options.branchId),
-      where("variantId", "==", options.variantId),
-    ];
-    if (range) {
-      constraints.push(where("createdAt", ">=", range.from));
-      constraints.push(where("createdAt", "<=", range.to));
-    }
-    constraints.push(orderBy("createdAt", "desc"), limit(max));
+    const rows: InventoryLog[] = [];
+    let cursor: QueryDocumentSnapshot | null = null;
 
-    const snapshot = await getDocs(query(ref, ...constraints));
-    return snapshot.docs.map((d) => d.data());
+    while (rows.length < max) {
+      const pageLimit = Math.min(PAGE_SIZE, max - rows.length);
+      const constraints: QueryConstraint[] = [
+        where("branchId", "==", options.branchId),
+        where("variantId", "==", options.variantId),
+      ];
+      if (range) {
+        constraints.push(where("createdAt", ">=", range.from));
+        constraints.push(where("createdAt", "<=", range.to));
+      }
+      constraints.push(orderBy("createdAt", "desc"));
+      if (cursor) {
+        constraints.push(startAfter(cursor));
+      }
+      constraints.push(limit(pageLimit));
+
+      const snapshot = await getDocs(query(ref, ...constraints));
+      if (snapshot.empty) break;
+
+      for (const docSnap of snapshot.docs) {
+        rows.push(docSnap.data());
+      }
+      cursor = snapshot.docs[snapshot.docs.length - 1] ?? null;
+      if (snapshot.docs.length < pageLimit) break;
+    }
+
+    return rows;
   } catch {
     // Fallback when the composite index is not deployed yet.
     const branchLogs = await getInventoryLogs({
       branchId: options.branchId,
-      max: Math.max(max * 6, 200),
+      max: Math.max(max * 20, 1000),
       date: options.date,
       fromDate: options.fromDate,
       toDate: options.toDate,

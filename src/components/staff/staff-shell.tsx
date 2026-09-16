@@ -28,13 +28,13 @@ import { cn } from "@/lib/utils";
 
 const staffNavItems = [
   { href: STAFF_HOME, label: "Dashboard", icon: LayoutDashboard },
-  { href: "/staff/inventory", label: "Stock levels", icon: Warehouse },
-  { href: "/staff/find-stock", label: "Find stock", icon: Search },
   {
     href: "/staff/inventory/remaining-stocks",
     label: "Remaining stocks",
     icon: LayoutGrid,
   },
+  { href: "/staff/find-stock", label: "Find stock", icon: Search },
+  { href: "/staff/inventory", label: "Stock levels", icon: Warehouse },
   {
     href: "/staff/inventory/daily-stock-changes",
     label: "Daily changes",
@@ -49,7 +49,7 @@ const staffNavItems = [
 
 const primaryBottomHrefs = [
   STAFF_HOME,
-  "/staff/inventory",
+  "/staff/inventory/remaining-stocks",
   "/staff/find-stock",
 ] as const;
 
