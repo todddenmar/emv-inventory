@@ -1,8 +1,13 @@
-import { isCashierRole, isOwnerRole } from "@/lib/roles";
+import {
+  isCashierRole,
+  isInventoryViewerRole,
+  isOwnerRole,
+} from "@/lib/roles";
 import type { UserRole } from "@/types";
 
 export const CASHIER_HOME = "/admin/cashier";
 export const OWNER_HOME = "/admin";
+export const STAFF_HOME = "/staff";
 
 /** Paths cashiers may access under /admin. */
 export function isCashierAllowedPath(pathname: string): boolean {
@@ -67,6 +72,52 @@ export function isOwnerNavHref(href: string): boolean {
   );
 }
 
+/** Paths inventory-viewer staff may access under /staff. */
+export function isStaffAllowedPath(pathname: string): boolean {
+  if (pathname === STAFF_HOME || pathname === `${STAFF_HOME}/`) {
+    return true;
+  }
+  if (pathname === "/staff/inventory") {
+    return true;
+  }
+  if (
+    pathname === "/staff/inventory/remaining-stocks" ||
+    pathname.startsWith("/staff/inventory/remaining-stocks/")
+  ) {
+    return true;
+  }
+  if (
+    pathname === "/staff/inventory/daily-stock-changes" ||
+    pathname.startsWith("/staff/inventory/daily-stock-changes/")
+  ) {
+    return true;
+  }
+  if (
+    pathname === "/staff/inventory/adjustment-history" ||
+    pathname.startsWith("/staff/inventory/adjustment-history/")
+  ) {
+    return true;
+  }
+  if (
+    pathname === "/staff/find-stock" ||
+    pathname.startsWith("/staff/find-stock/")
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isStaffNavHref(href: string): boolean {
+  return (
+    href === STAFF_HOME ||
+    href === "/staff/inventory" ||
+    href === "/staff/inventory/remaining-stocks" ||
+    href === "/staff/inventory/daily-stock-changes" ||
+    href === "/staff/inventory/adjustment-history" ||
+    href === "/staff/find-stock"
+  );
+}
+
 export function resolvePostLoginRedirect(
   isStaff: boolean,
   redirect: string,
@@ -83,6 +134,13 @@ export function resolvePostLoginRedirect(
     return CASHIER_HOME;
   }
 
+  if (isInventoryViewerRole(role)) {
+    if (redirect && isStaffAllowedPath(redirect)) {
+      return redirect;
+    }
+    return STAFF_HOME;
+  }
+
   if (isOwnerRole(role)) {
     if (redirect && isOwnerAllowedPath(redirect)) {
       return redirect;
@@ -93,4 +151,3 @@ export function resolvePostLoginRedirect(
   const path = redirect || "/admin";
   return path.startsWith("/admin") ? path : "/admin";
 }
-

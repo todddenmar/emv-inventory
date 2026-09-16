@@ -33,7 +33,7 @@ async function handlePostLogin(user: User, inviteToken?: string) {
       throw new Error("This invite was sent to a different email address");
     }
 
-    if (invite.role === "cashier") {
+    if (invite.role === "cashier" || invite.role === "staff") {
       if (!invite.branchId) {
         throw new Error("This invite is missing a branch assignment");
       }
@@ -47,7 +47,7 @@ async function handlePostLogin(user: User, inviteToken?: string) {
     }
 
     const appUser = await upsertUserOnLogin(user, {
-      role: invite.role === "owner" ? "owner" : "admin",
+      role: invite.role,
       branchId: null,
     });
     await acceptInvite(invite.id, user.uid);

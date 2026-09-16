@@ -4,6 +4,7 @@ export function parseUserRole(role: unknown): UserRole {
   if (role === "master-admin") return "master-admin";
   if (role === "admin") return "admin";
   if (role === "owner") return "owner";
+  if (role === "staff") return "staff";
   if (role === "cashier" || role === "manager") return "cashier";
   return "customer";
 }
@@ -13,6 +14,7 @@ export function isStaffRole(role: UserRole | null | undefined): boolean {
     role === "master-admin" ||
     role === "admin" ||
     role === "owner" ||
+    role === "staff" ||
     role === "cashier"
   );
 }
@@ -25,11 +27,11 @@ export function isOwnerRole(role: UserRole | null | undefined): boolean {
   return role === "owner";
 }
 
-/** Cashier — branch-scoped staff (not elevated). */
-export function isBranchStaffRole(
+/** View-only inventory access (stock levels, history, remaining stocks). */
+export function isInventoryViewerRole(
   role: UserRole | null | undefined
 ): boolean {
-  return role === "cashier";
+  return role === "staff";
 }
 
 export function isMasterAdminRole(role: UserRole | null | undefined): boolean {
@@ -50,6 +52,24 @@ export function canViewAllBranchesRole(
   return isElevatedAdminRole(role) || isOwnerRole(role);
 }
 
+/** Roles that may mutate stock (not owners or inventory viewers). */
+export function canEditStockRole(role: UserRole | null | undefined): boolean {
+  return isStaffRole(role) && !isOwnerRole(role) && !isInventoryViewerRole(role);
+}
+
+/** Cashier or inventory staff — must be assigned to a branch. */
+export function isBranchStaffRole(
+  role: UserRole | null | undefined
+): boolean {
+  return role === "cashier" || role === "staff";
+}
+
+export function roleNeedsBranchAssignment(
+  role: UserRole | null | undefined
+): boolean {
+  return isBranchStaffRole(role);
+}
+
 export function roleAssignableBy(
   actorRole: UserRole,
   targetRole: UserRole
@@ -59,6 +79,7 @@ export function roleAssignableBy(
     return (
       targetRole === "admin" ||
       targetRole === "owner" ||
+      targetRole === "staff" ||
       targetRole === "cashier" ||
       targetRole === "customer"
     );

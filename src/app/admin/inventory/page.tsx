@@ -72,7 +72,13 @@ import type {
 type StockFilter = "all" | "low" | "in_stock" | "out_of_stock";
 
 export default function AdminInventoryPage() {
-  const { canViewAllBranches, isOwner, assignedBranchId } = useBranchAccess();
+  const {
+    canViewAllBranches,
+    canEditStock,
+    isOwner,
+    isInventoryViewer,
+    assignedBranchId,
+  } = useBranchAccess();
   const { catalogImageSource } = useAppSettings();
   const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -94,7 +100,6 @@ export default function AdminInventoryPage() {
   const activeBranchId = canViewAllBranches
     ? selectedBranchId
     : assignedBranchId ?? "";
-  const canEditStock = !isOwner;
 
   const loadBranches = async () => {
     const all = await getBranches(true);
@@ -461,7 +466,7 @@ export default function AdminInventoryPage() {
                           className="py-8 text-center text-muted-foreground"
                         >
                           {variantsWithStock.length === 0 ? (
-                            isOwner ? (
+                            isOwner || isInventoryViewer ? (
                               "No selling variants for this branch."
                             ) : (
                               <>

@@ -25,7 +25,11 @@ type SearchHit = {
   label: string;
 };
 
-export default function FindStockPage() {
+export default function FindStockPage({
+  viewOnly = false,
+}: {
+  viewOnly?: boolean;
+}) {
   const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const { assignedBranchId } = useBranchAccess();
@@ -203,7 +207,9 @@ export default function FindStockPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Find stock</h1>
         <p className="text-sm text-muted-foreground">
-          Search a product and request a transfer from another branch
+          {viewOnly
+            ? "Search a product to see stock levels at every branch"
+            : "Search a product and request a transfer from another branch"}
         </p>
       </div>
 
@@ -310,7 +316,7 @@ export default function FindStockPage() {
                   </span>
                 </p>
 
-                {!isMine && stock > 0 ? (
+                {!viewOnly && !isMine && stock > 0 ? (
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center gap-1">
                       <Button
@@ -378,7 +384,11 @@ export default function FindStockPage() {
                   </div>
                 ) : null}
 
-                {!isMine && stock <= 0 ? (
+                {!viewOnly && !isMine && stock <= 0 ? (
+                  <p className="text-xs text-muted-foreground">No stock</p>
+                ) : null}
+
+                {viewOnly && !isMine && stock <= 0 ? (
                   <p className="text-xs text-muted-foreground">No stock</p>
                 ) : null}
               </li>

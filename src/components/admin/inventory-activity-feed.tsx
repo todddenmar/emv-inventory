@@ -37,6 +37,8 @@ interface InventoryActivityFeedProps {
   description?: string;
   max?: number;
   showViewAll?: boolean;
+  viewAllHref?: string;
+  viewAllLabel?: string;
 }
 
 export function InventoryActivityFeed({
@@ -45,6 +47,8 @@ export function InventoryActivityFeed({
   description = "Sales, adjustments, and transfers across branches",
   max = 15,
   showViewAll = true,
+  viewAllHref = "/admin/inventory/transfers",
+  viewAllLabel = "Transfers",
 }: InventoryActivityFeedProps) {
   const [logs, setLogs] = useState<InventoryLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,8 +87,8 @@ export function InventoryActivityFeed({
           <CardDescription>{description}</CardDescription>
         </div>
         {showViewAll && (
-          <LinkButton href="/admin/inventory/transfers" variant="outline" size="sm">
-            Transfers
+          <LinkButton href={viewAllHref} variant="outline" size="sm">
+            {viewAllLabel}
           </LinkButton>
         )}
       </CardHeader>

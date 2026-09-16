@@ -106,12 +106,18 @@ export function UserMenu({
                       ? "/admin/reports"
                       : user.role === "cashier"
                         ? "/admin/cashier"
-                        : "/admin"
+                        : user.role === "staff"
+                          ? "/staff"
+                          : "/admin"
                   )
                 }
               >
                 <LayoutDashboard className="mr-2 h-4 w-4" />
-                {user.role === "owner" ? "Reports" : "Admin dashboard"}
+                {user.role === "owner"
+                  ? "Reports"
+                  : user.role === "staff"
+                    ? "Staff dashboard"
+                    : "Admin dashboard"}
               </DropdownMenuItem>
             </>
           )}

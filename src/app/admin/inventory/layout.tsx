@@ -4,7 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
-import { inventoryNavItems } from "@/components/admin/inventory-nav";
+import {
+  inventoryHrefForRole,
+  inventoryNavItems,
+} from "@/components/admin/inventory-nav";
 
 export function InventoryNav({
   onNavigate,
@@ -14,20 +17,31 @@ export function InventoryNav({
   className?: string;
 }) {
   const pathname = usePathname();
-  const { isOwner } = useBranchAccess();
+  const { isOwner, isInventoryViewer } = useBranchAccess();
 
-  const items = inventoryNavItems.filter((item) => {
-    if (isOwner) return item.ownerVisible === true;
-    return true;
-  });
+  const items = inventoryNavItems
+    .filter((item) => {
+      if (isInventoryViewer) return item.staffVisible === true;
+      if (isOwner) return item.ownerVisible === true;
+      return true;
+    })
+    .map((item) => ({
+      ...item,
+      href: inventoryHrefForRole(item.href, isInventoryViewer),
+    }));
+
+  const stockLevelsHref = inventoryHrefForRole(
+    "/admin/inventory",
+    isInventoryViewer
+  );
 
   return (
     <nav className={cn("space-y-1", className)}>
       {items.map((item) => {
         const Icon = item.icon;
-        const isStockLevels = item.href === "/admin/inventory";
+        const isStockLevels = item.href === stockLevelsHref;
         const isActive = isStockLevels
-          ? pathname === "/admin/inventory"
+          ? pathname === stockLevelsHref
           : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
         return (
@@ -56,6 +70,13 @@ export default function AdminInventoryLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { isInventoryViewer } = useBranchAccess();
+
+  // Staff already has inventory links in the main sidebar.
+  if (isInventoryViewer) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="-m-4 flex min-h-[calc(100dvh-4rem)] flex-col md:-m-6 md:flex-row">
       <aside className="w-full shrink-0 border-b bg-muted/20 p-4 md:sticky md:top-0 md:max-h-[calc(100dvh-4rem)] md:w-56 md:self-start md:overflow-y-auto md:border-r md:border-b-0">

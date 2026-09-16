@@ -3,7 +3,13 @@ import {
   useIsElevatedAdmin,
   useIsMasterAdmin,
 } from "@/stores/auth-store";
-import { canViewAllBranchesRole, isOwnerRole } from "@/lib/roles";
+import {
+  canEditStockRole,
+  canViewAllBranchesRole,
+  isBranchStaffRole,
+  isInventoryViewerRole,
+  isOwnerRole,
+} from "@/lib/roles";
 
 export function useBranchAccess() {
   const user = useAuthStore((s) => s.user);
@@ -12,9 +18,11 @@ export function useBranchAccess() {
   const assignedBranchId = user?.branchId ?? null;
   const isCashier = user?.role === "cashier";
   const isOwner = isOwnerRole(user?.role);
-  const isBranchStaff = isCashier;
+  const isInventoryViewer = isInventoryViewerRole(user?.role);
+  const isBranchStaff = isBranchStaffRole(user?.role);
   const isAdmin = user?.role === "admin";
   const canViewAllBranches = canViewAllBranchesRole(user?.role);
+  const canEditStock = canEditStockRole(user?.role);
 
   const canAccessBranch = (branchId: string) =>
     canViewAllBranches || assignedBranchId === branchId;
@@ -27,9 +35,11 @@ export function useBranchAccess() {
     isElevatedAdmin,
     isAdmin,
     isOwner,
+    isInventoryViewer,
     isCashier,
     isBranchStaff,
     canViewAllBranches,
+    canEditStock,
     assignedBranchId,
     scopedBranchId,
     canAccessBranch,

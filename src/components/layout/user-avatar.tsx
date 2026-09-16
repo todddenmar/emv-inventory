@@ -33,6 +33,8 @@ export function formatUserRole(
       return "Admin";
     case "owner":
       return "Owner";
+    case "staff":
+      return "Staff";
     case "cashier":
       return "Cashier";
     case "customer":

@@ -78,6 +78,8 @@ const roleBadgeVariant = (
       return "default";
     case "owner":
       return "secondary";
+    case "staff":
+      return "secondary";
     case "cashier":
       return "secondary";
     case "customer":
@@ -110,6 +112,7 @@ export default function AdminUsersPage() {
     const all: UserRole[] = [
       "customer",
       "cashier",
+      "staff",
       "owner",
       "admin",
       "master-admin",
@@ -216,8 +219,12 @@ export default function AdminUsersPage() {
   const handleSave = async () => {
     if (!editingUser || !currentUser) return;
 
-    if (role === "cashier" && !branchId) {
-      toast.error("Select a branch for cashiers");
+    if ((role === "cashier" || role === "staff") && !branchId) {
+      toast.error(
+        role === "staff"
+          ? "Select a branch for staff"
+          : "Select a branch for cashiers"
+      );
       return;
     }
 
@@ -227,7 +234,8 @@ export default function AdminUsersPage() {
         editingUser.uid,
         {
           role,
-          branchId: role === "cashier" ? branchId : null,
+          branchId:
+            role === "cashier" || role === "staff" ? branchId : null,
         },
         currentUser.uid
       );
@@ -429,7 +437,7 @@ export default function AdminUsersPage() {
                   onValueChange={(v) => {
                     const nextRole = (v ?? "customer") as UserRole;
                     setRole(nextRole);
-                    if (nextRole !== "cashier") {
+                    if (nextRole !== "cashier" && nextRole !== "staff") {
                       setBranchId("");
                     }
                   }}
@@ -451,7 +459,7 @@ export default function AdminUsersPage() {
                 </Select>
               </div>
 
-              {role === "cashier" && (
+              {(role === "cashier" || role === "staff") && (
                 <div className="space-y-2">
                   <Label>Assigned branch</Label>
                   <Select
@@ -498,6 +506,14 @@ export default function AdminUsersPage() {
                   Owners can view the dashboard, sales reports, inventory, and
                   price changes across all branches. They cannot edit stock or
                   access other admin tools.
+                </p>
+              )}
+
+              {role === "staff" && (
+                <p className="text-sm text-muted-foreground">
+                  Staff can view inventory, remaining stocks, daily stock
+                  changes, and adjustment history for their assigned branch.
+                  View only — they can also search stock at other branches.
                 </p>
               )}
 

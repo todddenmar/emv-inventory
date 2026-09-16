@@ -19,9 +19,8 @@ export function BranchSetupGuard({ children }: { children: React.ReactNode }) {
           <CardHeader>
             <CardTitle>Branch not assigned</CardTitle>
             <CardDescription>
-              Your cashier account does not have a
-              branch yet. Ask an admin to assign you to a branch or send you a
-              new invite linked to a branch.
+              Your account does not have a branch yet. Ask an admin to assign
+              you to a branch or send you a new invite linked to a branch.
             </CardDescription>
           </CardHeader>
           <CardContent>

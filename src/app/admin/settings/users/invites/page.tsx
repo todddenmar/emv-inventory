@@ -111,20 +111,25 @@ export default function AdminInvitesPage() {
 
   const handleCreateInvite = async () => {
     if (!user) return;
-    if (role === "cashier" && !branchId) {
-      toast.error("Select a branch for this cashier");
+    if ((role === "cashier" || role === "staff") && !branchId) {
+      toast.error(
+        role === "staff"
+          ? "Select a branch for this staff invite"
+          : "Select a branch for this cashier"
+      );
       return;
     }
     const branch = branches.find((b) => b.id === branchId);
     setSubmitting(true);
     try {
+      const needsBranch = role === "cashier" || role === "staff";
       const invite = await createInvite({
         createdBy: user.uid,
         createdByName: user.displayName || user.email || "Admin",
         email: email || null,
         role,
-        branchId: role === "cashier" ? branchId : null,
-        branchName: role === "cashier" ? (branch?.name ?? null) : null,
+        branchId: needsBranch ? branchId : null,
+        branchName: needsBranch ? (branch?.name ?? null) : null,
       });
       const link = `${window.location.origin}/invite/${invite.token}`;
       setLastLink(link);
@@ -163,8 +168,8 @@ export default function AdminInvitesPage() {
         <div>
           <h1 className="text-2xl font-bold">Staff invites</h1>
           <p className="text-muted-foreground">
-            Invite cashiers, owners (dashboard, sales, inventory, price
-            changes), or admins (full access)
+            Invite cashiers, staff (branch inventory, view only), owners
+            (dashboard, sales, inventory, price changes), or admins (full access)
           </p>
         </div>
         <Button
@@ -195,7 +200,7 @@ export default function AdminInvitesPage() {
                   onValueChange={(v) => {
                     const next = (v as InviteRole) ?? "cashier";
                     setRole(next);
-                    if (next !== "cashier") {
+                    if (next !== "cashier" && next !== "staff") {
                       setBranchId("");
                     }
                   }}
@@ -209,13 +214,14 @@ export default function AdminInvitesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cashier">Cashier</SelectItem>
+                    <SelectItem value="staff">Staff</SelectItem>
                     <SelectItem value="owner">Owner</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              {role === "cashier" ? (
+              {role === "cashier" || role === "staff" ? (
                 <div className="space-y-2">
                   <Label>Branch</Label>
                   <Select
@@ -241,6 +247,12 @@ export default function AdminInvitesPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {role === "staff" ? (
+                    <p className="text-xs text-muted-foreground">
+                      Staff view inventory for this branch only, and can search
+                      stock at other branches.
+                    </p>
+                  ) : null}
                 </div>
               ) : role === "owner" ? (
                 <p className="text-sm text-muted-foreground">

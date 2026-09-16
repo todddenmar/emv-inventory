@@ -154,8 +154,15 @@ export async function updateUserAccess(
   data: UpdateUserAccessInput,
   actorUid: string
 ): Promise<void> {
-  if (data.role === "cashier" && !data.branchId) {
-    throw new Error("Cashiers must be assigned to a branch");
+  if (
+    (data.role === "cashier" || data.role === "staff") &&
+    !data.branchId
+  ) {
+    throw new Error(
+      data.role === "staff"
+        ? "Staff must be assigned to a branch"
+        : "Cashiers must be assigned to a branch"
+    );
   }
 
   const [user, actor] = await Promise.all([getUser(uid), getUser(actorUid)]);
@@ -199,7 +206,8 @@ export async function updateUserAccess(
     }
   }
 
-  const branchId = data.role === "cashier" ? data.branchId : null;
+  const branchId =
+    data.role === "cashier" || data.role === "staff" ? data.branchId : null;
 
   await updateDoc(doc(getClientDb(), "users", uid), {
     role: data.role,

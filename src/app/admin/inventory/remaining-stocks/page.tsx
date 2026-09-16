@@ -51,6 +51,7 @@ import {
   type RemainingStockCategoryGroup,
 } from "@/lib/remaining-stock";
 import { cn } from "@/lib/utils";
+import { useBranchAccess } from "@/hooks/use-branch-access";
 import type {
   Branch,
   BranchInventory,
@@ -146,6 +147,7 @@ function CategoryBlock({
 }
 
 export default function RemainingStocksPage() {
+  const { canViewAllBranches, assignedBranchId } = useBranchAccess();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
@@ -173,6 +175,11 @@ export default function RemainingStocksPage() {
         setProducts(productList);
         setInventory(inventoryList);
         setSelectedBranchIds((prev) => {
+          if (!canViewAllBranches && assignedBranchId) {
+            return branchList.some((b) => b.id === assignedBranchId)
+              ? [assignedBranchId]
+              : [];
+          }
           const valid = prev.filter((id) =>
             branchList.some((branch) => branch.id === id)
           );
@@ -185,7 +192,13 @@ export default function RemainingStocksPage() {
         toast.error("Failed to load remaining stocks");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [assignedBranchId, canViewAllBranches]);
+
+  useEffect(() => {
+    if (!canViewAllBranches && assignedBranchId) {
+      setSelectedBranchIds([assignedBranchId]);
+    }
+  }, [assignedBranchId, canViewAllBranches]);
 
   const activeGroups = useMemo(
     () => categoryGroups.filter((group) => !group.isArchived),
@@ -319,12 +332,14 @@ export default function RemainingStocksPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Filters</CardTitle>
           <CardDescription>
-            Choose which branches appear as columns, then search or filter by
-            category.
+            {canViewAllBranches
+              ? "Choose which branches appear as columns, then search or filter by category."
+              : "Search or filter by category for your branch."}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            {canViewAllBranches ? (
             <div className="flex min-w-0 flex-col gap-2">
               <Label>Branch columns</Label>
               <Popover>
@@ -394,6 +409,7 @@ export default function RemainingStocksPage() {
                 </PopoverContent>
               </Popover>
             </div>
+            ) : null}
             <div className="flex min-w-0 flex-col gap-2">
               <Label htmlFor="remaining-stock-search">Search</Label>
               <Input

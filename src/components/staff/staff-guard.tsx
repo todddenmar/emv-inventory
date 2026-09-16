@@ -2,31 +2,30 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthStore, useIsStaff } from "@/stores/auth-store";
-import { isInventoryViewerRole } from "@/lib/roles";
+import { useAuthStore } from "@/stores/auth-store";
+import { isInventoryViewerRole, isStaffRole } from "@/lib/roles";
 import { STAFF_HOME } from "@/lib/post-login-redirect";
 
-export function AdminGuard({ children }: { children: React.ReactNode }) {
+export function StaffGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const loading = useAuthStore((s) => s.loading);
   const user = useAuthStore((s) => s.user);
-  const isStaff = useIsStaff();
   const isInventoryViewer = isInventoryViewerRole(user?.role);
 
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.replace("/login?redirect=/admin");
+      router.replace(`/login?redirect=${STAFF_HOME}`);
       return;
     }
-    if (isInventoryViewer) {
-      router.replace(STAFF_HOME);
-      return;
+    if (!isInventoryViewer) {
+      if (isStaffRole(user.role)) {
+        router.replace("/admin");
+      } else {
+        router.replace("/login?denied=1");
+      }
     }
-    if (!isStaff) {
-      router.replace("/login?denied=1");
-    }
-  }, [loading, user, isStaff, isInventoryViewer, router]);
+  }, [loading, user, isInventoryViewer, router]);
 
   if (loading) {
     return (
@@ -36,7 +35,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user || !isStaff || isInventoryViewer) return null;
+  if (!user || !isInventoryViewer) return null;
 
   return <>{children}</>;
 }
