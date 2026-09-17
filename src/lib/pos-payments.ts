@@ -560,14 +560,17 @@ export function allocatedPaymentsForCartLines(
 
 /**
  * Flatten cart payment splits into sale-level payments.
- * Payment amounts on the cart must already equal amountDue (post-voucher).
+ * Payment amounts on the cart must already equal amountDue (post-voucher),
+ * unless `allowUnequalPayments` is set (admin override for partial / past half payments).
  */
 export function resolvePaymentsFromCartLines(
   lines: CartLineForPayment[],
   accounts: PaymentAccount[],
   amountDue: number,
-  paymentGroups: PosCheckoutPaymentGroup[] = []
+  paymentGroups: PosCheckoutPaymentGroup[] = [],
+  options?: { allowUnequalPayments?: boolean }
 ): PosPaymentLine[] {
+  const allowUnequalPayments = options?.allowUnequalPayments === true;
   const paid = lines.filter((line) => cartLineNeedsPayment(line));
   if (amountDue <= PAYMENT_AMOUNT_TOLERANCE) {
     return [];
@@ -589,7 +592,10 @@ export function resolvePaymentsFromCartLines(
 
   for (const group of groups) {
     assertPositivePayments(group.payments);
-    if (!itemPaymentsCoverLineTotal(group.payments, amountDue)) {
+    if (
+      !allowUnequalPayments &&
+      !itemPaymentsCoverLineTotal(group.payments, amountDue)
+    ) {
       throw new Error("Payments must equal the amount due");
     }
     for (const pay of group.payments) {
@@ -630,7 +636,7 @@ export function resolvePaymentsFromCartLines(
     }
 
     let amount: number;
-    if (i === drafts.length - 1) {
+    if (!allowUnequalPayments && i === drafts.length - 1) {
       amount = roundMoney(amountDue - allocated);
     } else {
       amount = roundMoney(draft.amount);
@@ -650,7 +656,10 @@ export function resolvePaymentsFromCartLines(
     });
   }
 
-  if (!paymentsCoverAmountDue(amountDue, resolved)) {
+  if (
+    !allowUnequalPayments &&
+    !paymentsCoverAmountDue(amountDue, resolved)
+  ) {
     throw new Error("Payment amounts must equal the amount due");
   }
 

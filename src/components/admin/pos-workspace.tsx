@@ -1,13 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, Search, Expand } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +31,7 @@ import {
   type PosCartLine,
   type PosCustomerDraft,
 } from "@/components/admin/pos-cart";
+import { PosCatalogListCard } from "@/components/admin/pos-catalog-cards";
 import {
   FreebieShortfallDialog,
   type FreebieShortfall,
@@ -57,13 +56,14 @@ import {
   type VariantWithStock,
 } from "@/lib/inventory";
 import { isProductPublished } from "@/lib/products-catalog";
-import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
+import {
+  buildPosCatalogListItems,
+} from "@/lib/pos-catalog-list";
 import { formatVariantLabel } from "@/lib/product-variants";
 import {
   normalizeRetailPrice,
   normalizeWholesalePrice,
   resolveEffectivePrices,
-  unitPriceForPaymentMethod,
   type EffectiveSalePrices,
 } from "@/lib/product-pricing";
 import {
@@ -328,11 +328,19 @@ export function PosWorkspace({
     [categoryProducts, inventory]
   );
 
+  const productsById = useMemo(() => {
+    const map = new Map<string, (typeof categoryProducts)[number]>();
+    for (const product of categoryProducts) {
+      map.set(product.id, product);
+    }
+    return map;
+  }, [categoryProducts]);
+
   const filteredVariants = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return sellingVariants;
     return sellingVariants.filter((row) => {
-      const product = categoryProducts.find((p) => p.id === row.productId);
+      const product = productsById.get(row.productId);
       const label = formatVariantLabel(row, product?.options ?? []);
       return (
         row.productName.toLowerCase().includes(q) ||
@@ -340,7 +348,17 @@ export function PosWorkspace({
         label.toLowerCase().includes(q)
       );
     });
-  }, [sellingVariants, search, categoryProducts]);
+  }, [sellingVariants, search, productsById]);
+
+  const catalogListItems = useMemo(
+    () =>
+      buildPosCatalogListItems(
+        filteredVariants,
+        productsById,
+        catalogImageSource
+      ),
+    [filteredVariants, productsById, catalogImageSource]
+  );
 
   useEffect(() => {
     setPage(1);
@@ -349,11 +367,11 @@ export function PosWorkspace({
   const {
     page: safePage,
     totalPages,
-    pagedItems: pagedVariants,
+    pagedItems: pagedCatalogItems,
     total,
   } = useMemo(
-    () => paginateItems(filteredVariants, page, POS_PAGE_SIZE),
-    [filteredVariants, page]
+    () => paginateItems(catalogListItems, page, POS_PAGE_SIZE),
+    [catalogListItems, page]
   );
 
   useEffect(() => {
@@ -1052,189 +1070,27 @@ export function PosWorkspace({
             ) : (
               <>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {pagedVariants.map((row) => {
-                    const product = categoryProducts.find(
-                      (p) => p.id === row.productId
-                    );
-                    const thumb =
-                      product && showCatalogImages(catalogImageSource)
-                        ? getCatalogImageUrl(
-                            product,
-                            row,
-                            catalogImageSource === "none"
-                              ? "none"
-                              : row.imageId
-                                ? "variant"
-                                : catalogImageSource
-                          )
-                        : null;
-                    const variantLabel = formatVariantLabel(
-                      row,
-                      product?.options ?? []
-                    );
-                    const displayName =
-                      variantLabel !== "Default"
-                        ? `${row.productName} — ${variantLabel}`
-                        : row.productName;
-                    const effective = resolveEffectivePrices(
-                      row,
-                      promoMap,
-                      row.id
-                    );
-                    const pricedRow = {
-                      price: effective.price,
-                      retailPrice: effective.retailPrice,
-                    };
-                    const outOfStock = row.stock <= 0;
-                    const inCart =
-                      cart.find((line) => line.variantId === row.id)
-                        ?.quantity ?? 0;
-
-                    return (
-                      <div
-                        key={row.id}
-                        className="relative flex min-h-0 flex-row items-stretch gap-3 overflow-hidden rounded-xl border bg-card p-3 sm:min-h-[140px] sm:flex-col sm:gap-0 sm:p-0"
-                      >
-                        {isCashier ? (
-                          <Link
-                            href={`/admin/cashier/find-stock?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(row.productId)}`}
-                            title="Check other branches"
-                            aria-label={`Check other branches for ${displayName}`}
-                            className="absolute top-2 right-2 z-10 inline-flex size-8 items-center justify-center rounded-md border bg-background/95 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Search className="size-3.5" />
-                          </Link>
-                        ) : null}
-                        {thumb ? (
-                          <button
-                            type="button"
-                            title="View full image"
-                            aria-label={`View full image for ${displayName}`}
-                            className="absolute top-2 left-2 z-10 inline-flex size-8 items-center justify-center rounded-md border bg-background/95 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground sm:top-2 sm:left-2"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setImagePreview({
-                                url: thumb,
-                                title: displayName,
-                              });
-                            }}
-                          >
-                            <Expand className="size-3.5" />
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          disabled={outOfStock}
-                          onClick={() => addVariant(row)}
-                          className="flex min-h-0 min-w-0 flex-1 flex-row items-stretch gap-3 text-left transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-col sm:gap-0"
-                        >
-                        {showCatalogImages(catalogImageSource) ? (
-                          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted sm:aspect-[4/3] sm:h-auto sm:w-full sm:rounded-none">
-                            {thumb ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={thumb}
-                                alt=""
-                                className="h-full w-full object-cover object-center"
-                              />
-                            ) : (
-                              <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                                No image
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
-                        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <p
-                              className={`min-w-0 text-sm font-medium leading-snug break-words ${
-                                isCashier ? "pr-8" : ""
-                              }`}
-                            >
-                              {displayName}
-                            </p>
-                            {effective.onSale && effective.promotionName ? (
-                              <Badge
-                                variant="outline"
-                                className="max-w-[7.5rem] shrink-0 truncate text-[10px] text-amber-700"
-                                title={effective.promotionName}
-                              >
-                                {effective.promotionName}
-                              </Badge>
-                            ) : null}
-                          </div>
-                          <div className="mt-auto flex items-end justify-between gap-2 pt-2">
-                            <span className="text-sm font-semibold tabular-nums">
-                              {(() => {
-                                if (isWholesale) {
-                                  const wholesale = normalizeWholesalePrice(
-                                    row.wholesalePrice
-                                  );
-                                  return wholesale != null
-                                    ? formatCurrency(wholesale)
-                                    : "Set at checkout";
-                                }
-                                const display = unitPriceForPaymentMethod(
-                                  pricedRow,
-                                  paymentMethod
-                                );
-                                const catalogDisplay = unitPriceForPaymentMethod(
-                                  {
-                                    price: row.price,
-                                    retailPrice: normalizeRetailPrice(
-                                      row.retailPrice
-                                    ),
-                                  },
-                                  paymentMethod
-                                );
-                                const showStrike =
-                                  effective.onSale &&
-                                  catalogDisplay != null &&
-                                  display != null &&
-                                  catalogDisplay !== display;
-
-                                if (display != null) {
-                                  return (
-                                    <span className="inline-flex flex-wrap items-baseline gap-x-1.5">
-                                      {showStrike ? (
-                                        <span className="text-xs font-normal text-muted-foreground line-through">
-                                          {formatCurrency(catalogDisplay)}
-                                        </span>
-                                      ) : null}
-                                      <span
-                                        className={
-                                          effective.onSale
-                                            ? "text-amber-800"
-                                            : undefined
-                                        }
-                                      >
-                                        {formatCurrency(display)}
-                                      </span>
-                                    </span>
-                                  );
-                                }
-                                return paymentMethod === "retail"
-                                  ? "Set retail"
-                                  : formatCurrency(pricedRow.price);
-                              })()}
-                            </span>
-                            <Badge
-                              variant={outOfStock ? "outline" : "secondary"}
-                              className="text-xs"
-                            >
-                              {outOfStock
-                                ? "Out"
-                                : inCart > 0
-                                  ? `${row.stock} · ${inCart}`
-                                  : `${row.stock}`}
-                            </Badge>
-                          </div>
-                        </div>
-                        </button>
-                      </div>
-                    );
-                  })}
+                  {pagedCatalogItems.map((item) => (
+                    <PosCatalogListCard
+                      key={
+                        item.kind === "group"
+                          ? `group:${item.productId}:${item.imageUrl}`
+                          : item.row.id
+                      }
+                      item={item}
+                      productsById={productsById}
+                      catalogImageSource={catalogImageSource}
+                      cart={cart}
+                      isCashier={isCashier}
+                      isWholesale={isWholesale}
+                      paymentMethod={paymentMethod}
+                      promoMap={promoMap}
+                      onAdd={addVariant}
+                      onPreviewImage={(url, title) =>
+                        setImagePreview({ url, title })
+                      }
+                    />
+                  ))}
                 </div>
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-muted-foreground">

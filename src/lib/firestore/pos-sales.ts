@@ -73,6 +73,11 @@ export interface CompletePosSaleInput {
   createdByName?: string | null;
   /** When set, the sale is dated to this instant instead of the server time. */
   soldAt?: Date | null;
+  /**
+   * Admin override: allow payment amounts that do not equal amount due
+   * (e.g. half-paid / partial receipts).
+   */
+  allowUnequalPayments?: boolean;
 }
 
 export async function getPosSale(id: string): Promise<PosSale | null> {
@@ -463,7 +468,9 @@ export async function completePosSale(
           amountDue
         );
       if (!paymentsCoverAmountDue(amountDue, payments)) {
-        throw new Error("Payment amounts must equal the amount due");
+        if (!input.allowUnequalPayments) {
+          throw new Error("Payment amounts must equal the amount due");
+        }
       }
     }
 
@@ -628,6 +635,10 @@ export interface UpdatePosSalePaymentsInput {
   items?: PosSaleItem[];
   /** Local `YYYY-MM-DD` — moves the sale onto that day's sales report. */
   saleDate?: string | null;
+  /**
+   * Admin override: keep partial / half payments that do not equal amount due.
+   */
+  allowUnequalPayments?: boolean;
 }
 
 /** Admin-only correction of tender methods / accounts. Totals stay the same. */
@@ -695,7 +706,10 @@ export async function updatePosSalePayments(
     if (payments.length === 0) {
       throw new Error("Add at least one payment");
     }
-    if (!paymentsCoverAmountDue(amountDue, payments)) {
+    if (
+      !input.allowUnequalPayments &&
+      !paymentsCoverAmountDue(amountDue, payments)
+    ) {
       throw new Error("Payment amounts must equal the amount due");
     }
   } else if (payments.length > 0) {
@@ -715,7 +729,10 @@ export async function updatePosSalePayments(
       if (item.payments.length === 0) {
         throw new Error("Add at least one payment for each paid item");
       }
-      if (!itemPaymentsCoverLineTotal(item.payments, target)) {
+      if (
+        !input.allowUnequalPayments &&
+        !itemPaymentsCoverLineTotal(item.payments, target)
+      ) {
         throw new Error("Each item's payments must keep that item's paid amount");
       }
     }

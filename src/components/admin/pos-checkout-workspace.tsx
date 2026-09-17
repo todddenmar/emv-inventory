@@ -382,7 +382,9 @@ export function PosCheckoutWorkspace({
     }
   };
 
-  const handleCharge = async () => {
+  const handleCharge = async (options?: {
+    allowUnequalPayments?: boolean;
+  }) => {
     if (!user || !draftMeta || lines.length === 0) return;
     if (saleLock && draftMeta.branchId !== saleLock.branchId) {
       toast.error("This checkout is locked to another branch");
@@ -390,6 +392,7 @@ export function PosCheckoutWorkspace({
     }
 
     const noCharge = isNonRevenueCustomerType(customerType);
+    const allowUnequalPayments = options?.allowUnequalPayments === true;
 
     const missingRetail =
       !noCharge &&
@@ -415,7 +418,8 @@ export function PosCheckoutWorkspace({
               lines,
               paymentAccounts,
               amountDue,
-              paymentGroups
+              paymentGroups,
+              { allowUnequalPayments }
             );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid payments");
@@ -569,6 +573,7 @@ export function PosCheckoutWorkspace({
         soldAt: saleLock
           ? saleCreatedAtForDate(saleLock.saleDate)
           : undefined,
+        allowUnequalPayments,
       });
 
       clearPosCheckoutDraft(saleChannel, saleLock);
@@ -728,8 +733,8 @@ export function PosCheckoutWorkspace({
         }}
         onRetailPriceChange={setLineRetailPrice}
         onUnitPriceChange={setLineUnitPrice}
-        onConfirmCharge={() => {
-          handleCharge().catch(console.error);
+        onConfirmCharge={(options) => {
+          handleCharge(options).catch(console.error);
         }}
       />
     </div>

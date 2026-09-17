@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -45,6 +46,7 @@ import {
   parseMoneyInput,
   paymentKindLabel,
   paymentRemaining,
+  paymentsCoverAmountDue,
   roundMoney,
   saleAmountDue,
   salePaymentLineToCheckout,
@@ -126,6 +128,7 @@ export function EditSalePaymentDialog({
   onOpenChange: (open: boolean) => void;
   onUpdated?: (sale: PosSale) => void;
 }) {
+  const { isElevatedAdmin } = useBranchAccess();
   const [loaded, setLoaded] = useState<PosSale | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -136,6 +139,7 @@ export function EditSalePaymentDialog({
   const [editByItem, setEditByItem] = useState(false);
   const [lineEditor, setLineEditor] = useState<LineEditor | null>(null);
   const [saleDate, setSaleDate] = useState("");
+  const [allowUnequalPayments, setAllowUnequalPayments] = useState(false);
 
   const invoice = sale ?? loaded;
 
@@ -148,6 +152,7 @@ export function EditSalePaymentDialog({
       setSaleDrafts([]);
       setLineEditor(null);
       setSaleDate("");
+      setAllowUnequalPayments(false);
       return;
     }
 
@@ -186,6 +191,18 @@ export function EditSalePaymentDialog({
             ]
         ).map(salePaymentLineToCheckout)
       );
+      const due = saleAmountDue(row);
+      const existingPayments =
+        row.payments.length > 0
+          ? row.payments
+          : [
+              {
+                amount: due,
+              },
+            ];
+      setAllowUnequalPayments(
+        due > 0.01 && !paymentsCoverAmountDue(due, existingPayments)
+      );
     };
 
     load()
@@ -223,6 +240,8 @@ export function EditSalePaymentDialog({
           itemPaymentsCoverLineTotal(row.payments, row.targetAmount)
         )
       : true);
+  const canSaveUnequal = isElevatedAdmin && allowUnequalPayments;
+  const paymentsAcceptable = balanced || canSaveUnequal;
 
   const editorDraft = lineEditor?.draft ?? null;
   const methodOptions = (() => {
@@ -316,7 +335,7 @@ export function EditSalePaymentDialog({
     const dateChanged = Boolean(saleDate) && saleDate !== originalDate;
     const noPaymentDue = amountDue <= 0.01;
 
-    if (!noPaymentDue && !balanced) return;
+    if (!noPaymentDue && !paymentsAcceptable) return;
 
     setSaving(true);
     try {
@@ -379,6 +398,7 @@ export function EditSalePaymentDialog({
         payments,
         items: editByItem ? items : undefined,
         saleDate: dateChanged ? saleDate : undefined,
+        allowUnequalPayments: canSaveUnequal,
       });
       toast.success(dateChanged ? "Sale updated" : "Payment updated");
       onUpdated?.(updated);
@@ -485,8 +505,14 @@ export function EditSalePaymentDialog({
         </ul>
       )}
       {!itemPaymentsCoverLineTotal(payments, targetAmount) ? (
-        <p className="text-xs text-destructive">
-          Payments must equal {formatCurrency(targetAmount)}.
+        <p
+          className={`text-xs ${
+            canSaveUnequal ? "text-amber-700" : "text-destructive"
+          }`}
+        >
+          {canSaveUnequal
+            ? `Payments do not equal ${formatCurrency(targetAmount)} (override on).`
+            : `Payments must equal ${formatCurrency(targetAmount)}.`}
         </p>
       ) : null}
     </div>
@@ -809,6 +835,27 @@ export function EditSalePaymentDialog({
               ) : (
                 renderPaymentList("sale", saleDrafts, amountDue, remaining)
               )}
+
+              {isElevatedAdmin ? (
+                <label className="flex items-start gap-3 rounded-md border p-3">
+                  <Checkbox
+                    checked={allowUnequalPayments}
+                    disabled={saving}
+                    onCheckedChange={(checked) =>
+                      setAllowUnequalPayments(checked === true)
+                    }
+                  />
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium leading-none">
+                      Allow payments that don’t equal amount due
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Use for half-paid or partial receipts from past dates.
+                      Leave off for normal full payments.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
                 </>
               )}
             </div>
@@ -851,7 +898,7 @@ export function EditSalePaymentDialog({
                   loading ||
                   !invoice ||
                   !saleDate ||
-                  (amountDue > 0.01 && !balanced)
+                  (amountDue > 0.01 && !paymentsAcceptable)
                 }
                 onClick={() => void handleSave()}
               >

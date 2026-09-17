@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Loader2, Minus, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useBranchAccess } from "@/hooks/use-branch-access";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
@@ -691,7 +693,7 @@ interface PosCheckoutDialogProps {
   onCustomerChange: (patch: Partial<PosCustomerDraft>) => void;
   onRetailPriceChange: (variantId: string, retailPrice: number | null) => void;
   onUnitPriceChange?: (variantId: string, unitPrice: number) => void;
-  onConfirmCharge: () => void;
+  onConfirmCharge: (options?: { allowUnequalPayments?: boolean }) => void;
   paymentGroups?: PosCheckoutPaymentGroup[];
   onPaymentGroupsChange?: (groups: PosCheckoutPaymentGroup[]) => void;
 }
@@ -727,6 +729,7 @@ export function PosCheckoutDialog({
   paymentGroups: paymentGroupsProp,
   onPaymentGroupsChange,
 }: PosCheckoutDialogProps) {
+  const { isElevatedAdmin } = useBranchAccess();
   const prefersDrawer = usePrefersDrawer();
   const isWholesale = saleChannel === "wholesale";
   const isPage = layout === "page";
@@ -745,6 +748,7 @@ export function PosCheckoutDialog({
     payId: string | null;
     draft: PosCheckoutPaymentLine;
   } | null>(null);
+  const [allowUnequalPayments, setAllowUnequalPayments] = useState(false);
   const { itemCount, subtotal, voucherApplied, voucherMax, amountDue } =
     cartTotals(lines, appliedVoucher, voucherAppliedOverride);
   const [voucherLessText, setVoucherLessText] = useState(() =>
@@ -819,6 +823,10 @@ export function PosCheckoutDialog({
           (pay) => !Number.isFinite(pay.amount) || pay.amount <= 0
         )
     );
+  const canOverrideUnequal = isElevatedAdmin && allowUnequalPayments;
+  const paymentsBlockProgress =
+    (unbalancedItemPayments && !canOverrideUnequal) ||
+    invalidItemPaymentAmount;
   const missingRetail =
     !noCharge &&
     !isWholesale &&
@@ -837,8 +845,7 @@ export function PosCheckoutDialog({
   const goToReview = () => {
     if (missingRetail) return;
     if (!noCharge && amountDue > 0.01 && payableLines.length === 0) return;
-    if (missingPaymentAccount || unbalancedItemPayments || invalidItemPaymentAmount)
-      return;
+    if (missingPaymentAccount || paymentsBlockProgress) return;
     if (missingCustomerName) return;
     onStepChange("review");
   };
@@ -935,8 +942,7 @@ export function PosCheckoutDialog({
               charging ||
               missingRetail ||
               missingPaymentAccount ||
-              unbalancedItemPayments ||
-              invalidItemPaymentAmount ||
+              paymentsBlockProgress ||
               missingCustomerName ||
               lines.length === 0
             }
@@ -963,12 +969,17 @@ export function PosCheckoutDialog({
               charging ||
               missingRetail ||
               missingPaymentAccount ||
-              unbalancedItemPayments ||
-              invalidItemPaymentAmount ||
+              paymentsBlockProgress ||
               missingCustomerName ||
               lines.length === 0
             }
-            onClick={onConfirmCharge}
+            onClick={() =>
+              onConfirmCharge(
+                canOverrideUnequal
+                  ? { allowUnequalPayments: true }
+                  : undefined
+              )
+            }
           >
             {charging ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1517,9 +1528,18 @@ export function PosCheckoutDialog({
                           </div>
 
                           {!balanced ? (
-                            <p className="text-xs text-destructive">
-                              Payments must equal the amount due
-                              {voucherApplied > 0 ? " after voucher" : ""}.
+                            <p
+                              className={`text-xs ${
+                                canOverrideUnequal
+                                  ? "text-amber-700"
+                                  : "text-destructive"
+                              }`}
+                            >
+                              {canOverrideUnequal
+                                ? "Payments do not equal the amount due (override on)."
+                                : `Payments must equal the amount due${
+                                    voucherApplied > 0 ? " after voucher" : ""
+                                  }.`}
                             </p>
                           ) : null}
                         </div>
@@ -1541,9 +1561,42 @@ export function PosCheckoutDialog({
                   </p>
                 ) : null}
                 {unbalancedItemPayments || invalidItemPaymentAmount ? (
-                  <p className="text-sm text-destructive">
-                    Fix payment splits so the amount due is fully covered.
+                  <p
+                    className={`text-sm ${
+                      unbalancedItemPayments &&
+                      !invalidItemPaymentAmount &&
+                      canOverrideUnequal
+                        ? "text-amber-700"
+                        : "text-destructive"
+                    }`}
+                  >
+                    {unbalancedItemPayments &&
+                    !invalidItemPaymentAmount &&
+                    canOverrideUnequal
+                      ? "Payment splits do not fully cover the amount due (override on)."
+                      : "Fix payment splits so the amount due is fully covered."}
                   </p>
+                ) : null}
+
+                {isElevatedAdmin && !noCharge && amountDue > 0.01 ? (
+                  <label className="flex items-start gap-3 rounded-md border p-3">
+                    <Checkbox
+                      checked={allowUnequalPayments}
+                      disabled={charging}
+                      onCheckedChange={(checked) =>
+                        setAllowUnequalPayments(checked === true)
+                      }
+                    />
+                    <span className="space-y-1">
+                      <span className="block text-sm font-medium leading-none">
+                        Allow payments that don’t equal amount due
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        For half-paid or partial receipts. Cashiers cannot use
+                        this override.
+                      </span>
+                    </span>
+                  </label>
                 ) : null}
               </div>
               </>
