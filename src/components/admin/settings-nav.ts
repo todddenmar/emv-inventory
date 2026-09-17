@@ -3,6 +3,7 @@ import {
   CreditCard,
   FileJson,
   FolderKanban,
+  IdCard,
   ListChecks,
   RotateCcw,
   Settings2,
@@ -61,6 +62,13 @@ export const settingsNavItems: SettingsNavItem[] = [
     icon: UsersRound,
     elevatedOnly: false,
     description: "Reseller accounts for prepaid credit and POS",
+  },
+  {
+    href: "/admin/settings/loyalty-cards",
+    label: "Loyalty cards",
+    icon: IdCard,
+    elevatedOnly: true,
+    description: "Customer loyalty card profiles",
   },
   {
     href: "/admin/settings/vouchers",

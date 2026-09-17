@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,7 +43,10 @@ import {
 import { getVouchers } from "@/lib/firestore/vouchers";
 import { formatCurrency } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
-import { summarizeVoucherCommission } from "@/lib/voucher-sales";
+import {
+  saleMatchesItemNameSearch,
+  summarizeVoucherCommission,
+} from "@/lib/voucher-sales";
 import type {
   Branch,
   Category,
@@ -92,6 +95,7 @@ export default function AdminVoucherSalesPage() {
   const [fromDate, setFromDate] = useState(() => applyPreset("last7").fromDate);
   const [toDate, setToDate] = useState(() => applyPreset("last7").toDate);
   const [page, setPage] = useState(1);
+  const [itemSearch, setItemSearch] = useState("");
 
   const scopeBranchId = canViewAllBranches
     ? selectedBranchId === "all"
@@ -154,6 +158,7 @@ export default function AdminVoucherSalesPage() {
     toDate,
     selectedBranchId,
     selectedCategoryIds,
+    itemSearch,
   ]);
 
   const categoryProductIds = useMemo(
@@ -161,10 +166,12 @@ export default function AdminVoucherSalesPage() {
     [products, selectedCategoryIds]
   );
 
-  const filteredSales = useMemo(
-    () => filterSalesByProducts(sales, categoryProductIds),
-    [sales, categoryProductIds]
-  );
+  const filteredSales = useMemo(() => {
+    const byCategory = filterSalesByProducts(sales, categoryProductIds);
+    return byCategory.filter((sale) =>
+      saleMatchesItemNameSearch(sale, itemSearch)
+    );
+  }, [sales, categoryProductIds, itemSearch]);
 
   const summary = useMemo(
     () => summarizeVoucherCommission(filteredSales),
@@ -271,7 +278,7 @@ export default function AdminVoucherSalesPage() {
         <CardHeader>
           <CardTitle>Filters</CardTitle>
           <CardDescription>
-            Filter by date, branch, category, voucher, and reseller
+            Filter by date, branch, category, item name, voucher, and reseller
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -302,6 +309,19 @@ export default function AdminVoucherSalesPage() {
             </Button>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+              <Label htmlFor="voucher-item-search">Item name</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="voucher-item-search"
+                  className="pl-9"
+                  placeholder="Search product name…"
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="from-date">From</Label>
               <Input

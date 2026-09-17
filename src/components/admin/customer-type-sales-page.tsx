@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,10 @@ import { getProducts } from "@/lib/firestore/products";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
 import { posCustomerTypeLabel } from "@/lib/pos-customer-type";
-import { formatSaleItemsSummary } from "@/lib/voucher-sales";
+import {
+  formatSaleItemsSummary,
+  saleMatchesItemNameSearch,
+} from "@/lib/voucher-sales";
 import type {
   Branch,
   Category,
@@ -92,6 +95,7 @@ export function CustomerTypeSalesPage({
   const [sales, setSales] = useState<PosSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [itemSearch, setItemSearch] = useState("");
 
   const scopeBranchId = canViewAllBranches
     ? selectedBranchId === "all"
@@ -155,17 +159,26 @@ export function CustomerTypeSalesPage({
 
   useEffect(() => {
     setPage(1);
-  }, [fromDate, toDate, selectedBranchId, selectedCategoryIds, customerType]);
+  }, [
+    fromDate,
+    toDate,
+    selectedBranchId,
+    selectedCategoryIds,
+    customerType,
+    itemSearch,
+  ]);
 
   const categoryProductIds = useMemo(
     () => productIdsForCategoryFilter(products, selectedCategoryIds),
     [products, selectedCategoryIds]
   );
 
-  const filteredSales = useMemo(
-    () => filterSalesByProducts(sales, categoryProductIds),
-    [sales, categoryProductIds]
-  );
+  const filteredSales = useMemo(() => {
+    const byCategory = filterSalesByProducts(sales, categoryProductIds);
+    return byCategory.filter((sale) =>
+      saleMatchesItemNameSearch(sale, itemSearch)
+    );
+  }, [sales, categoryProductIds, itemSearch]);
 
   const totalAmount = useMemo(
     () =>
@@ -220,7 +233,7 @@ export function CustomerTypeSalesPage({
         <CardHeader>
           <CardTitle>Filters</CardTitle>
           <CardDescription>
-            Filter by date range, branch, and category
+            Filter by date range, branch, category, or item name
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -251,6 +264,19 @@ export function CustomerTypeSalesPage({
             </Button>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-2 sm:col-span-2 lg:col-span-4">
+              <Label htmlFor={`${customerType}-item-search`}>Item name</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id={`${customerType}-item-search`}
+                  className="pl-9"
+                  placeholder="Search product name…"
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor={`${customerType}-from`}>From</Label>
               <Input

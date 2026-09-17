@@ -27,9 +27,11 @@ import { paymentMethodName } from "@/lib/payment-methods";
 import {
   getPosSale,
   resolveSalePaymentDrafts,
+  updatePosSaleDate,
   updatePosSalePayments,
 } from "@/lib/firestore/pos-sales";
 import { formatCurrency } from "@/lib/format";
+import { toDateInputValue } from "@/lib/dates";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   POS_PAYMENT_KINDS,
@@ -133,6 +135,7 @@ export function EditSalePaymentDialog({
   const [saleDrafts, setSaleDrafts] = useState<PosCheckoutPaymentLine[]>([]);
   const [editByItem, setEditByItem] = useState(false);
   const [lineEditor, setLineEditor] = useState<LineEditor | null>(null);
+  const [saleDate, setSaleDate] = useState("");
 
   const invoice = sale ?? loaded;
 
@@ -144,6 +147,7 @@ export function EditSalePaymentDialog({
       setItemDrafts([]);
       setSaleDrafts([]);
       setLineEditor(null);
+      setSaleDate("");
       return;
     }
 
@@ -165,6 +169,7 @@ export function EditSalePaymentDialog({
       setAccounts(accountRows);
       setTenderMethods(methodRows);
       setLoaded(row);
+      setSaleDate(toDateInputValue(row.createdAt));
       setEditByItem(shouldEditSalePaymentsByItem(row));
       setItemDrafts(buildItemDrafts(row));
       setSaleDrafts(
@@ -306,10 +311,29 @@ export function EditSalePaymentDialog({
   };
 
   const handleSave = async () => {
-    if (!invoice || !balanced) return;
+    if (!invoice) return;
+    const originalDate = toDateInputValue(invoice.createdAt);
+    const dateChanged = Boolean(saleDate) && saleDate !== originalDate;
+    const noPaymentDue = amountDue <= 0.01;
+
+    if (!noPaymentDue && !balanced) return;
+
     setSaving(true);
     try {
       const original = invoice;
+
+      if (noPaymentDue) {
+        if (!dateChanged) {
+          toast.message("No changes to save");
+          return;
+        }
+        const updated = await updatePosSaleDate(original.id, saleDate);
+        toast.success("Sale date updated");
+        onUpdated?.(updated);
+        onOpenChange(false);
+        return;
+      }
+
       let payments;
       let items = original.items;
 
@@ -354,14 +378,15 @@ export function EditSalePaymentDialog({
       const updated = await updatePosSalePayments(original.id, {
         payments,
         items: editByItem ? items : undefined,
+        saleDate: dateChanged ? saleDate : undefined,
       });
-      toast.success("Payment updated");
+      toast.success(dateChanged ? "Sale updated" : "Payment updated");
       onUpdated?.(updated);
       onOpenChange(false);
     } catch (error) {
       console.error(error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to update payment"
+        error instanceof Error ? error.message : "Failed to update sale"
       );
     } finally {
       setSaving(false);
@@ -486,7 +511,7 @@ export function EditSalePaymentDialog({
               ? lineEditor.payId
                 ? "Edit payment"
                 : "Add payment"
-              : "Edit payment"}
+              : "Edit sale"}
           </DialogTitle>
           <DialogDescription>
             {lineEditor && invoice
@@ -495,7 +520,7 @@ export function EditSalePaymentDialog({
                 : `${invoice.items[lineEditor.scope]?.quantity ?? ""}× ${
                     invoice.items[lineEditor.scope]?.productName ?? "Item"
                   }`
-              : "Correct tender methods and accounts. Receipt totals stay the same."}
+              : "Change the sale date or correct tender methods. Totals stay the same."}
           </DialogDescription>
         </DialogHeader>
 
@@ -503,16 +528,11 @@ export function EditSalePaymentDialog({
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading payment…
+              Loading sale…
             </div>
           ) : !invoice ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
               No sale selected.
-            </p>
-          ) : amountDue <= 0.01 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              This receipt was fully covered by a voucher. There is no payment
-              to edit.
             </p>
           ) : lineEditor && editorDraft ? (
             <div className="space-y-3">
@@ -703,6 +723,28 @@ export function EditSalePaymentDialog({
             </div>
           ) : (
             <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-sale-date">Sale date</Label>
+                <Input
+                  id="edit-sale-date"
+                  type="date"
+                  value={saleDate}
+                  max={toDateInputValue()}
+                  disabled={saving}
+                  onChange={(e) => setSaleDate(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Controls which daily sales report this receipt appears on.
+                </p>
+              </div>
+
+              {amountDue <= 0.01 ? (
+                <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                  This receipt was fully covered by a voucher. You can still
+                  change the sale date above.
+                </p>
+              ) : (
+                <>
               <div className="grid grid-cols-3 gap-2 rounded-md border bg-muted/20 p-2 text-[11px]">
                 <div>
                   <p className="text-muted-foreground">Amount due</p>
@@ -767,6 +809,8 @@ export function EditSalePaymentDialog({
               ) : (
                 renderPaymentList("sale", saleDrafts, amountDue, remaining)
               )}
+                </>
+              )}
             </div>
           )}
         </div>
@@ -802,7 +846,13 @@ export function EditSalePaymentDialog({
               </Button>
               <Button
                 type="button"
-                disabled={saving || loading || !invoice || !balanced}
+                disabled={
+                  saving ||
+                  loading ||
+                  !invoice ||
+                  !saleDate ||
+                  (amountDue > 0.01 && !balanced)
+                }
                 onClick={() => void handleSave()}
               >
                 {saving ? (
@@ -832,8 +882,6 @@ export function EditSalePaymentButton({
   const { isElevatedAdmin } = useBranchAccess();
   const [open, setOpen] = useState(false);
   const canOpen = Boolean(sale || saleId);
-  const amountDue = sale ? saleAmountDue(sale) : null;
-  const noPayment = amountDue != null && amountDue <= 0.01;
 
   if (!isElevatedAdmin) return null;
 
@@ -843,12 +891,12 @@ export function EditSalePaymentButton({
         type="button"
         variant="ghost"
         size="icon"
-        disabled={disabled || !canOpen || noPayment}
+        disabled={disabled || !canOpen}
         onClick={() => setOpen(true)}
-        title={noPayment ? "No payment to edit" : "Edit payment"}
+        title="Edit sale"
       >
         <Pencil className="h-4 w-4" />
-        <span className="sr-only">Edit payment</span>
+        <span className="sr-only">Edit sale</span>
       </Button>
       <EditSalePaymentDialog
         sale={sale ?? null}

@@ -493,6 +493,24 @@ export interface Reseller {
   updatedAt: Date;
 }
 
+/** Customer loyalty card / membership profile. */
+export interface LoyaltyCard {
+  id: string;
+  name: string;
+  /** Local calendar date `YYYY-MM-DD`. */
+  birthDate: string | null;
+  address: string | null;
+  contact: string | null;
+  emergencyContactName: string | null;
+  emergencyContactNumber: string | null;
+  /** Free-text household / family notes. */
+  familyInfo: string | null;
+  email: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export type VoucherStatus = "active" | "depleted" | "void";
 
 /** How the voucher reduces the cart total. */

@@ -31,6 +31,7 @@ import type {
   ProductVariant,
   Reseller,
   ResellerTransfer,
+  LoyaltyCard,
   SupplierStockIn,
   Vendor,
   Voucher,
@@ -995,6 +996,50 @@ export const resellerConverter: FirestoreDataConverter<Reseller> = {
       email: data.email ?? null,
       address: data.address ?? null,
       notes: data.notes ?? null,
+      isActive: data.isActive !== false,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
+    };
+  },
+};
+
+export const loyaltyCardConverter: FirestoreDataConverter<LoyaltyCard> = {
+  toFirestore(card: LoyaltyCard): DocumentData {
+    return {
+      name: card.name,
+      birthDate: card.birthDate,
+      address: card.address,
+      contact: card.contact,
+      emergencyContactName: card.emergencyContactName,
+      emergencyContactNumber: card.emergencyContactNumber,
+      familyInfo: card.familyInfo,
+      email: card.email,
+      isActive: card.isActive,
+      createdAt: card.createdAt,
+      updatedAt: card.updatedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): LoyaltyCard {
+    const data = snapshot.data(options);
+    const birthDate =
+      typeof data.birthDate === "string" && data.birthDate.trim()
+        ? data.birthDate.trim()
+        : data.birthDate instanceof Timestamp
+          ? data.birthDate.toDate().toISOString().slice(0, 10)
+          : null;
+    return {
+      id: snapshot.id,
+      name: data.name ?? "",
+      birthDate,
+      address: data.address ?? null,
+      contact: data.contact ?? null,
+      emergencyContactName: data.emergencyContactName ?? null,
+      emergencyContactNumber: data.emergencyContactNumber ?? null,
+      familyInfo: data.familyInfo ?? null,
+      email: data.email ?? null,
       isActive: data.isActive !== false,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),

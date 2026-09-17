@@ -17,7 +17,7 @@ import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { posSaleConverter } from "@/lib/firestore/converters";
 import { inventoryDocId } from "@/lib/firestore/inventory";
-import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
+import { endOfLocalDay, saleCreatedAtForDateEdit, startOfLocalDay, toDateInputValue } from "@/lib/dates";
 import { isVoucherRedeemable } from "@/lib/firestore/vouchers";
 import {
   isNonRevenueCustomerType,
@@ -626,6 +626,8 @@ function itemsUnchangedForPaymentEdit(
 export interface UpdatePosSalePaymentsInput {
   payments: PosPaymentLine[];
   items?: PosSaleItem[];
+  /** Local `YYYY-MM-DD` — moves the sale onto that day's sales report. */
+  saleDate?: string | null;
 }
 
 /** Admin-only correction of tender methods / accounts. Totals stay the same. */
@@ -731,11 +733,56 @@ export async function updatePosSalePayments(
       note: null,
     }));
 
-  await updateDoc(doc(getClientDb(), COLLECTIONS.posSales, saleId), {
+  const patch: Record<string, unknown> = {
     payments,
     tenderMethod: primary?.tenderMethod ?? existing.tenderMethod,
     paymentAccount: primary?.paymentAccount ?? null,
     items: nextItems,
+  };
+
+  if (input.saleDate != null && input.saleDate !== "") {
+    const nextCreatedAt = saleCreatedAtForDateEdit(
+      input.saleDate,
+      existing.createdAt
+    );
+    if (toDateInputValue(existing.createdAt) !== input.saleDate) {
+      patch.createdAt = Timestamp.fromDate(nextCreatedAt);
+    }
+  }
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.posSales, saleId), patch);
+
+  const updated = await getPosSale(saleId);
+  if (!updated) {
+    throw new Error("Sale not found after update");
+  }
+  return updated;
+}
+
+/** Move a sale onto another calendar day for daily sales reports. */
+export async function updatePosSaleDate(
+  saleId: string,
+  saleDate: string
+): Promise<PosSale> {
+  const existing = await getPosSale(saleId);
+  if (!existing) {
+    throw new Error("Sale not found");
+  }
+  if (isPosSaleArchived(existing)) {
+    throw new Error("Archived sales cannot be edited");
+  }
+
+  if (toDateInputValue(existing.createdAt) === saleDate) {
+    return existing;
+  }
+
+  const nextCreatedAt = saleCreatedAtForDateEdit(
+    saleDate,
+    existing.createdAt
+  );
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.posSales, saleId), {
+    createdAt: Timestamp.fromDate(nextCreatedAt),
   });
 
   const updated = await getPosSale(saleId);

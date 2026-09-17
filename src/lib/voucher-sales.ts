@@ -10,6 +10,18 @@ export function formatSaleItemsSummary(
     .join(", ");
 }
 
+/** True when any line item product name matches the search query. */
+export function saleMatchesItemNameSearch(
+  sale: Pick<PosSale, "items">,
+  query: string
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (sale.items ?? []).some((item) =>
+    item.productName.toLowerCase().includes(q)
+  );
+}
+
 export function voucherSaleCustomerName(
   sale: Pick<PosSale, "customer">
 ): string {

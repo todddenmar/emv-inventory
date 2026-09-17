@@ -40,6 +40,41 @@ export function saleCreatedAtForDate(
   return dated > end ? end : dated;
 }
 
+/**
+ * Move an existing sale onto `saleDate`, keeping its original clock time when
+ * backdating. Rejects future calendar days.
+ */
+export function saleCreatedAtForDateEdit(
+  saleDate: string,
+  previousCreatedAt: Date,
+  now: Date = new Date()
+): Date {
+  if (!isDateInputValue(saleDate)) {
+    throw new Error("Invalid sale date");
+  }
+  const today = toDateInputValue(now);
+  if (saleDate > today) {
+    throw new Error("Sale date cannot be in the future");
+  }
+  if (saleDate === today) {
+    return toDateInputValue(previousCreatedAt) === today
+      ? previousCreatedAt
+      : now;
+  }
+  const start = startOfLocalDay(saleDate);
+  const dated = new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate(),
+    previousCreatedAt.getHours(),
+    previousCreatedAt.getMinutes(),
+    previousCreatedAt.getSeconds(),
+    previousCreatedAt.getMilliseconds()
+  );
+  const end = endOfLocalDay(saleDate);
+  return dated > end ? end : dated;
+}
+
 /** Local calendar date as `YYYY-MM-DD` for `<input type="date">`. */
 export function toDateInputValue(date: Date = new Date()): string {
   const y = date.getFullYear();

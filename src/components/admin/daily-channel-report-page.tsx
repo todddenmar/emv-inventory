@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Loader2,
   MoreHorizontal,
+  Search,
   ShoppingCart,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -67,7 +68,6 @@ import { getDailyCashRecord } from "@/lib/firestore/daily-cash";
 import { getDailyExpenses } from "@/lib/firestore/daily-expenses";
 import { getPosSales } from "@/lib/firestore/pos-sales";
 import { formatCurrency } from "@/lib/format";
-import { saleAmountDue } from "@/lib/pos-payments";
 import { lockedPosPath } from "@/lib/pos-sale-lock";
 import type {
   Branch,
@@ -107,6 +107,7 @@ function DailyChannelReportInner({
   const [editSaleId, setEditSaleId] = useState<string | null>(null);
   const [invoiceSaleId, setInvoiceSaleId] = useState<string | null>(null);
   const [archiveSaleId, setArchiveSaleId] = useState<string | null>(null);
+  const [itemSearch, setItemSearch] = useState("");
 
   useEffect(() => {
     getBranches(true)
@@ -223,6 +224,11 @@ function DailyChannelReportInner({
     () => flattenDailySalesRows(sales, paymentMethods),
     [sales, paymentMethods]
   );
+  const visibleRows = useMemo(() => {
+    const q = itemSearch.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((row) => row.itemLabel.toLowerCase().includes(q));
+  }, [rows, itemSearch]);
   const cashAddsTotal = isWholesale
     ? 0
     : sumDailyCashAdds(cashRecord?.additions ?? []);
@@ -351,6 +357,19 @@ function DailyChannelReportInner({
               New sale
             </LinkButton>
           ) : null}
+          <div className="flex min-w-0 flex-col gap-2 sm:min-w-[14rem] sm:flex-1">
+            <Label htmlFor={`${dateInputId}-item-search`}>Item name</Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id={`${dateInputId}-item-search`}
+                className="h-8 pl-9"
+                placeholder="Search product name…"
+                value={itemSearch}
+                onChange={(e) => setItemSearch(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -387,27 +406,28 @@ function DailyChannelReportInner({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {rows.length === 0 ? (
+                      {visibleRows.length === 0 ? (
                         <TableRow>
                           <TableCell
                             colSpan={4}
                             className="py-8 text-center text-muted-foreground"
                           >
-                            {isWholesale
-                              ? "No wholesale sales for this day"
-                              : "No sales for this day"}
-                            {newSaleHref ? ". Use New sale to add one." : ""}
+                            {itemSearch.trim()
+                              ? "No items match this search"
+                              : isWholesale
+                                ? "No wholesale sales for this day"
+                                : "No sales for this day"}
+                            {!itemSearch.trim() && newSaleHref
+                              ? ". Use New sale to add one."
+                              : ""}
                           </TableCell>
                         </TableRow>
                       ) : (
-                        rows.map((row) => {
+                        visibleRows.map((row) => {
                           const sale = sales.find(
                             (item) => item.id === row.saleId
                           );
-                          const canEditSale =
-                            isElevatedAdmin &&
-                            sale != null &&
-                            saleAmountDue(sale) > 0.01;
+                          const canEditSale = isElevatedAdmin && sale != null;
                           return (
                             <TableRow key={row.key}>
                               <TableCell className="tabular-nums font-medium">
@@ -533,9 +553,15 @@ function DailyChannelReportInner({
           if (!open) setEditSaleId(null);
         }}
         onUpdated={(updated) => {
-          setSales((prev) =>
-            prev.map((row) => (row.id === updated.id ? updated : row))
-          );
+          const updatedDay = toDateInputValue(updated.createdAt);
+          setSales((prev) => {
+            if (updatedDay !== date) {
+              return prev.filter((row) => row.id !== updated.id);
+            }
+            return prev.map((row) =>
+              row.id === updated.id ? updated : row
+            );
+          });
         }}
       />
       <SaleInvoiceDialog
