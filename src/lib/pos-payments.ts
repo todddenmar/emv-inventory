@@ -561,7 +561,7 @@ export function allocatedPaymentsForCartLines(
 /**
  * Flatten cart payment splits into sale-level payments.
  * Payment amounts on the cart must already equal amountDue (post-voucher),
- * unless `allowUnequalPayments` is set (admin override for partial / past half payments).
+ * unless `allowUnequalPayments` is set (override for partial / past half payments).
  */
 export function resolvePaymentsFromCartLines(
   lines: CartLineForPayment[],

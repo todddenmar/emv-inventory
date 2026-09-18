@@ -23,6 +23,24 @@ function recordRef(branchId: string, date: string) {
   ).withConverter(dailyCashRecordConverter);
 }
 
+function serializeCashAdds(
+  rows: Array<DailyCashAdd & { createdAt?: Date | Timestamp }>
+) {
+  return rows.map((row) => ({
+    id: row.id,
+    note: row.note,
+    amount: row.amount,
+    createdBy: row.createdBy,
+    createdByName: row.createdByName ?? null,
+    createdAt:
+      row.createdAt instanceof Timestamp
+        ? row.createdAt
+        : row.createdAt instanceof Date
+          ? Timestamp.fromDate(row.createdAt)
+          : Timestamp.now(),
+  }));
+}
+
 export async function getDailyCashRecord(
   branchId: string,
   date: string
@@ -109,6 +127,52 @@ export async function addDailyCashAdd(input: {
   return addId;
 }
 
+export async function updateDailyCashAdd(input: {
+  branchId: string;
+  date: string;
+  addId: string;
+  note: string;
+  amount: number;
+}): Promise<void> {
+  const note = input.note.trim();
+  if (!note) {
+    throw new Error("Cash note is required");
+  }
+  const amount = roundMoney(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Cash amount must be greater than 0");
+  }
+
+  const db = getClientDb();
+  const ref = doc(
+    db,
+    COLLECTIONS.dailyCashRecords,
+    dailyCashRecordId(input.branchId, input.date)
+  );
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) {
+      throw new Error("Cash record not found");
+    }
+    const record = snap.data() as {
+      additions?: Array<DailyCashAdd & { createdAt?: Date | Timestamp }>;
+    };
+    const existing = record.additions ?? [];
+    const index = existing.findIndex((row) => row.id === input.addId);
+    if (index < 0) {
+      throw new Error("Cash entry not found");
+    }
+    const next = existing.map((row, i) =>
+      i === index ? { ...row, note, amount } : row
+    );
+    tx.update(ref, {
+      additions: serializeCashAdds(next),
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
 export async function deleteDailyCashAdd(options: {
   branchId: string;
   date: string;
@@ -131,19 +195,7 @@ export async function deleteDailyCashAdd(options: {
       (row) => row.id !== options.addId
     );
     tx.update(ref, {
-      additions: remaining.map((row) => ({
-        id: row.id,
-        note: row.note,
-        amount: row.amount,
-        createdBy: row.createdBy,
-        createdByName: row.createdByName ?? null,
-        createdAt:
-          row.createdAt instanceof Timestamp
-            ? row.createdAt
-            : row.createdAt instanceof Date
-              ? Timestamp.fromDate(row.createdAt)
-              : Timestamp.now(),
-      })),
+      additions: serializeCashAdds(remaining),
       updatedAt: serverTimestamp(),
     });
   });

@@ -74,7 +74,7 @@ export interface CompletePosSaleInput {
   /** When set, the sale is dated to this instant instead of the server time. */
   soldAt?: Date | null;
   /**
-   * Admin override: allow payment amounts that do not equal amount due
+   * Allow payment amounts that do not equal amount due
    * (e.g. half-paid / partial receipts).
    */
   allowUnequalPayments?: boolean;
@@ -636,7 +636,7 @@ export interface UpdatePosSalePaymentsInput {
   /** Local `YYYY-MM-DD` — moves the sale onto that day's sales report. */
   saleDate?: string | null;
   /**
-   * Admin override: keep partial / half payments that do not equal amount due.
+   * Keep partial / half payments that do not equal amount due.
    */
   allowUnequalPayments?: boolean;
 }

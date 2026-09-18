@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,13 +14,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { addDailyCashAdd, deleteDailyCashAdd } from "@/lib/firestore/daily-cash";
+import {
+  addDailyCashAdd,
+  deleteDailyCashAdd,
+  updateDailyCashAdd,
+} from "@/lib/firestore/daily-cash";
 import {
   addDailyExpense,
   deleteDailyExpense,
 } from "@/lib/firestore/daily-expenses";
 import { formatCurrency } from "@/lib/format";
-import { parseMoneyInput } from "@/lib/pos-payments";
+import { moneyInputText, parseMoneyInput } from "@/lib/pos-payments";
 import { useAuthStore } from "@/stores/auth-store";
 import type { DailyCashRecord, DailyExpense } from "@/types";
 import type { DailySalesReportSummary } from "@/lib/daily-sales-report";
@@ -35,12 +39,14 @@ export function NamedAmountList({
   emptyLabel,
   deletingId,
   amountClassName,
+  onEdit,
   onDelete,
 }: {
   items: Array<{ id: string; label: string; amount: number }>;
   emptyLabel: string;
   deletingId?: string | null;
   amountClassName?: string;
+  onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
   if (items.length === 0) {
@@ -62,22 +68,37 @@ export function NamedAmountList({
               {formatCurrency(item.amount)}
             </p>
           </div>
-          {onDelete ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="shrink-0"
-              disabled={deletingId === item.id}
-              onClick={() => onDelete(item.id)}
-              aria-label={`Delete ${item.label}`}
-            >
-              {deletingId === item.id ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Trash2 className="size-4" />
-              )}
-            </Button>
+          {onEdit || onDelete ? (
+            <div className="flex shrink-0 items-center gap-0.5">
+              {onEdit ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  disabled={deletingId === item.id}
+                  onClick={() => onEdit(item.id)}
+                  aria-label={`Edit ${item.label}`}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+              ) : null}
+              {onDelete ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  disabled={deletingId === item.id}
+                  onClick={() => onDelete(item.id)}
+                  aria-label={`Delete ${item.label}`}
+                >
+                  {deletingId === item.id ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-4" />
+                  )}
+                </Button>
+              ) : null}
+            </div>
           ) : null}
         </li>
       ))}
@@ -109,6 +130,7 @@ export function DailyCashExpenseControls({
   const [expenseAmountText, setExpenseAmountText] = useState("");
   const [cashAddNote, setCashAddNote] = useState("");
   const [cashAddAmountText, setCashAddAmountText] = useState("");
+  const [editingCashAddId, setEditingCashAddId] = useState<string | null>(null);
   const [savingExpense, setSavingExpense] = useState(false);
   const [savingCashAdd, setSavingCashAdd] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -117,6 +139,12 @@ export function DailyCashExpenseControls({
   );
 
   const canAct = Boolean(branchId && branchName && user);
+
+  const resetCashAddForm = () => {
+    setCashAddNote("");
+    setCashAddAmountText("");
+    setEditingCashAddId(null);
+  };
 
   const handleAddExpense = async () => {
     if (!branchId || !user) return;
@@ -169,7 +197,15 @@ export function DailyCashExpenseControls({
     }
   };
 
-  const handleAddCash = async () => {
+  const startEditCashAdd = (addId: string) => {
+    const row = cashRecord?.additions.find((add) => add.id === addId);
+    if (!row) return;
+    setEditingCashAddId(row.id);
+    setCashAddNote(row.note);
+    setCashAddAmountText(moneyInputText(row.amount));
+  };
+
+  const handleSaveCashAdd = async () => {
     if (!branchId || !user) return;
     const amount = parseMoneyInput(cashAddAmountText);
     if (!cashAddNote.trim()) {
@@ -183,23 +219,37 @@ export function DailyCashExpenseControls({
 
     setSavingCashAdd(true);
     try {
-      await addDailyCashAdd({
-        branchId,
-        branchName,
-        date,
-        note: cashAddNote,
-        amount,
-        createdBy: user.uid,
-        createdByName: user.displayName,
-      });
-      setCashAddNote("");
-      setCashAddAmountText("");
-      toast.success("Cash added");
+      if (editingCashAddId) {
+        await updateDailyCashAdd({
+          branchId,
+          date,
+          addId: editingCashAddId,
+          note: cashAddNote,
+          amount,
+        });
+        toast.success("Cash entry updated");
+      } else {
+        await addDailyCashAdd({
+          branchId,
+          branchName,
+          date,
+          note: cashAddNote,
+          amount,
+          createdBy: user.uid,
+          createdByName: user.displayName,
+        });
+        toast.success("Cash added");
+      }
+      resetCashAddForm();
       await onReload();
     } catch (error) {
       console.error(error);
       toast.error(
-        error instanceof Error ? error.message : "Failed to add cash"
+        error instanceof Error
+          ? error.message
+          : editingCashAddId
+            ? "Failed to update cash entry"
+            : "Failed to add cash"
       );
     } finally {
       setSavingCashAdd(false);
@@ -215,6 +265,9 @@ export function DailyCashExpenseControls({
         date,
         addId,
       });
+      if (editingCashAddId === addId) {
+        resetCashAddForm();
+      }
       toast.success("Cash entry removed");
       await onReload();
     } catch (error) {
@@ -239,7 +292,10 @@ export function DailyCashExpenseControls({
         <Button
           type="button"
           variant="outline"
-          onClick={() => setCashDialogOpen(true)}
+          onClick={() => {
+            resetCashAddForm();
+            setCashDialogOpen(true);
+          }}
           disabled={!canAct}
         >
           <Plus className="size-4" />
@@ -312,12 +368,18 @@ export function DailyCashExpenseControls({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={cashDialogOpen} onOpenChange={setCashDialogOpen}>
+      <Dialog
+        open={cashDialogOpen}
+        onOpenChange={(open) => {
+          setCashDialogOpen(open);
+          if (!open) resetCashAddForm();
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Set daily cash record</DialogTitle>
             <DialogDescription>
-              Add extra cash for this branch and day.
+              Add, edit, or remove extra cash for this branch and day.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -338,6 +400,7 @@ export function DailyCashExpenseControls({
                 emptyLabel="No extra cash yet"
                 deletingId={deletingCashAddId}
                 amountClassName="text-emerald-700"
+                onEdit={startEditCashAdd}
                 onDelete={(id) => void handleDeleteCashAdd(id)}
               />
               <div className="grid gap-2 sm:grid-cols-[1fr_7rem]">
@@ -357,27 +420,41 @@ export function DailyCashExpenseControls({
                   disabled={savingCashAdd || !canAct}
                 />
               </div>
+              {editingCashAddId ? (
+                <p className="text-xs text-muted-foreground">
+                  Editing this entry. Save to update, or cancel to add a new
+                  one instead.
+                </p>
+              ) : null}
             </div>
           </div>
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              onClick={() => setCashDialogOpen(false)}
+              onClick={() => {
+                if (editingCashAddId) {
+                  resetCashAddForm();
+                  return;
+                }
+                setCashDialogOpen(false);
+              }}
             >
-              Close
+              {editingCashAddId ? "Cancel edit" : "Close"}
             </Button>
             <Button
               type="button"
-              onClick={() => void handleAddCash()}
+              onClick={() => void handleSaveCashAdd()}
               disabled={savingCashAdd || !canAct}
             >
               {savingCashAdd ? (
                 <Loader2 className="size-4 animate-spin" />
+              ) : editingCashAddId ? (
+                <Pencil className="size-4" />
               ) : (
                 <Plus className="size-4" />
               )}
-              Add
+              {editingCashAddId ? "Save" : "Add"}
             </Button>
           </DialogFooter>
         </DialogContent>

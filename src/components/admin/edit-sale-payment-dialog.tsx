@@ -128,7 +128,6 @@ export function EditSalePaymentDialog({
   onOpenChange: (open: boolean) => void;
   onUpdated?: (sale: PosSale) => void;
 }) {
-  const { isElevatedAdmin } = useBranchAccess();
   const [loaded, setLoaded] = useState<PosSale | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -240,7 +239,7 @@ export function EditSalePaymentDialog({
           itemPaymentsCoverLineTotal(row.payments, row.targetAmount)
         )
       : true);
-  const canSaveUnequal = isElevatedAdmin && allowUnequalPayments;
+  const canSaveUnequal = allowUnequalPayments;
   const paymentsAcceptable = balanced || canSaveUnequal;
 
   const editorDraft = lineEditor?.draft ?? null;
@@ -836,7 +835,7 @@ export function EditSalePaymentDialog({
                 renderPaymentList("sale", saleDrafts, amountDue, remaining)
               )}
 
-              {isElevatedAdmin ? (
+              {amountDue > 0.01 ? (
                 <label className="flex items-start gap-3 rounded-md border p-3">
                   <Checkbox
                     checked={allowUnequalPayments}

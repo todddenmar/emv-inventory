@@ -31,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useBranchAccess } from "@/hooks/use-branch-access";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
@@ -729,7 +728,6 @@ export function PosCheckoutDialog({
   paymentGroups: paymentGroupsProp,
   onPaymentGroupsChange,
 }: PosCheckoutDialogProps) {
-  const { isElevatedAdmin } = useBranchAccess();
   const prefersDrawer = usePrefersDrawer();
   const isWholesale = saleChannel === "wholesale";
   const isPage = layout === "page";
@@ -823,7 +821,7 @@ export function PosCheckoutDialog({
           (pay) => !Number.isFinite(pay.amount) || pay.amount <= 0
         )
     );
-  const canOverrideUnequal = isElevatedAdmin && allowUnequalPayments;
+  const canOverrideUnequal = allowUnequalPayments;
   const paymentsBlockProgress =
     (unbalancedItemPayments && !canOverrideUnequal) ||
     invalidItemPaymentAmount;
@@ -1578,7 +1576,7 @@ export function PosCheckoutDialog({
                   </p>
                 ) : null}
 
-                {isElevatedAdmin && !noCharge && amountDue > 0.01 ? (
+                {!noCharge && amountDue > 0.01 ? (
                   <label className="flex items-start gap-3 rounded-md border p-3">
                     <Checkbox
                       checked={allowUnequalPayments}
@@ -1592,8 +1590,7 @@ export function PosCheckoutDialog({
                         Allow payments that don’t equal amount due
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        For half-paid or partial receipts. Cashiers cannot use
-                        this override.
+                        Use for half-paid or partial receipts.
                       </span>
                     </span>
                   </label>
