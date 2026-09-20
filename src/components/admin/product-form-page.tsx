@@ -59,6 +59,7 @@ import {
   uploadProductImage,
 } from "@/lib/storage/products";
 import { normalizeImageOrder } from "@/lib/products";
+import { normalizeRetailPrice } from "@/lib/product-pricing";
 import { canPublishProduct, productStatusLabel } from "@/lib/products-catalog";
 import { formatProductTags, parseProductTags } from "@/lib/product-tags";
 import { slugify } from "@/lib/slug";
@@ -349,16 +350,41 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
 
       const variantIds = new Set(variants.map((variant) => variant.id));
       const priceWrites: Array<Promise<void>> = [];
+
+      // Clearing catalog retail must clear branch retail overrides so POS
+      // shows no retail price instead of a sticky per-branch value.
+      const inventoryRows = await getInventoryForProduct(productId);
+      for (const row of inventoryRows) {
+        const catalog = variants.find((variant) => variant.id === row.variantId);
+        if (!catalog || normalizeRetailPrice(catalog.retailPrice) != null) {
+          continue;
+        }
+        if (row.retailPrice == null) continue;
+        priceWrites.push(
+          setBranchVariantPrices({
+            branchId: row.branchId,
+            productId,
+            variantId: row.variantId,
+            retailPrice: null,
+          })
+        );
+      }
+
       for (const [branchId, byVariant] of Object.entries(branchPrices)) {
         for (const [variantId, prices] of Object.entries(byVariant)) {
           if (!variantIds.has(variantId)) continue;
+          const catalog = variants.find((variant) => variant.id === variantId);
+          const retailPrice =
+            catalog && normalizeRetailPrice(catalog.retailPrice) == null
+              ? null
+              : prices.retailPrice;
           priceWrites.push(
             setBranchVariantPrices({
               branchId,
               productId,
               variantId,
               cashPrice: prices.cashPrice,
-              retailPrice: prices.retailPrice,
+              retailPrice,
             })
           );
         }
@@ -593,7 +619,26 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           variants={variants}
           options={options}
           images={galleryImages}
-          onChange={setVariants}
+          onChange={(next) => {
+            setVariants(next);
+            setBranchPrices((prev) => {
+              let changed = false;
+              const updated: BranchPriceOverrides = { ...prev };
+              for (const variant of next) {
+                if (normalizeRetailPrice(variant.retailPrice) != null) continue;
+                for (const branchId of Object.keys(updated)) {
+                  const entry = updated[branchId]?.[variant.id];
+                  if (entry == null || entry.retailPrice == null) continue;
+                  changed = true;
+                  updated[branchId] = {
+                    ...updated[branchId],
+                    [variant.id]: { ...entry, retailPrice: null },
+                  };
+                }
+              }
+              return changed ? updated : prev;
+            });
+          }}
           disabled={saving || publishing}
           branches={branches}
           priceScope={priceScope}

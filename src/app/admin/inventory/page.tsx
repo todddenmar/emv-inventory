@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { History, Loader2, MoreHorizontal, AlertTriangle } from "lucide-react";
+import { History, AlertTriangle, MoreHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -12,12 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -28,6 +23,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Table,
   TableBody,
   TableCell,
@@ -36,11 +37,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   InventoryAdjustmentHistorySheet,
   type AdjustmentHistoryTarget,
 } from "@/components/admin/inventory-adjustment-history-sheet";
 import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
-import { StockChangePopover } from "@/components/admin/stock-change-popover";
+import {
+  StockChangePopover,
+  computeNextStock,
+  type StockChangeMode,
+} from "@/components/admin/stock-change-popover";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { productIdsForCategoryFilter } from "@/lib/category-filters";
@@ -53,12 +64,15 @@ import {
 import { getProducts } from "@/lib/firestore/products";
 import { getCategories } from "@/lib/firestore/categories";
 import { getCategoryGroups } from "@/lib/firestore/category-groups";
-import { getCatalogImageUrl, showCatalogImages } from "@/lib/products";
-import { mergeSellingVariantsWithInventory, getLowStockVariants } from "@/lib/inventory";
-import { useAppSettings } from "@/hooks/use-app-settings";
+import {
+  mergeSellingVariantsWithInventory,
+  getLowStockVariants,
+  type VariantWithStock,
+} from "@/lib/inventory";
 import { formatCurrency } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
 import { formatVariantLabel } from "@/lib/product-variants";
+import { summarizeBulkResult } from "@/lib/bulk";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
@@ -71,6 +85,132 @@ import type {
 
 type StockFilter = "all" | "low" | "in_stock" | "out_of_stock";
 
+const INVENTORY_PAGE_SIZE = 20;
+
+function selectedItemLabel(
+  row: VariantWithStock,
+  products: Product[]
+): string {
+  const product = products.find((p) => p.id === row.productId);
+  const variantLabel = formatVariantLabel(row, product?.options ?? []);
+  return variantLabel !== "Default"
+    ? `${row.productName} — ${variantLabel}`
+    : row.productName;
+}
+
+function InventorySelectionPanel({
+  selectedRows,
+  products,
+  saving,
+  onRemove,
+  onClear,
+  onSelectAllVisible,
+  visibleCount,
+  onSaveBulk,
+}: {
+  selectedRows: VariantWithStock[];
+  products: Product[];
+  saving: boolean;
+  onRemove: (id: string) => void;
+  onClear: () => void;
+  onSelectAllVisible: () => void;
+  visibleCount: number;
+  onSaveBulk: (input: {
+    mode: StockChangeMode;
+    amount: number;
+  }) => Promise<boolean>;
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-start justify-between gap-2 border-b px-4 py-3">
+        <div className="min-w-0">
+          <p className="font-semibold">Selected</p>
+          <p className="text-sm text-muted-foreground">
+            {selectedRows.length === 0
+              ? "Select items in the table"
+              : `${selectedRows.length} item${selectedRows.length === 1 ? "" : "s"}`}
+          </p>
+        </div>
+        {selectedRows.length > 0 ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={saving}
+            onClick={onClear}
+          >
+            Clear
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        {selectedRows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No items selected yet.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {selectedRows.map((row) => {
+              const label = selectedItemLabel(row, products);
+              return (
+                <li
+                  key={row.id}
+                  className="flex items-start gap-2 rounded-lg border bg-background px-2.5 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium leading-snug break-words">
+                      {label}
+                    </p>
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                      Stock {row.stock}
+                      {row.sku ? ` · ${row.sku}` : ""}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="size-7 shrink-0"
+                    disabled={saving}
+                    aria-label={`Remove ${label}`}
+                    onClick={() => onRemove(row.id)}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div className="space-y-2 border-t p-4">
+        {selectedRows.length < visibleCount ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={saving || visibleCount === 0}
+            onClick={onSelectAllVisible}
+          >
+            Select all on page ({visibleCount})
+          </Button>
+        ) : null}
+        <StockChangePopover
+          selectedCount={selectedRows.length}
+          saving={saving}
+          disabled={saving || selectedRows.length === 0}
+          triggerLabel="Change stock"
+          triggerClassName="w-full"
+          onSaveBulk={onSaveBulk}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function AdminInventoryPage() {
   const {
     canViewAllBranches,
@@ -79,7 +219,6 @@ export default function AdminInventoryPage() {
     isInventoryViewer,
     assignedBranchId,
   } = useBranchAccess();
-  const { catalogImageSource } = useAppSettings();
   const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -88,10 +227,12 @@ export default function AdminInventoryPage() {
   const [inventory, setInventory] = useState<BranchInventory[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectionSheetOpen, setSelectionSheetOpen] = useState(false);
   const [historyTarget, setHistoryTarget] =
     useState<AdjustmentHistoryTarget | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -183,6 +324,7 @@ export default function AdminInventoryPage() {
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds([]);
   }, [search, selectedCategoryIds, stockFilter, activeBranchId]);
 
   const {
@@ -191,13 +333,42 @@ export default function AdminInventoryPage() {
     pagedItems,
     total,
   } = useMemo(
-    () => paginateItems(filteredVariants, page),
+    () => paginateItems(filteredVariants, page, INVENTORY_PAGE_SIZE),
     [filteredVariants, page]
   );
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+
+  const pageIds = pagedItems.map((row) => row.id);
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.includes(id));
+
+  const selectedRows = useMemo(() => {
+    const byId = new Map(variantsWithStock.map((row) => [row.id, row]));
+    return selectedIds
+      .map((id) => byId.get(id))
+      .filter((row): row is VariantWithStock => row != null);
+  }, [selectedIds, variantsWithStock]);
+
+  const toggleSelected = (id: string) => {
+    if (!canEditStock) return;
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds((prev) => [...new Set([...prev, ...pageIds])]);
+  };
+
+  const deselectPage = () => {
+    setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+  };
+
+  const clearSelection = () => setSelectedIds([]);
 
   const lowStock = getLowStockVariants(variantsWithStock);
   const activeBranch = branches.find((b) => b.id === activeBranchId);
@@ -242,43 +413,88 @@ export default function AdminInventoryPage() {
   const saveStock = async (
     variantId: string,
     productId: string,
-    stock: number
+    stock: number,
+    options?: { silent?: boolean }
   ): Promise<boolean> => {
     if (!canEditStock) return false;
     if (!activeBranchId || activeBranchId === "all") return false;
     const row = variantsWithStock.find((v) => v.id === variantId);
     if (!row) return false;
     if (!Number.isFinite(stock) || stock < 0) {
-      toast.error("Stock must be zero or greater");
+      if (!options?.silent) toast.error("Stock must be zero or greater");
       return false;
     }
     if (stock === row.stock) return false;
 
-    setSavingId(variantId);
+    const product = products.find((p) => p.id === productId);
+    const label = `${row.productName} — ${formatVariantLabel(row, product?.options ?? [])}`;
+    await setBranchStockWithLog(
+      activeBranchId,
+      productId,
+      variantId,
+      stock,
+      row.lowStockThreshold,
+      {
+        productName: label,
+        branchName: activeBranch?.name ?? null,
+        performedBy: user?.uid ?? "unknown",
+        performedByName: user?.displayName ?? user?.email ?? null,
+      }
+    );
+    return true;
+  };
+
+  const saveBulkStock = async (input: {
+    mode: StockChangeMode;
+    amount: number;
+  }): Promise<boolean> => {
+    if (!canEditStock || selectedIds.length === 0) return false;
+    if (!activeBranchId || activeBranchId === "all") return false;
+
+    setSaving(true);
     try {
-      const product = products.find((p) => p.id === productId);
-      const label = `${row.productName} — ${formatVariantLabel(row, product?.options ?? [])}`;
-      await setBranchStockWithLog(
-        activeBranchId,
-        productId,
-        variantId,
-        stock,
-        row.lowStockThreshold,
-        {
-          productName: label,
-          branchName: activeBranch?.name ?? null,
-          performedBy: user?.uid ?? "unknown",
-          performedByName: user?.displayName ?? user?.email ?? null,
+      let ok = 0;
+      let skipped = 0;
+      const messages: string[] = [];
+
+      for (const id of selectedIds) {
+        const row = variantsWithStock.find((v) => v.id === id);
+        if (!row) {
+          messages.push("Item not found");
+          continue;
         }
-      );
-      toast.success("Stock saved");
+        const next = computeNextStock(row.stock, input.mode, input.amount);
+        if (next === row.stock) {
+          skipped += 1;
+          continue;
+        }
+        try {
+          const saved = await saveStock(row.id, row.productId, next, {
+            silent: true,
+          });
+          if (saved) ok += 1;
+          else messages.push(`${row.productName}: unchanged`);
+        } catch (error) {
+          messages.push(
+            error instanceof Error ? error.message : `${row.productName}: failed`
+          );
+        }
+      }
+
       await loadInventory(activeBranchId);
-      return true;
-    } catch {
-      toast.error("Failed to save stock");
-      return false;
+      const summary = summarizeBulkResult(
+        { ok, failed: messages.length, messages },
+        "updated"
+      );
+      if (summary.success) toast.success(summary.success);
+      else if (skipped > 0 && ok === 0 && messages.length === 0) {
+        toast.message("No stock changes needed");
+      }
+      if (summary.error) toast.error(summary.error);
+      if (ok > 0) clearSelection();
+      return ok > 0;
     } finally {
-      setSavingId(null);
+      setSaving(false);
     }
   };
 
@@ -307,7 +523,7 @@ export default function AdminInventoryPage() {
             {canViewAllBranches
               ? isOwner
                 ? "View stock levels across branches"
-                : "Stock levels across branches"
+                : "Select items, then change stock for all selected"
               : `Stock for ${activeBranch?.name ?? "your branch"}`}
           </p>
         </div>
@@ -401,14 +617,25 @@ export default function AdminInventoryPage() {
             <CardHeader>
               <CardTitle>{activeBranch?.name} stock</CardTitle>
               <CardDescription>
-                Stock for variants this branch sells. Low-at thresholds come from{" "}
-                <Link href="/admin/categories" className="underline underline-offset-2">
+                {canEditStock
+                  ? "Select items in the table, then change stock for the whole selection."
+                  : "Stock for variants this branch sells."}{" "}
+                Low-at thresholds come from{" "}
+                <Link
+                  href="/admin/categories"
+                  className="underline underline-offset-2"
+                >
                   categories
                 </Link>
                 .{" "}
-                <Link href="/admin/settings/assortment" className="underline underline-offset-2">
-                  Manage assortment
-                </Link>
+                {!isOwner && !isInventoryViewer ? (
+                  <Link
+                    href="/admin/settings/assortment"
+                    className="underline underline-offset-2"
+                  >
+                    Manage assortment
+                  </Link>
+                ) : null}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -445,210 +672,321 @@ export default function AdminInventoryPage() {
                 </Select>
               </div>
 
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product / variant</TableHead>
-                      <TableHead className="w-28">SKU</TableHead>
-                      <TableHead className="w-28">Cash</TableHead>
-                      <TableHead className="w-28">Retail</TableHead>
-                      <TableHead className="w-28">Stock</TableHead>
-                      <TableHead className="w-28">Low at</TableHead>
-                      <TableHead className="w-14 text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredVariants.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={7}
-                          className="py-8 text-center text-muted-foreground"
-                        >
-                          {variantsWithStock.length === 0 ? (
-                            isOwner || isInventoryViewer ? (
-                              "No selling variants for this branch."
-                            ) : (
-                              <>
-                                No selling variants for this branch.{" "}
-                                <Link
-                                  href="/admin/settings/assortment"
-                                  className="underline underline-offset-2"
-                                >
-                                  Assign variants in Branch assortment
-                                </Link>
-                                .
-                              </>
-                            )
-                          ) : (
-                            "No variants match your filters."
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                    pagedItems.map((row) => {
-                      const product = products.find((p) => p.id === row.productId);
-                      const showImages = showCatalogImages(catalogImageSource);
-                      const thumb =
-                        product && showImages
-                          ? getCatalogImageUrl(product, row, catalogImageSource)
-                          : null;
-                      const isLow = isLowStockRow(row);
-                      const variantLabel = formatVariantLabel(
-                        row,
-                        product?.options ?? []
-                      );
-
-                      return (
-                        <TableRow key={row.id}>
-                          <TableCell>
-                            <div className="flex min-w-[220px] items-center gap-3">
-                              {showImages ? (
-                                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
-                                  {thumb ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={thumb}
-                                      alt=""
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : null}
-                                </div>
-                              ) : null}
-                              <div>
-                                <Link
-                                  href={`/admin/products/${row.productId}`}
-                                  className="font-medium hover:underline"
-                                >
-                                  {row.productName}
-                                </Link>
-                                {variantLabel !== "Default" && (
-                                  <p className="text-sm text-muted-foreground">
-                                    {variantLabel}
-                                  </p>
-                                )}
-                                {row.categoryIds.length > 0 && (
-                                  <div className="mt-1 flex flex-wrap gap-1">
-                                    {row.categoryIds.map((id) =>
-                                      categoryMap[id] ? (
-                                        <Link
-                                          key={id}
-                                          href={`/admin/categories/${id}`}
-                                        >
-                                          <Badge
-                                            variant="secondary"
-                                            className="text-xs"
-                                          >
-                                            {categoryMap[id].name}
-                                          </Badge>
-                                        </Link>
-                                      ) : null
-                                    )}
-                                  </div>
-                                )}
-                                {isLow && (
-                                  <Badge
-                                    variant="outline"
-                                    className="mt-1 text-xs text-amber-700"
-                                  >
-                                    Low stock
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {row.sku || "—"}
-                          </TableCell>
-                          <TableCell className="tabular-nums">
-                            {formatCurrency(row.price)}
-                          </TableCell>
-                          <TableCell className="tabular-nums text-muted-foreground">
-                            {row.retailPrice != null
-                              ? formatCurrency(row.retailPrice)
-                              : "—"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={cn(
-                                  "min-w-8 tabular-nums font-medium",
-                                  isLow && "text-amber-700"
-                                )}
-                              >
-                                {row.stock}
-                              </span>
-                              {canEditStock ? (
-                                <StockChangePopover
-                                  previousStock={row.stock}
-                                  saving={savingId === row.id}
-                                  disabled={
-                                    savingId != null && savingId !== row.id
+              <div
+                className={cn(
+                  "gap-4",
+                  canEditStock
+                    ? "flex flex-col lg:flex-row lg:items-start"
+                    : "block"
+                )}
+              >
+                <div
+                  className={cn(
+                    "min-w-0 space-y-4",
+                    canEditStock && "flex-1 lg:pb-0",
+                    canEditStock && selectedIds.length > 0 && "pb-24 lg:pb-0"
+                  )}
+                >
+                  {filteredVariants.length === 0 ? (
+                    <p className="py-12 text-center text-muted-foreground">
+                      {variantsWithStock.length === 0 ? (
+                        isOwner || isInventoryViewer ? (
+                          "No selling variants for this branch."
+                        ) : (
+                          <>
+                            No selling variants for this branch.{" "}
+                            <Link
+                              href="/admin/settings/assortment"
+                              className="underline underline-offset-2"
+                            >
+                              Assign variants in Branch assortment
+                            </Link>
+                            .
+                          </>
+                        )
+                      ) : (
+                        "No variants match your filters."
+                      )}
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            {canEditStock ? (
+                              <TableHead className="w-10">
+                                <Checkbox
+                                  checked={allPageSelected}
+                                  indeterminate={
+                                    somePageSelected && !allPageSelected
                                   }
-                                  onSave={(nextStock) =>
-                                    saveStock(row.id, row.productId, nextStock)
-                                  }
-                                />
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell className="tabular-nums text-muted-foreground">
-                            {row.lowStockThreshold}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger
-                                render={
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    disabled={savingId === row.id}
-                                  >
-                                    {savingId === row.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    )}
-                                    <span className="sr-only">Actions</span>
-                                  </Button>
-                                }
-                              />
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setHistoryTarget({
-                                      branchId: activeBranchId,
-                                      variantId: row.id,
-                                      productName: row.productName,
-                                      variantLabel,
-                                      branchName: activeBranch?.name ?? null,
-                                    });
-                                    setHistoryOpen(true);
+                                  onCheckedChange={() => {
+                                    if (allPageSelected) deselectPage();
+                                    else selectAllVisible();
                                   }}
+                                  aria-label="Select all on page"
+                                />
+                              </TableHead>
+                            ) : null}
+                            <TableHead>Product / variant</TableHead>
+                            <TableHead className="w-28">SKU</TableHead>
+                            <TableHead className="w-28">Cash</TableHead>
+                            <TableHead className="w-28">Retail</TableHead>
+                            <TableHead className="w-28">Stock</TableHead>
+                            <TableHead className="w-28">Low at</TableHead>
+                            <TableHead className="w-14 text-right">
+                              Actions
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pagedItems.map((row) => {
+                            const product = products.find(
+                              (p) => p.id === row.productId
+                            );
+                            const isLow = isLowStockRow(row);
+                            const variantLabel = formatVariantLabel(
+                              row,
+                              product?.options ?? []
+                            );
+                            const selected = selectedIds.includes(row.id);
+
+                            return (
+                              <TableRow
+                                key={row.id}
+                                data-state={selected ? "selected" : undefined}
+                                className={cn(
+                                  canEditStock && "cursor-pointer",
+                                  selected && "bg-primary/5"
+                                )}
+                                onClick={() => {
+                                  if (canEditStock) toggleSelected(row.id);
+                                }}
+                              >
+                                {canEditStock ? (
+                                  <TableCell
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Checkbox
+                                      checked={selected}
+                                      onCheckedChange={() =>
+                                        toggleSelected(row.id)
+                                      }
+                                      aria-label={`Select ${row.productName}`}
+                                    />
+                                  </TableCell>
+                                ) : null}
+                                <TableCell>
+                                  <div className="min-w-[200px]">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <Link
+                                        href={`/admin/products/${row.productId}`}
+                                        className="font-medium hover:underline"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {row.productName}
+                                      </Link>
+                                      {variantLabel === "Default" && isLow ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-xs text-amber-700"
+                                        >
+                                          Low stock
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                    {variantLabel !== "Default" ? (
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <p className="text-sm text-muted-foreground">
+                                          {variantLabel}
+                                        </p>
+                                        {isLow ? (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-xs text-amber-700"
+                                          >
+                                            Low stock
+                                          </Badge>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                    {row.categoryIds.length > 0 ? (
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {row.categoryIds.map((id) =>
+                                          categoryMap[id] ? (
+                                            <Link
+                                              key={id}
+                                              href={`/admin/categories/${id}`}
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            >
+                                              <Badge
+                                                variant="secondary"
+                                                className="text-xs"
+                                              >
+                                                {categoryMap[id].name}
+                                              </Badge>
+                                            </Link>
+                                          ) : null
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {row.sku || "—"}
+                                </TableCell>
+                                <TableCell className="tabular-nums">
+                                  {formatCurrency(row.price)}
+                                </TableCell>
+                                <TableCell className="tabular-nums text-muted-foreground">
+                                  {row.retailPrice != null
+                                    ? formatCurrency(row.retailPrice)
+                                    : "None"}
+                                </TableCell>
+                                <TableCell>
+                                  <span
+                                    className={cn(
+                                      "tabular-nums font-medium",
+                                      isLow && "text-amber-700"
+                                    )}
+                                  >
+                                    {row.stock}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="tabular-nums text-muted-foreground">
+                                  {row.lowStockThreshold}
+                                </TableCell>
+                                <TableCell
+                                  className="text-right"
+                                  onClick={(e) => e.stopPropagation()}
                                 >
-                                  <History className="h-4 w-4" />
-                                  Adjustment history
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                    )}
-                  </TableBody>
-                </Table>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger
+                                      render={
+                                        <Button
+                                          type="button"
+                                          size="icon"
+                                          variant="ghost"
+                                          disabled={saving}
+                                        >
+                                          <MoreHorizontal className="h-4 w-4" />
+                                          <span className="sr-only">
+                                            Actions
+                                          </span>
+                                        </Button>
+                                      }
+                                    />
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          setHistoryTarget({
+                                            branchId: activeBranchId,
+                                            variantId: row.id,
+                                            productName: row.productName,
+                                            variantLabel,
+                                            branchName:
+                                              activeBranch?.name ?? null,
+                                          });
+                                          setHistoryOpen(true);
+                                        }}
+                                      >
+                                        <History className="h-4 w-4" />
+                                        Adjustment history
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  <TablePagination
+                    page={safePage}
+                    totalPages={totalPages}
+                    total={total}
+                    pageSize={INVENTORY_PAGE_SIZE}
+                    onPageChange={setPage}
+                  />
+                </div>
+
+                {canEditStock ? (
+                  <aside className="hidden w-full shrink-0 overflow-hidden rounded-xl border bg-muted/20 lg:sticky lg:top-4 lg:block lg:w-[320px] xl:w-[360px]">
+                    <div className="flex max-h-[calc(100dvh-8rem)] flex-col">
+                      <InventorySelectionPanel
+                        selectedRows={selectedRows}
+                        products={products}
+                        saving={saving}
+                        onRemove={(id) =>
+                          setSelectedIds((prev) =>
+                            prev.filter((rowId) => rowId !== id)
+                          )
+                        }
+                        onClear={clearSelection}
+                        onSelectAllVisible={selectAllVisible}
+                        visibleCount={pageIds.length}
+                        onSaveBulk={saveBulkStock}
+                      />
+                    </div>
+                  </aside>
+                ) : null}
               </div>
-              <TablePagination
-                page={safePage}
-                totalPages={totalPages}
-                total={total}
-                onPageChange={setPage}
-                className="mt-4"
-              />
             </CardContent>
           </Card>
+
+          {canEditStock && selectedIds.length > 0 ? (
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 backdrop-blur lg:hidden">
+              <Button
+                type="button"
+                className="h-11 w-full"
+                onClick={() => setSelectionSheetOpen(true)}
+              >
+                {selectedIds.length} selected — review & change stock
+              </Button>
+            </div>
+          ) : null}
+
+          {canEditStock ? (
+            <Sheet
+              open={selectionSheetOpen}
+              onOpenChange={setSelectionSheetOpen}
+            >
+              <SheetContent
+                side="bottom"
+                className="flex h-[min(85dvh,40rem)] flex-col gap-0 p-0"
+              >
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Selected stock items</SheetTitle>
+                </SheetHeader>
+                <InventorySelectionPanel
+                  selectedRows={selectedRows}
+                  products={products}
+                  saving={saving}
+                  onRemove={(id) =>
+                    setSelectedIds((prev) =>
+                      prev.filter((rowId) => rowId !== id)
+                    )
+                  }
+                  onClear={() => {
+                    clearSelection();
+                    setSelectionSheetOpen(false);
+                  }}
+                  onSelectAllVisible={selectAllVisible}
+                  visibleCount={pageIds.length}
+                  onSaveBulk={async (input) => {
+                    const ok = await saveBulkStock(input);
+                    if (ok) setSelectionSheetOpen(false);
+                    return ok;
+                  }}
+                />
+              </SheetContent>
+            </Sheet>
+          ) : null}
         </>
       )}
 

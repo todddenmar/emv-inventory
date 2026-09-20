@@ -73,7 +73,7 @@ function VariantPriceLabel({
   }
 
   return paymentMethod === "retail"
-    ? "Set retail"
+    ? "None"
     : formatCurrency(pricedRow.price);
 }
 

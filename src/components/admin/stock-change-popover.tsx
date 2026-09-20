@@ -15,13 +15,20 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-type StockChangeMode = "set" | "add" | "remove";
+export type StockChangeMode = "set" | "add" | "remove";
 
 interface StockChangePopoverProps {
-  previousStock: number;
+  previousStock?: number;
+  selectedCount?: number;
   saving?: boolean;
   disabled?: boolean;
-  onSave: (nextStock: number) => Promise<boolean>;
+  triggerLabel?: string;
+  triggerClassName?: string;
+  onSave?: (nextStock: number) => Promise<boolean>;
+  onSaveBulk?: (input: {
+    mode: StockChangeMode;
+    amount: number;
+  }) => Promise<boolean>;
 }
 
 const MODE_OPTIONS: { value: StockChangeMode; label: string }[] = [
@@ -30,12 +37,27 @@ const MODE_OPTIONS: { value: StockChangeMode; label: string }[] = [
   { value: "set", label: "Set" },
 ];
 
+export function computeNextStock(
+  previousStock: number,
+  mode: StockChangeMode,
+  amount: number
+): number {
+  if (mode === "set") return Math.max(0, amount);
+  if (mode === "add") return previousStock + amount;
+  return Math.max(0, previousStock - amount);
+}
+
 export function StockChangePopover({
-  previousStock,
+  previousStock = 0,
+  selectedCount,
   saving = false,
   disabled = false,
+  triggerLabel = "Change",
+  triggerClassName,
   onSave,
+  onSaveBulk,
 }: StockChangePopoverProps) {
+  const isBulk = selectedCount != null && selectedCount > 0;
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<StockChangeMode>("add");
   const [value, setValue] = useState<number | "">("");
@@ -44,43 +66,60 @@ export function StockChangePopover({
     if (!open) return;
     setMode("add");
     setValue("");
-  }, [open, previousStock]);
+  }, [open, previousStock, selectedCount]);
 
   useEffect(() => {
     if (!open) return;
-    if (mode === "set") {
+    if (mode === "set" && !isBulk) {
       setValue(previousStock);
+    } else if (mode === "set" && isBulk) {
+      setValue("");
     } else {
       setValue("");
     }
-  }, [mode, open, previousStock]);
+  }, [mode, open, previousStock, isBulk]);
 
   const amount = value === "" ? null : value;
 
   const nextStock = useMemo(() => {
+    if (isBulk) return null;
     if (amount == null || !Number.isFinite(amount) || amount < 0) return null;
-    if (mode === "set") return amount;
-    if (mode === "add") return previousStock + amount;
-    return Math.max(0, previousStock - amount);
-  }, [amount, mode, previousStock]);
+    return computeNextStock(previousStock, mode, amount);
+  }, [amount, mode, previousStock, isBulk]);
 
-  const delta = nextStock == null ? null : nextStock - previousStock;
-  const canSave =
-    nextStock != null &&
-    Number.isFinite(nextStock) &&
-    nextStock >= 0 &&
-    nextStock !== previousStock;
+  const delta =
+    isBulk || nextStock == null ? null : nextStock - previousStock;
+
+  const canSave = isBulk
+    ? amount != null &&
+      Number.isFinite(amount) &&
+      amount >= 0 &&
+      (mode === "set" || amount > 0) &&
+      onSaveBulk != null
+    : nextStock != null &&
+      Number.isFinite(nextStock) &&
+      nextStock >= 0 &&
+      nextStock !== previousStock &&
+      onSave != null;
 
   const inputLabel =
     mode === "set"
-      ? "New stock"
+      ? isBulk
+        ? "Stock for each selected"
+        : "New stock"
       : mode === "add"
         ? "Amount to add"
         : "Amount to remove";
 
   const handleSave = async () => {
-    if (nextStock == null || !canSave) return;
-    const ok = await onSave(nextStock);
+    if (!canSave || amount == null) return;
+    if (isBulk) {
+      const ok = await onSaveBulk!({ mode, amount });
+      if (ok) setOpen(false);
+      return;
+    }
+    if (nextStock == null) return;
+    const ok = await onSave!(nextStock);
     if (ok) setOpen(false);
   };
 
@@ -92,18 +131,29 @@ export function StockChangePopover({
             type="button"
             size="sm"
             variant="outline"
+            className={triggerClassName}
             disabled={disabled || saving}
           />
         }
       >
-        <Pencil className="h-3.5 w-3.5" />
-        Change
+        {saving ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Pencil className="h-3.5 w-3.5" />
+        )}
+        {triggerLabel}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 gap-3 p-3">
         <PopoverHeader>
-          <PopoverTitle>Change stock</PopoverTitle>
+          <PopoverTitle>
+            {isBulk
+              ? `Change stock (${selectedCount})`
+              : "Change stock"}
+          </PopoverTitle>
           <PopoverDescription>
-            Set a new total, or add/remove units from the current stock.
+            {isBulk
+              ? "Apply the same add, remove, or set to every selected item."
+              : "Set a new total, or add/remove units from the current stock."}
           </PopoverDescription>
         </PopoverHeader>
 
@@ -126,34 +176,60 @@ export function StockChangePopover({
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="rounded-md border bg-muted/40 px-2.5 py-2">
-            <p className="text-xs text-muted-foreground">Previous</p>
-            <p className="mt-0.5 font-semibold tabular-nums">{previousStock}</p>
-          </div>
-          <div className="rounded-md border bg-muted/40 px-2.5 py-2">
-            <p className="text-xs text-muted-foreground">New stock</p>
+        {isBulk ? (
+          <div className="rounded-md border bg-muted/40 px-2.5 py-2 text-sm">
+            <p className="text-xs text-muted-foreground">Selected</p>
             <p className="mt-0.5 font-semibold tabular-nums">
-              {nextStock == null ? "—" : nextStock}
+              {selectedCount} item{selectedCount === 1 ? "" : "s"}
             </p>
+            {amount != null ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {mode === "set"
+                  ? `Each becomes ${amount}`
+                  : mode === "add"
+                    ? `Each gains +${amount}`
+                    : `Each loses up to ${amount}`}
+              </p>
+            ) : null}
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-md border bg-muted/40 px-2.5 py-2">
+                <p className="text-xs text-muted-foreground">Previous</p>
+                <p className="mt-0.5 font-semibold tabular-nums">
+                  {previousStock}
+                </p>
+              </div>
+              <div className="rounded-md border bg-muted/40 px-2.5 py-2">
+                <p className="text-xs text-muted-foreground">New stock</p>
+                <p className="mt-0.5 font-semibold tabular-nums">
+                  {nextStock == null ? "—" : nextStock}
+                </p>
+              </div>
+            </div>
 
-        <div className="rounded-md border bg-muted/40 px-2.5 py-2 text-sm">
-          <p className="text-xs text-muted-foreground">Change</p>
-          <p
-            className={cn(
-              "mt-0.5 font-semibold tabular-nums",
-              delta == null || delta === 0
-                ? "text-muted-foreground"
-                : delta > 0
-                  ? "text-emerald-700"
-                  : "text-red-700"
-            )}
-          >
-            {delta == null ? "—" : delta > 0 ? `+${delta}` : String(delta)}
-          </p>
-        </div>
+            <div className="rounded-md border bg-muted/40 px-2.5 py-2 text-sm">
+              <p className="text-xs text-muted-foreground">Change</p>
+              <p
+                className={cn(
+                  "mt-0.5 font-semibold tabular-nums",
+                  delta == null || delta === 0
+                    ? "text-muted-foreground"
+                    : delta > 0
+                      ? "text-emerald-700"
+                      : "text-red-700"
+                )}
+              >
+                {delta == null
+                  ? "—"
+                  : delta > 0
+                    ? `+${delta}`
+                    : String(delta)}
+              </p>
+            </div>
+          </>
+        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="stock-change-amount">{inputLabel}</Label>
@@ -165,7 +241,9 @@ export function StockChangePopover({
             value={value}
             disabled={saving}
             autoFocus
-            placeholder={mode === "set" ? String(previousStock) : "0"}
+            placeholder={
+              mode === "set" && !isBulk ? String(previousStock) : "0"
+            }
             onChange={(e) => {
               const raw = e.target.value;
               if (raw === "") {
@@ -183,7 +261,8 @@ export function StockChangePopover({
               }
             }}
           />
-          {mode === "remove" &&
+          {!isBulk &&
+          mode === "remove" &&
           amount != null &&
           amount > previousStock ? (
             <p className="text-xs text-muted-foreground">
@@ -213,6 +292,8 @@ export function StockChangePopover({
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Saving…
               </>
+            ) : isBulk ? (
+              `Apply to ${selectedCount}`
             ) : (
               "Save"
             )}

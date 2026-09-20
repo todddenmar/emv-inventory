@@ -279,7 +279,7 @@ function DailyChannelReportInner({
             {selectedBranch ? ` · ${selectedBranch.name}` : null}
             {isWholesale
               ? ". Wholesale receipts only — shop sales stay on Daily sales."
-              : ". Shop sales only. Expenses and daily cash are recorded by cashiers."}
+              : ". Shop sales only. Record expenses and cash added in Daily cash."}
           </p>
         </div>
 

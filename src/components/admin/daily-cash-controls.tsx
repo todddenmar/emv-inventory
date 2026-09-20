@@ -25,6 +25,7 @@ import {
 } from "@/lib/firestore/daily-expenses";
 import { formatCurrency } from "@/lib/format";
 import { moneyInputText, parseMoneyInput } from "@/lib/pos-payments";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { DailyCashRecord, DailyExpense } from "@/types";
 import type { DailySalesReportSummary } from "@/lib/daily-sales-report";
@@ -39,6 +40,7 @@ export function NamedAmountList({
   emptyLabel,
   deletingId,
   amountClassName,
+  className,
   onEdit,
   onDelete,
 }: {
@@ -46,6 +48,7 @@ export function NamedAmountList({
   emptyLabel: string;
   deletingId?: string | null;
   amountClassName?: string;
+  className?: string;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
 }) {
@@ -54,7 +57,12 @@ export function NamedAmountList({
   }
 
   return (
-    <ul className="max-h-64 space-y-2 overflow-y-auto">
+    <ul
+      className={cn(
+        "max-h-64 space-y-2 overflow-y-auto",
+        className
+      )}
+    >
       {items.map((item) => (
         <li
           key={item.id}

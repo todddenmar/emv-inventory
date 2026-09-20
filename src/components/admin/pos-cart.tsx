@@ -1101,7 +1101,7 @@ export function PosCheckoutDialog({
                                   {line.retailPrice != null &&
                                   line.retailPrice > 0
                                     ? formatCurrency(line.retailPrice)
-                                    : "—"}
+                                    : "None"}
                                 </p>
                               </div>
                             </div>
@@ -1263,7 +1263,7 @@ export function PosCheckoutDialog({
                                 {line.retailPrice != null &&
                                 line.retailPrice > 0
                                   ? formatCurrency(line.retailPrice)
-                                  : "—"}
+                                  : "None"}
                               </p>
                             )}
                             {!needsRetailInput && line.quantity > 1 ? (
@@ -1416,7 +1416,7 @@ export function PosCheckoutDialog({
                                         Retail{" "}
                                         {line.retailPrice != null
                                           ? formatCurrency(line.retailPrice)
-                                          : "—"}
+                                          : "None"}
                                       </Button>
                                     </div>
                                   ) : null}

@@ -173,7 +173,7 @@ const ROLE_SCOPE_ROWS: {
   },
   {
     scope: "Sales reports",
-    note: "Cashiers see their sales list. Daily cash and expenses are set in cashier Daily cash, not the admin report.",
+    note: "Cashiers use Daily cash on their home. Admins can use Reports → Daily cash for any branch.",
     marks: ["yes", "yes", "yes", "partial"],
   },
   {

@@ -55,7 +55,7 @@ export default function AdminReportsLayout({
         <div className="mb-3 md:mb-4">
           <h2 className="text-sm font-semibold">Reports</h2>
           <p className="hidden text-xs text-muted-foreground md:block">
-            Sales overview, daily shop, and wholesale
+            Sales overview, daily shop, cash, and wholesale
           </p>
         </div>
         <ReportsNav className="flex-row overflow-x-auto md:flex-col md:overflow-visible" />
