@@ -59,9 +59,7 @@ export function buildPosCatalogListItems(
     const product = productsById.get(row.productId);
     const thumb = resolvePosCatalogThumb(product, row, catalogImageSource);
     const canGroup =
-      row.imageId != null &&
-      row.imageId !== "" &&
-      thumb != null;
+      row.imageId != null && row.imageId !== "" && thumb != null;
     const key = canGroup
       ? `group:${row.productId}:${row.imageId}`
       : `single:${row.id}`;

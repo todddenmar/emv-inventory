@@ -119,6 +119,7 @@ function PosSingleVariantCard({
   onPreviewImage: (url: string, title: string) => void;
 }) {
   const thumb = resolvePosCatalogThumb(product, row, catalogImageSource);
+  const showImage = showCatalogImages(catalogImageSource);
   const variantLabel = formatVariantLabel(row, product?.options ?? []);
   const displayName =
     variantLabel !== "Default"
@@ -142,7 +143,7 @@ function PosSingleVariantCard({
           <Search className="size-3.5" />
         </Link>
       ) : null}
-      {thumb ? (
+      {showImage && thumb ? (
         <button
           type="button"
           title="View full image"
@@ -162,7 +163,7 @@ function PosSingleVariantCard({
         onClick={() => onAdd(row)}
         className="flex min-h-0 min-w-0 flex-1 flex-row items-stretch gap-3 text-left transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-col sm:gap-0"
       >
-        {showCatalogImages(catalogImageSource) ? (
+        {showImage ? (
           <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-muted sm:aspect-[4/3] sm:h-auto sm:w-full sm:rounded-none">
             {thumb ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -214,7 +215,84 @@ function PosSingleVariantCard({
   );
 }
 
-function PosGroupedVariantCard({
+function VariantRowActions({
+  row,
+  productId,
+  productName,
+  product,
+  cart,
+  isCashier,
+  isWholesale,
+  paymentMethod,
+  promoMap,
+  onAdd,
+}: {
+  row: VariantWithStock;
+  productId: string;
+  productName: string;
+  product: Product | undefined;
+  cart: PosCartLine[];
+  isCashier: boolean;
+  isWholesale: boolean;
+  paymentMethod: PosPaymentMethod;
+  promoMap: Map<string, EffectiveSalePrices>;
+  onAdd: (row: VariantWithStock) => void;
+}) {
+  const variantLabel = formatVariantLabel(row, product?.options ?? []);
+  const label = variantLabel !== "Default" ? variantLabel : "Default";
+  const effective = resolveEffectivePrices(row, promoMap, row.id);
+  const outOfStock = row.stock <= 0;
+  const inCart =
+    cart.find((line) => line.variantId === row.id)?.quantity ?? 0;
+
+  return (
+    <li className="flex items-stretch">
+      <button
+        type="button"
+        disabled={outOfStock}
+        onClick={() => onAdd(row)}
+        className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left transition hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium">{label}</span>
+            {effective.onSale && effective.promotionName ? (
+              <Badge
+                variant="outline"
+                className="max-w-[5.5rem] shrink-0 truncate text-[10px] text-amber-700"
+                title={effective.promotionName}
+              >
+                {effective.promotionName}
+              </Badge>
+            ) : null}
+          </div>
+          <span className="text-sm font-semibold tabular-nums">
+            <VariantPriceLabel
+              row={row}
+              isWholesale={isWholesale}
+              paymentMethod={paymentMethod}
+              promoMap={promoMap}
+            />
+          </span>
+        </div>
+        <StockBadge stock={row.stock} inCart={inCart} />
+      </button>
+      {isCashier ? (
+        <Link
+          href={`/admin/cashier/find-stock?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(productId)}`}
+          title="Check other branches"
+          aria-label={`Check other branches for ${productName} — ${label}`}
+          className="inline-flex shrink-0 items-center justify-center border-l px-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <Search className="size-3.5" />
+        </Link>
+      ) : null}
+    </li>
+  );
+}
+
+/** Desktop: one product card with shared image + variant list. */
+function PosDesktopGroupedCard({
   productId,
   productName,
   imageUrl,
@@ -267,65 +345,21 @@ function PosGroupedVariantCard({
           {productName}
         </p>
         <ul className="divide-y rounded-lg border bg-muted/30">
-          {variants.map((row) => {
-            const variantLabel = formatVariantLabel(
-              row,
-              product?.options ?? []
-            );
-            const label =
-              variantLabel !== "Default" ? variantLabel : "Default";
-            const effective = resolveEffectivePrices(row, promoMap, row.id);
-            const outOfStock = row.stock <= 0;
-            const inCart =
-              cart.find((line) => line.variantId === row.id)?.quantity ?? 0;
-
-            return (
-              <li key={row.id} className="flex items-stretch">
-                <button
-                  type="button"
-                  disabled={outOfStock}
-                  onClick={() => onAdd(row)}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left transition hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate text-sm font-medium">
-                        {label}
-                      </span>
-                      {effective.onSale && effective.promotionName ? (
-                        <Badge
-                          variant="outline"
-                          className="max-w-[5.5rem] shrink-0 truncate text-[10px] text-amber-700"
-                          title={effective.promotionName}
-                        >
-                          {effective.promotionName}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <span className="text-sm font-semibold tabular-nums">
-                      <VariantPriceLabel
-                        row={row}
-                        isWholesale={isWholesale}
-                        paymentMethod={paymentMethod}
-                        promoMap={promoMap}
-                      />
-                    </span>
-                  </div>
-                  <StockBadge stock={row.stock} inCart={inCart} />
-                </button>
-                {isCashier ? (
-                  <Link
-                    href={`/admin/cashier/find-stock?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(productId)}`}
-                    title="Check other branches"
-                    aria-label={`Check other branches for ${productName} — ${label}`}
-                    className="inline-flex shrink-0 items-center justify-center border-l px-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                  >
-                    <Search className="size-3.5" />
-                  </Link>
-                ) : null}
-              </li>
-            );
-          })}
+          {variants.map((row) => (
+            <VariantRowActions
+              key={row.id}
+              row={row}
+              productId={productId}
+              productName={productName}
+              product={product}
+              cart={cart}
+              isCashier={isCashier}
+              isWholesale={isWholesale}
+              paymentMethod={paymentMethod}
+              promoMap={promoMap}
+              onAdd={onAdd}
+            />
+          ))}
         </ul>
       </div>
     </div>
@@ -356,21 +390,44 @@ export function PosCatalogListCard({
   onPreviewImage: (url: string, title: string) => void;
 }) {
   if (item.kind === "group") {
+    const product = productsById.get(item.productId);
+
     return (
-      <PosGroupedVariantCard
-        productId={item.productId}
-        productName={item.productName}
-        imageUrl={item.imageUrl}
-        variants={item.variants}
-        product={productsById.get(item.productId)}
-        cart={cart}
-        isCashier={isCashier}
-        isWholesale={isWholesale}
-        paymentMethod={paymentMethod}
-        promoMap={promoMap}
-        onAdd={onAdd}
-        onPreviewImage={onPreviewImage}
-      />
+      <>
+        <div className="flex flex-col gap-3 sm:hidden">
+          {item.variants.map((row) => (
+            <PosSingleVariantCard
+              key={row.id}
+              row={row}
+              product={product}
+              catalogImageSource={catalogImageSource}
+              cart={cart}
+              isCashier={isCashier}
+              isWholesale={isWholesale}
+              paymentMethod={paymentMethod}
+              promoMap={promoMap}
+              onAdd={onAdd}
+              onPreviewImage={onPreviewImage}
+            />
+          ))}
+        </div>
+        <div className="hidden sm:block">
+          <PosDesktopGroupedCard
+            productId={item.productId}
+            productName={item.productName}
+            imageUrl={item.imageUrl}
+            variants={item.variants}
+            product={product}
+            cart={cart}
+            isCashier={isCashier}
+            isWholesale={isWholesale}
+            paymentMethod={paymentMethod}
+            promoMap={promoMap}
+            onAdd={onAdd}
+            onPreviewImage={onPreviewImage}
+          />
+        </div>
+      </>
     );
   }
 

@@ -1,96 +1,35 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ArrowLeftRight,
-  LayoutDashboard,
-  MoreHorizontal,
-  PackageOpen,
-  Receipt,
-  Search,
-  ShoppingCart,
-  Wallet,
-} from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useBranchAccess } from "@/hooks/use-branch-access";
-import { getBranch } from "@/lib/firestore/branches";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-
-const primaryCashierNavItems = [
-  { href: "/admin/cashier", label: "Overview", icon: LayoutDashboard },
-  { href: "/admin/cashier/sales", label: "Sales", icon: Receipt },
-  { href: "/admin/pos", label: "POS", icon: ShoppingCart },
-] as const;
-
-const wholesaleNavItem = {
-  href: "/admin/wholesale",
-  label: "Wholesale",
-  icon: PackageOpen,
-} as const;
-
-const moreCashierNavItems = [
-  { href: "/admin/cashier/find-stock", label: "Find stock", icon: Search },
-  {
-    href: "/admin/cashier/transfer-requests",
-    label: "Requests",
-    icon: ArrowLeftRight,
-  },
-  { href: "/admin/cashier/daily-cash", label: "Daily cash", icon: Wallet },
-] as const;
-
-function isNavActive(pathname: string, href: string) {
-  if (href === "/admin/cashier") {
-    return pathname === "/admin/cashier";
-  }
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
+import {
+  isCashierNavActive,
+  useCashierNavItems,
+} from "@/components/admin/cashier-sidebar";
 
 export function CashierBottomNav() {
   const pathname = usePathname();
-  const { assignedBranchId } = useBranchAccess();
-  const [supportsWholesale, setSupportsWholesale] = useState(false);
+  const { primary, more } = useCashierNavItems();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  useEffect(() => {
-    if (!assignedBranchId) {
-      setSupportsWholesale(false);
-      return;
-    }
-    let cancelled = false;
-    getBranch(assignedBranchId)
-      .then((branch) => {
-        if (!cancelled) {
-          setSupportsWholesale(branch?.supportsWholesale === true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setSupportsWholesale(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [assignedBranchId]);
-
-  const barItems = supportsWholesale
-    ? [...primaryCashierNavItems, wholesaleNavItem]
-    : [...primaryCashierNavItems];
-
-  const moreActive = moreCashierNavItems.some((item) =>
-    isNavActive(pathname, item.href)
+  const moreActive = more.some((item) =>
+    isCashierNavActive(pathname, item.href)
   );
-  const columns = barItems.length + 1;
+  const columns = primary.length + 1;
 
   return (
     <>
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+        className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 lg:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         aria-label="Cashier"
       >
@@ -100,9 +39,9 @@ export function CashierBottomNav() {
             gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
           }}
         >
-          {barItems.map((item) => {
+          {primary.map((item) => {
             const Icon = item.icon;
-            const active = isNavActive(pathname, item.href);
+            const active = isCashierNavActive(pathname, item.href);
             return (
               <Link
                 key={item.href}
@@ -149,9 +88,9 @@ export function CashierBottomNav() {
           </SheetHeader>
           <div className="overflow-y-auto p-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <nav className="space-y-1">
-              {moreCashierNavItems.map((item) => {
+              {more.map((item) => {
                 const Icon = item.icon;
-                const active = isNavActive(pathname, item.href);
+                const active = isCashierNavActive(pathname, item.href);
                 return (
                   <Link
                     key={item.href}

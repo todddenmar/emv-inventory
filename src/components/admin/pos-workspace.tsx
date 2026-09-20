@@ -56,9 +56,7 @@ import {
   type VariantWithStock,
 } from "@/lib/inventory";
 import { isProductPublished } from "@/lib/products-catalog";
-import {
-  buildPosCatalogListItems,
-} from "@/lib/pos-catalog-list";
+import { buildPosCatalogListItems } from "@/lib/pos-catalog-list";
 import { formatVariantLabel } from "@/lib/product-variants";
 import {
   normalizeRetailPrice,
@@ -106,7 +104,23 @@ import type {
 } from "@/types";
 
 const ALL_CATEGORIES_ID = "all";
-const POS_PAGE_SIZE = 20;
+const POS_PAGE_SIZE_DESKTOP = 20;
+const POS_PAGE_SIZE_MOBILE = 10;
+
+function usePosPageSize() {
+  const [pageSize, setPageSize] = useState(POS_PAGE_SIZE_DESKTOP);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 639px)");
+    const sync = () =>
+      setPageSize(query.matches ? POS_PAGE_SIZE_MOBILE : POS_PAGE_SIZE_DESKTOP);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  return pageSize;
+}
 
 function resolveUnitPrice(
   cashPrice: number,
@@ -135,6 +149,7 @@ export function PosWorkspace({
     useBranchAccess();
   const { catalogImageSource } = useAppSettings();
   const router = useRouter();
+  const pageSize = usePosPageSize();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -360,9 +375,19 @@ export function PosWorkspace({
     [filteredVariants, productsById, catalogImageSource]
   );
 
+  /** Mobile pages flat variant cards (10); desktop pages grouped catalog items (20). */
+  const paginationItems = useMemo(() => {
+    if (pageSize === POS_PAGE_SIZE_MOBILE) {
+      return filteredVariants.map(
+        (row) => ({ kind: "single" as const, row })
+      );
+    }
+    return catalogListItems;
+  }, [pageSize, filteredVariants, catalogListItems]);
+
   useEffect(() => {
     setPage(1);
-  }, [selectedCategoryId, search, activeBranchId]);
+  }, [selectedCategoryId, search, activeBranchId, pageSize]);
 
   const {
     page: safePage,
@@ -370,8 +395,8 @@ export function PosWorkspace({
     pagedItems: pagedCatalogItems,
     total,
   } = useMemo(
-    () => paginateItems(catalogListItems, page, POS_PAGE_SIZE),
-    [catalogListItems, page]
+    () => paginateItems(paginationItems, page, pageSize),
+    [paginationItems, page, pageSize]
   );
 
   useEffect(() => {
@@ -937,36 +962,39 @@ export function PosWorkspace({
     <div
       className={
         isCashier
-          ? "-m-4 flex h-[calc(100dvh-3.5rem-4rem)] flex-col md:-m-6 sm:h-[calc(100dvh-4rem-4rem)]"
+          ? "-m-4 flex h-[calc(100dvh-3.5rem-4rem)] flex-col md:-m-6 sm:h-[calc(100dvh-4rem-4rem)] lg:h-[calc(100dvh-4rem)]"
           : "-m-4 flex h-[calc(100dvh-3.5rem-4rem)] flex-col md:-m-6 lg:h-[calc(100dvh-4rem)]"
       }
     >
-      <div className="flex flex-col gap-3 border-b bg-background px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-bold">
+      <div className="flex items-center justify-between gap-3 border-b bg-background px-4 py-2 sm:py-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-bold sm:text-xl">
             {isWholesale ? "Wholesale POS" : "Point of sale"}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {activeBranch?.name ?? "Select a branch"}
-            {saleLock
-              ? ` · ${formatDateInputLabel(saleLock.saleDate)}`
-              : ""}
-          </p>
+          {saleLock ? (
+            <p className="truncate text-xs text-muted-foreground sm:text-sm">
+              {formatDateInputLabel(saleLock.saleDate)}
+            </p>
+          ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {saleLock ? (
             <LinkButton
               href={dailySalesReportPath(saleLock, saleChannel)}
               variant="outline"
+              size="sm"
             >
-              Back to daily {isWholesale ? "wholesale" : "sales"}
+              <span className="sm:hidden">Back</span>
+              <span className="hidden sm:inline">
+                Back to daily {isWholesale ? "wholesale" : "sales"}
+              </span>
             </LinkButton>
           ) : isElevatedAdmin ? (
             <Select
               value={selectedBranchId}
               onValueChange={(v) => setSelectedBranchId(v ?? "")}
             >
-              <SelectTrigger className="w-full sm:w-56">
+              <SelectTrigger className="h-8 w-[9.5rem] sm:h-9 sm:w-56">
                 <SelectValue placeholder="Select branch">
                   {(value) => branchSelectLabel(value as string | null)}
                 </SelectValue>
@@ -979,7 +1007,11 @@ export function PosWorkspace({
                 ))}
               </SelectContent>
             </Select>
-          ) : null}
+          ) : (
+            <p className="max-w-[10rem] truncate text-sm font-medium text-muted-foreground sm:max-w-none">
+              {activeBranch?.name ?? "No branch"}
+            </p>
+          )}
         </div>
       </div>
       {saleLock ? (
@@ -998,8 +1030,8 @@ export function PosWorkspace({
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="space-y-3 border-b px-4 py-3">
-            <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="space-y-2 border-b px-4 py-2 sm:space-y-3 sm:py-3">
+            <div className="flex gap-2 overflow-x-auto pb-0.5">
               <Button
                 type="button"
                 size="sm"
@@ -1054,7 +1086,7 @@ export function PosWorkspace({
 
           <div
             ref={productListRef}
-            className="min-h-0 flex-1 overflow-y-auto p-4 pb-40 lg:pb-4"
+            className="min-h-0 flex-1 overflow-y-auto p-4"
           >
             {loadingCategory && !categoryCache[selectedCategoryId] ? (
               <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
@@ -1068,79 +1100,77 @@ export function PosWorkspace({
                   : "No selling variants in this category for the selected branch."}
               </p>
             ) : (
-              <>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {pagedCatalogItems.map((item) => (
-                    <PosCatalogListCard
-                      key={
-                        item.kind === "group"
-                          ? `group:${item.productId}:${item.imageUrl}`
-                          : item.row.id
-                      }
-                      item={item}
-                      productsById={productsById}
-                      catalogImageSource={catalogImageSource}
-                      cart={cart}
-                      isCashier={isCashier}
-                      isWholesale={isWholesale}
-                      paymentMethod={paymentMethod}
-                      promoMap={promoMap}
-                      onAdd={addVariant}
-                      onPreviewImage={(url, title) =>
-                        setImagePreview({ url, title })
-                      }
-                    />
-                  ))}
-                </div>
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    {total === 0
-                      ? "No variants"
-                      : `Showing ${(safePage - 1) * POS_PAGE_SIZE + 1}–${Math.min(safePage * POS_PAGE_SIZE, total)} of ${total}`}
-                  </p>
-                  <TablePagination
-                    page={safePage}
-                    totalPages={totalPages}
-                    total={total}
-                    pageSize={POS_PAGE_SIZE}
-                    onPageChange={setPage}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {pagedCatalogItems.map((item) => (
+                  <PosCatalogListCard
+                    key={
+                      item.kind === "group"
+                        ? `group:${item.productId}:${item.imageUrl}`
+                        : item.row.id
+                    }
+                    item={item}
+                    productsById={productsById}
+                    catalogImageSource={catalogImageSource}
+                    cart={cart}
+                    isCashier={isCashier}
+                    isWholesale={isWholesale}
+                    paymentMethod={paymentMethod}
+                    promoMap={promoMap}
+                    onAdd={addVariant}
+                    onPreviewImage={(url, title) =>
+                      setImagePreview({ url, title })
+                    }
                   />
-                </div>
-              </>
+                ))}
+              </div>
             )}
           </div>
+
+          {filteredVariants.length > 0 ? (
+            <div className="shrink-0 border-t bg-background px-3 py-1.5 sm:px-4 sm:py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-xs tabular-nums text-muted-foreground sm:text-sm">
+                  {`${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, total)} of ${total}`}
+                </p>
+                <TablePagination
+                  page={safePage}
+                  totalPages={totalPages}
+                  total={total}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  compact
+                  className="shrink-0 sm:[&_button]:h-8"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {cartCount > 0 ? (
+            <div className="shrink-0 border-t bg-background px-3 py-2 lg:hidden">
+              <Button
+                type="button"
+                className="h-10 w-full text-sm"
+                onClick={() => setMobileCartOpen(true)}
+              >
+                Cart · {cartCount} ·{" "}
+                {formatCurrency(
+                  cart.reduce(
+                    (sum, line) =>
+                      sum +
+                      (isWholesale ? line.unitPrice : line.cashPrice) *
+                        line.quantity,
+                    0
+                  )
+                )}
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <aside className="hidden w-[360px] shrink-0 border-l lg:block xl:w-[400px]">
           {cartPanel}
         </aside>
       </div>
-
-      {cartCount > 0 && (
-        <div
-          className="fixed inset-x-0 z-40 border-t bg-background p-3 lg:hidden"
-          style={{
-            bottom: "calc(4rem + env(safe-area-inset-bottom))",
-          }}
-        >
-          <Button
-            type="button"
-            className="h-12 w-full text-base"
-            onClick={() => setMobileCartOpen(true)}
-          >
-            Cart · {cartCount} ·{" "}
-            {formatCurrency(
-              cart.reduce(
-                (sum, line) =>
-                  sum +
-                  (isWholesale ? line.unitPrice : line.cashPrice) *
-                    line.quantity,
-                0
-              )
-            )}
-          </Button>
-        </div>
-      )}
 
       <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
         <SheetContent

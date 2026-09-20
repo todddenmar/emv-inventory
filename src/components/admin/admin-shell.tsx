@@ -3,6 +3,7 @@
 import { AdminBottomNav } from "@/components/admin/admin-bottom-nav";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { CashierBottomNav } from "@/components/admin/cashier-bottom-nav";
+import { CashierSidebar } from "@/components/admin/cashier-sidebar";
 import { CashierRouteGuard } from "@/components/admin/cashier-route-guard";
 import { CashierTransferRequestBanner } from "@/components/admin/cashier-transfer-request-banner";
 import { OwnerRouteGuard } from "@/components/admin/owner-route-guard";
@@ -44,8 +45,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="flex h-dvh min-h-0 w-full flex-col">
           <CashierHeader />
           <CashierTransferRequestBanner />
-          <div className="flex min-h-0 w-full flex-1 flex-col overflow-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pt-6">
-            {children}
+          <div className="flex min-h-0 w-full flex-1 flex-col lg:flex-row">
+            <CashierSidebar />
+            <div className="flex min-h-0 w-full flex-1 flex-col overflow-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pt-6 lg:p-6 lg:pb-6">
+              {children}
+            </div>
           </div>
           <CashierBottomNav />
         </div>
