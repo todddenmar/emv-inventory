@@ -29,9 +29,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
+import { getBranches } from "@/lib/firestore/branches";
 import {
   cancelTransferRequest,
   declineTransferRequest,
@@ -41,7 +49,12 @@ import {
   undoDeclineTransferRequest,
   undoReleaseTransferRequest,
 } from "@/lib/firestore/transfer-requests";
-import type { AppUser, TransferRequest, TransferRequestStatus } from "@/types";
+import type {
+  AppUser,
+  Branch,
+  TransferRequest,
+  TransferRequestStatus,
+} from "@/types";
 
 type ConfirmAction =
   | "release"
@@ -464,7 +477,9 @@ function confirmCopy(
 
 export default function CashierTransferRequestsPage() {
   const user = useAuthStore((s) => s.user);
-  const { assignedBranchId } = useBranchAccess();
+  const { assignedBranchId, canViewAllBranches } = useBranchAccess();
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
   const [rows, setRows] = useState<TransferRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
@@ -474,15 +489,29 @@ export default function CashierTransferRequestsPage() {
     row: TransferRequest;
   } | null>(null);
 
+  const activeBranchId = canViewAllBranches
+    ? selectedBranchId
+    : assignedBranchId ?? "";
+
+  useEffect(() => {
+    if (!canViewAllBranches) return;
+    getBranches(true)
+      .then((list) => {
+        setBranches(list);
+        setSelectedBranchId((prev) => prev || assignedBranchId || list[0]?.id || "");
+      })
+      .catch(console.error);
+  }, [canViewAllBranches, assignedBranchId]);
+
   const load = useCallback(async () => {
-    if (!assignedBranchId) {
+    if (!activeBranchId) {
       setRows([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const list = await getTransferRequestsForBranch(assignedBranchId);
+      const list = await getTransferRequestsForBranch(activeBranchId);
       setRows(list);
     } catch (error) {
       console.error(error);
@@ -490,19 +519,19 @@ export default function CashierTransferRequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [assignedBranchId]);
+  }, [activeBranchId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const incoming = useMemo(
-    () => rows.filter((r) => r.fromBranchId === assignedBranchId),
-    [rows, assignedBranchId]
+    () => rows.filter((r) => r.fromBranchId === activeBranchId),
+    [rows, activeBranchId]
   );
   const outgoing = useMemo(
-    () => rows.filter((r) => r.toBranchId === assignedBranchId),
-    [rows, assignedBranchId]
+    () => rows.filter((r) => r.toBranchId === activeBranchId),
+    [rows, activeBranchId]
   );
 
   const visible = tab === "incoming" ? incoming : outgoing;
@@ -586,15 +615,22 @@ export default function CashierTransferRequestsPage() {
     }
   };
 
-  if (!assignedBranchId) {
+  if (!activeBranchId) {
     return (
       <p className="text-sm text-muted-foreground">
-        Your account needs a branch assignment.
+        {canViewAllBranches
+          ? "Select a branch to view transfer requests."
+          : "Your account needs a branch assignment."}
       </p>
     );
   }
 
   const dialogCopy = confirm ? confirmCopy(confirm.action, confirm.row) : null;
+  const branchSelectLabel = (value: string | null) => {
+    if (!value) return null;
+    const b = branches.find((row) => row.id === value);
+    return b ? `${b.name} (${b.code})` : null;
+  };
 
   return (
     <div className="mx-auto flex h-0 min-h-0 w-full max-w-lg flex-1 flex-col gap-4">
@@ -605,6 +641,26 @@ export default function CashierTransferRequestsPage() {
             Release, receive, or cancel branch transfer requests
           </p>
         </div>
+
+        {canViewAllBranches ? (
+          <Select
+            value={activeBranchId}
+            onValueChange={(v) => setSelectedBranchId(v ?? "")}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select branch">
+                {(value) => branchSelectLabel(value as string | null)}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {branches.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name} ({b.code})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-2">
           <Button

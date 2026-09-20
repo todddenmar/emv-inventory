@@ -147,6 +147,41 @@ export async function completeSupplierStockIn(
   return stockInId;
 }
 
+/** One stock-in receipt per supplier group (same branch / notes / actor). */
+export async function completeSupplierStockInsByVendor(
+  input: Omit<CompleteSupplierStockInInput, "vendorId" | "vendorName" | "items"> & {
+    groups: Array<{
+      vendorId: string;
+      vendorName: string;
+      items: SupplierStockInItem[];
+    }>;
+  }
+): Promise<string[]> {
+  if (input.groups.length === 0) {
+    throw new Error("Add at least one variant");
+  }
+  const ids: string[] = [];
+  for (const group of input.groups) {
+    if (group.items.length === 0) continue;
+    ids.push(
+      await completeSupplierStockIn({
+        branchId: input.branchId,
+        branchName: input.branchName,
+        vendorId: group.vendorId,
+        vendorName: group.vendorName,
+        items: group.items,
+        notes: input.notes,
+        createdBy: input.createdBy,
+        createdByName: input.createdByName,
+      })
+    );
+  }
+  if (ids.length === 0) {
+    throw new Error("Add at least one variant");
+  }
+  return ids;
+}
+
 export async function getSupplierStockIns(options?: {
   branchId?: string | null;
   max?: number;

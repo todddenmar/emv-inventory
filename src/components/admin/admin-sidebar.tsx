@@ -15,6 +15,8 @@ import {
   Tag,
   PackageOpen,
   Receipt,
+  Search,
+  ArrowLeftRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -32,6 +34,18 @@ export const adminNavItems = [
     masterOnly: false,
   },
   { href: "/admin/inventory", label: "Inventory", icon: Warehouse, masterOnly: false },
+  {
+    href: "/admin/find-stock",
+    label: "Find stock",
+    icon: Search,
+    masterOnly: false,
+  },
+  {
+    href: "/admin/transfer-requests",
+    label: "Transfer requests",
+    icon: ArrowLeftRight,
+    masterOnly: false,
+  },
   {
     href: "/admin/reports",
     label: "Reports",

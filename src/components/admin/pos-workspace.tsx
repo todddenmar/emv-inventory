@@ -1101,27 +1101,33 @@ export function PosWorkspace({
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                {pagedCatalogItems.map((item) => (
-                  <PosCatalogListCard
-                    key={
-                      item.kind === "group"
-                        ? `group:${item.productId}:${item.imageUrl}`
-                        : item.row.id
-                    }
-                    item={item}
-                    productsById={productsById}
-                    catalogImageSource={catalogImageSource}
-                    cart={cart}
-                    isCashier={isCashier}
-                    isWholesale={isWholesale}
-                    paymentMethod={paymentMethod}
-                    promoMap={promoMap}
-                    onAdd={addVariant}
-                    onPreviewImage={(url, title) =>
-                      setImagePreview({ url, title })
-                    }
-                  />
-                ))}
+                  {pagedCatalogItems.map((item) => (
+                    <PosCatalogListCard
+                      key={
+                        item.kind === "group"
+                          ? `group:${item.productId}:${item.imageUrl}`
+                          : item.row.id
+                      }
+                      item={item}
+                      productsById={productsById}
+                      catalogImageSource={catalogImageSource}
+                      cart={cart}
+                      findStockBasePath={
+                        isCashier
+                          ? "/admin/cashier/find-stock"
+                          : isElevatedAdmin
+                            ? "/admin/find-stock"
+                            : null
+                      }
+                      isWholesale={isWholesale}
+                      paymentMethod={paymentMethod}
+                      promoMap={promoMap}
+                      onAdd={addVariant}
+                      onPreviewImage={(url, title) =>
+                        setImagePreview({ url, title })
+                      }
+                    />
+                  ))}
               </div>
             )}
           </div>

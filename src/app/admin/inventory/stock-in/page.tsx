@@ -17,6 +17,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -53,7 +54,7 @@ import { getVendors } from "@/lib/firestore/vendors";
 import { getProducts } from "@/lib/firestore/products";
 import { getBranchInventory } from "@/lib/firestore/inventory";
 import {
-  completeSupplierStockIn,
+  completeSupplierStockInsByVendor,
   getSupplierStockIns,
 } from "@/lib/firestore/supplier-stock-ins";
 import {
@@ -88,38 +89,46 @@ function rowLabel(row: VariantWithStock, products: Product[]): string {
 function StockInSelectionPanel({
   selectedRows,
   products,
+  vendorsById,
   qtyByVariant,
   bulkQtyText,
   notes,
   submitting,
   canSubmit,
   receivingCount,
+  totalQtyIn,
+  submitGroups,
   onBulkQtyTextChange,
-  onApplyBulkQty,
   onSetQty,
   onRemove,
   onClear,
   onSelectAllVisible,
   onNotesChange,
-  onSubmit,
+  onRequestConfirm,
   visibleCount,
 }: {
   selectedRows: VariantWithStock[];
   products: Product[];
+  vendorsById: Map<string, Vendor>;
   qtyByVariant: Record<string, number>;
   bulkQtyText: string;
   notes: string;
   submitting: boolean;
   canSubmit: boolean;
   receivingCount: number;
+  totalQtyIn: number;
+  submitGroups: Array<{
+    vendorId: string;
+    vendorName: string;
+    items: Array<{ productName: string; quantity: number }>;
+  }>;
   onBulkQtyTextChange: (value: string) => void;
-  onApplyBulkQty: () => void;
   onSetQty: (variantId: string, value: number) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
   onSelectAllVisible: () => void;
   onNotesChange: (value: string) => void;
-  onSubmit: () => void;
+  onRequestConfirm: () => void;
   visibleCount: number;
 }) {
   const selectedWithQty = selectedRows.filter(
@@ -162,6 +171,10 @@ function StockInSelectionPanel({
             {selectedRows.map((row) => {
               const label = rowLabel(row, products);
               const qty = qtyByVariant[row.id] ?? 0;
+              const product = products.find((p) => p.id === row.productId);
+              const vendorName = product?.vendorId
+                ? vendorsById.get(product.vendorId)?.name
+                : null;
               return (
                 <li
                   key={row.id}
@@ -174,6 +187,7 @@ function StockInSelectionPanel({
                     <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
                       Current {row.stock}
                       {row.sku ? ` · ${row.sku}` : ""}
+                      {vendorName ? ` · ${vendorName}` : ""}
                     </p>
                     <Input
                       type="number"
@@ -221,7 +235,7 @@ function StockInSelectionPanel({
             Select all on page ({visibleCount})
           </Button>
         ) : null}
-        <div className="flex gap-2">
+        <div className="space-y-1.5">
           <Input
             type="number"
             min={0}
@@ -233,26 +247,14 @@ function StockInSelectionPanel({
               const raw = e.target.value;
               if (raw === "" || /^\d*$/.test(raw)) onBulkQtyTextChange(raw);
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                onApplyBulkQty();
-              }
-            }}
           />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={
-              submitting ||
-              selectedRows.length === 0 ||
-              bulkQtyText.trim() === ""
-            }
-            onClick={onApplyBulkQty}
-          >
-            Apply
-          </Button>
+          <p className="text-xs text-muted-foreground">
+            {selectedRows.length === 0
+              ? "Select items to set qty for all at once."
+              : `Updates qty on all ${selectedRows.length} selected item${
+                  selectedRows.length === 1 ? "" : "s"
+                } as you type.`}
+          </p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="stock-in-notes">Notes (optional)</Label>
@@ -265,14 +267,52 @@ function StockInSelectionPanel({
             disabled={submitting}
           />
         </div>
+        {receivingCount > 0 ? (
+          <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <span className="font-medium">Stocking in</span>
+              <span className="tabular-nums font-semibold">
+                {receivingCount} variant{receivingCount === 1 ? "" : "s"} · qty{" "}
+                {totalQtyIn}
+              </span>
+            </div>
+            {submitGroups.length > 1 ? (
+              <ul className="space-y-1 border-t pt-2 text-xs text-muted-foreground">
+                {submitGroups.map((group) => {
+                  const groupQty = group.items.reduce(
+                    (sum, item) => sum + item.quantity,
+                    0
+                  );
+                  return (
+                    <li
+                      key={group.vendorId}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="min-w-0 truncate">{group.vendorName}</span>
+                      <span className="shrink-0 tabular-nums">
+                        {group.items.length} · qty {groupQty}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : submitGroups[0] ? (
+              <p className="border-t pt-2 text-xs text-muted-foreground">
+                From {submitGroups[0].vendorName}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <Button
           className="w-full"
-          onClick={onSubmit}
+          variant="outline"
+          onClick={onRequestConfirm}
           disabled={submitting || !canSubmit}
         >
-          {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Complete stock in
-          {receivingCount > 0 ? ` (${receivingCount})` : ""}
+          Show summary
+          {receivingCount > 0
+            ? ` · ${receivingCount} · qty ${totalQtyIn}`
+            : ""}
         </Button>
       </div>
     </div>
@@ -343,13 +383,14 @@ export default function AdminStockInPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [branchId, setBranchId] = useState("");
-  const [vendorId, setVendorId] = useState("");
+  const [vendorId, setVendorId] = useState("all");
   const [notes, setNotes] = useState("");
   const [qtyByVariant, setQtyByVariant] = useState<Record<string, number>>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkQtyText, setBulkQtyText] = useState("");
   const [selectionSheetOpen, setSelectionSheetOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [variantRows, setVariantRows] = useState<VariantWithStock[]>([]);
   const [history, setHistory] = useState<SupplierStockIn[]>([]);
   const [loading, setLoading] = useState(true);
@@ -375,7 +416,6 @@ export default function AdminStockInPage() {
         setCategories(cats.filter((c) => !c.isArchived));
         if (defaultBranch) setBranchId(defaultBranch);
         else if (isElevatedAdmin && b[0]) setBranchId(b[0].id);
-        if (v[0]) setVendorId(v[0].id);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -403,14 +443,16 @@ export default function AdminStockInPage() {
   }, [branchId, products, categories, isElevatedAdmin, assignedBranchId]);
 
   const branch = branches.find((b) => b.id === branchId);
-  const vendor = vendors.find((v) => v.id === vendorId);
+  const vendorsById = useMemo(
+    () => new Map(vendors.map((v) => [v.id, v])),
+    [vendors]
+  );
 
-  const supplierVariants = useMemo(() => {
-    if (!vendorId) return [];
+  const allSupplierVariants = useMemo(() => {
     return variantRows
       .filter((row) => {
         const product = products.find((p) => p.id === row.productId);
-        return product?.vendorId === vendorId;
+        return Boolean(product?.vendorId);
       })
       .sort((a, b) => {
         if (a.stock !== b.stock) return a.stock - b.stock;
@@ -418,7 +460,15 @@ export default function AdminStockInPage() {
         if (nameCmp !== 0) return nameCmp;
         return a.id.localeCompare(b.id);
       });
-  }, [variantRows, products, vendorId]);
+  }, [variantRows, products]);
+
+  const supplierVariants = useMemo(() => {
+    if (vendorId === "all") return allSupplierVariants;
+    return allSupplierVariants.filter((row) => {
+      const product = products.find((p) => p.id === row.productId);
+      return product?.vendorId === vendorId;
+    });
+  }, [allSupplierVariants, products, vendorId]);
 
   const filteredVariants = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -447,12 +497,12 @@ export default function AdminStockInPage() {
     setQtyByVariant({});
     setSelectedIds([]);
     setBulkQtyText("");
-  }, [vendorId, branchId]);
+    setProductPage(1);
+  }, [branchId]);
 
   useEffect(() => {
     setProductPage(1);
-    setSelectedIds([]);
-  }, [search, stockFilter, vendorId, branchId]);
+  }, [search, stockFilter, vendorId]);
 
   useEffect(() => {
     setHistoryPage(1);
@@ -492,27 +542,68 @@ export default function AdminStockInPage() {
   const somePageSelected = pageIds.some((id) => selectedIds.includes(id));
 
   const selectedRows = useMemo(() => {
-    const byId = new Map(supplierVariants.map((row) => [row.id, row]));
+    const byId = new Map(allSupplierVariants.map((row) => [row.id, row]));
     return selectedIds
       .map((id) => byId.get(id))
       .filter((row): row is VariantWithStock => row != null);
-  }, [selectedIds, supplierVariants]);
+  }, [selectedIds, allSupplierVariants]);
 
   const linesToSubmit = useMemo(() => {
-    return supplierVariants
+    return allSupplierVariants
       .map((row) => {
         const quantity = qtyByVariant[row.id] ?? 0;
         if (quantity <= 0) return null;
+        const product = products.find((p) => p.id === row.productId);
+        const lineVendorId = product?.vendorId ?? null;
+        if (!lineVendorId) return null;
+        const vendor = vendorsById.get(lineVendorId);
+        if (!vendor) return null;
         return {
           productId: row.productId,
           productName: rowLabel(row, products),
           variantId: row.id,
           quantity,
           currentStock: row.stock,
+          vendorId: vendor.id,
+          vendorName: vendor.name,
         };
       })
       .filter((line): line is NonNullable<typeof line> => line != null);
-  }, [supplierVariants, qtyByVariant, products]);
+  }, [allSupplierVariants, qtyByVariant, products, vendorsById]);
+
+  const submitGroups = useMemo(() => {
+    const byVendor = new Map<
+      string,
+      {
+        vendorId: string;
+        vendorName: string;
+        items: Array<{
+          productId: string;
+          productName: string;
+          variantId: string;
+          quantity: number;
+        }>;
+      }
+    >();
+    for (const line of linesToSubmit) {
+      let group = byVendor.get(line.vendorId);
+      if (!group) {
+        group = {
+          vendorId: line.vendorId,
+          vendorName: line.vendorName,
+          items: [],
+        };
+        byVendor.set(line.vendorId, group);
+      }
+      group.items.push({
+        productId: line.productId,
+        productName: line.productName,
+        variantId: line.variantId,
+        quantity: line.quantity,
+      });
+    }
+    return [...byVendor.values()];
+  }, [linesToSubmit]);
 
   const totalQtyIn = useMemo(
     () => linesToSubmit.reduce((sum, line) => sum + line.quantity, 0),
@@ -540,6 +631,7 @@ export default function AdminStockInPage() {
 
   const vendorSelectLabel = (value: string | null) => {
     if (!value) return null;
+    if (value === "all") return "All suppliers";
     return vendors.find((v) => v.id === value)?.name ?? null;
   };
 
@@ -587,11 +679,13 @@ export default function AdminStockInPage() {
     setBulkQtyText("");
   };
 
-  const applyBulkQty = () => {
-    const amount = Math.floor(Number(bulkQtyText));
-    if (!Number.isFinite(amount) || amount < 0 || selectedIds.length === 0) {
-      return;
-    }
+  const handleBulkQtyTextChange = (raw: string) => {
+    setBulkQtyText(raw);
+    if (raw === "") return;
+    const amount = Math.floor(Number(raw));
+    if (!Number.isFinite(amount) || amount < 0) return;
+    if (selectedIds.length === 0) return;
+
     setQtyByVariant((prev) => {
       const next = { ...prev };
       for (const id of selectedIds) {
@@ -600,43 +694,35 @@ export default function AdminStockInPage() {
       }
       return next;
     });
-    toast.success(
-      amount <= 0
-        ? `Cleared qty on ${selectedIds.length} item${selectedIds.length === 1 ? "" : "s"}`
-        : `Set qty ${amount} on ${selectedIds.length} item${selectedIds.length === 1 ? "" : "s"}`
-    );
   };
 
   const handleSubmit = async () => {
-    if (!user || !branch || !vendor) {
-      toast.error("Select branch and supplier");
+    if (!user || !branch) {
+      toast.error("Select a branch");
       return;
     }
-    if (linesToSubmit.length === 0) {
+    if (submitGroups.length === 0) {
       toast.error("Enter a quantity for at least one variant");
       return;
     }
 
     setSubmitting(true);
     try {
-      await completeSupplierStockIn({
+      await completeSupplierStockInsByVendor({
         branchId: branch.id,
         branchName: branch.name,
-        vendorId: vendor.id,
-        vendorName: vendor.name,
-        items: linesToSubmit.map(
-          ({ productId, productName, variantId, quantity }) => ({
-            productId,
-            productName,
-            variantId,
-            quantity,
-          })
-        ),
+        groups: submitGroups,
         notes: notes.trim() || null,
         createdBy: user.uid,
         createdByName: user.displayName ?? user.email,
       });
-      toast.success("Stock in recorded");
+      const supplierCount = submitGroups.length;
+      toast.success(
+        supplierCount === 1
+          ? "Stock in recorded"
+          : `Stock in recorded for ${supplierCount} suppliers`
+      );
+      setConfirmDialogOpen(false);
       setQtyByVariant({});
       setSelectedIds([]);
       setBulkQtyText("");
@@ -678,16 +764,16 @@ export default function AdminStockInPage() {
     <StockInSelectionPanel
       selectedRows={selectedRows}
       products={products}
+      vendorsById={vendorsById}
       qtyByVariant={qtyByVariant}
       bulkQtyText={bulkQtyText}
       notes={notes}
       submitting={submitting}
-      canSubmit={
-        linesToSubmit.length > 0 && Boolean(vendorId) && Boolean(branchId)
-      }
+      canSubmit={linesToSubmit.length > 0 && Boolean(branchId)}
       receivingCount={linesToSubmit.length}
-      onBulkQtyTextChange={setBulkQtyText}
-      onApplyBulkQty={applyBulkQty}
+      totalQtyIn={totalQtyIn}
+      submitGroups={submitGroups}
+      onBulkQtyTextChange={handleBulkQtyTextChange}
       onSetQty={setQty}
       onRemove={(id) =>
         setSelectedIds((prev) => prev.filter((rowId) => rowId !== id))
@@ -695,7 +781,7 @@ export default function AdminStockInPage() {
       onClear={clearSelection}
       onSelectAllVisible={selectAllVisible}
       onNotesChange={setNotes}
-      onSubmit={() => void handleSubmit()}
+      onRequestConfirm={() => setConfirmDialogOpen(true)}
       visibleCount={pageIds.length}
     />
   );
@@ -730,14 +816,15 @@ export default function AdminStockInPage() {
           </Select>
           <Select
             value={vendorId}
-            onValueChange={(v) => setVendorId(v ?? "")}
+            onValueChange={(v) => setVendorId(v ?? "all")}
           >
             <SelectTrigger className="w-full sm:w-56">
-              <SelectValue placeholder="Select supplier">
+              <SelectValue placeholder="All suppliers">
                 {(value) => vendorSelectLabel(value as string | null)}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">All suppliers</SelectItem>
               {vendors.map((v) => (
                 <SelectItem key={v.id} value={v.id}>
                   {v.name}
@@ -770,15 +857,17 @@ export default function AdminStockInPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <CardTitle className="text-base">
-                  {vendor ? `${vendor.name} variants` : "Supplier variants"}
+                  {vendorId === "all"
+                    ? "All supplier variants"
+                    : `${vendorsById.get(vendorId)?.name ?? "Supplier"} variants`}
                 </CardTitle>
                 <CardDescription>
                   {branch
-                    ? `Current stock at ${branch.name}. Select items, set qty (10 per page).`
+                    ? `Current stock at ${branch.name}. Mix suppliers in one stock in (10 per page).`
                     : "Select a branch to load stock."}
                 </CardDescription>
               </div>
-              {branchId && vendorId ? (
+              {branchId ? (
                 <div className="flex shrink-0 gap-3 text-sm">
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground">Variants</p>
@@ -801,7 +890,7 @@ export default function AdminStockInPage() {
                 </div>
               ) : null}
             </div>
-            {branchId && vendorId ? (
+            {branchId ? (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Input
                   placeholder="Search product, SKU, or variant..."
@@ -831,9 +920,9 @@ export default function AdminStockInPage() {
             ) : null}
           </CardHeader>
           <CardContent className="space-y-4">
-            {!branchId || !vendorId ? (
+            {!branchId ? (
               <p className="py-12 text-center text-sm text-muted-foreground">
-                Select a branch and supplier to see variants.
+                Select a branch to see variants.
               </p>
             ) : (
               <>
@@ -856,21 +945,23 @@ export default function AdminStockInPage() {
                           />
                         </TableHead>
                         <TableHead>Product / variant</TableHead>
+                        {vendorId === "all" ? (
+                          <TableHead className="w-32">Supplier</TableHead>
+                        ) : null}
                         <TableHead className="w-24">SKU</TableHead>
                         <TableHead className="w-20">Current</TableHead>
                         <TableHead className="w-20">Low at</TableHead>
-                        <TableHead className="w-28">Qty in</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredVariants.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={6}
+                            colSpan={vendorId === "all" ? 6 : 5}
                             className="py-8 text-center text-muted-foreground"
                           >
                             {supplierVariants.length === 0
-                              ? "No products assigned to this supplier."
+                              ? "No products with a supplier assigned."
                               : "No variants match your filters."}
                           </TableCell>
                         </TableRow>
@@ -880,7 +971,6 @@ export default function AdminStockInPage() {
                           const isLow =
                             row.stock > 0 &&
                             row.stock <= row.lowStockThreshold;
-                          const qty = qtyByVariant[row.id] ?? 0;
                           const selected = selectedIds.includes(row.id);
                           const product = products.find(
                             (p) => p.id === row.productId
@@ -889,6 +979,9 @@ export default function AdminStockInPage() {
                             row,
                             product?.options ?? []
                           );
+                          const rowVendorName = product?.vendorId
+                            ? vendorsById.get(product.vendorId)?.name
+                            : null;
 
                           return (
                             <TableRow
@@ -963,6 +1056,11 @@ export default function AdminStockInPage() {
                                   ) : null}
                                 </div>
                               </TableCell>
+                              {vendorId === "all" ? (
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {rowVendorName || "—"}
+                                </TableCell>
+                              ) : null}
                               <TableCell className="text-sm text-muted-foreground">
                                 {row.sku || "—"}
                               </TableCell>
@@ -977,32 +1075,6 @@ export default function AdminStockInPage() {
                               </TableCell>
                               <TableCell className="tabular-nums text-muted-foreground">
                                 {row.lowStockThreshold}
-                              </TableCell>
-                              <TableCell
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  value={qty || ""}
-                                  placeholder="0"
-                                  className="w-24"
-                                  disabled={submitting}
-                                  onChange={(e) => {
-                                    const next = Math.max(
-                                      0,
-                                      Number(e.target.value) || 0
-                                    );
-                                    setQty(row.id, next);
-                                    if (next > 0 && !selected) {
-                                      setSelectedIds((prev) =>
-                                        prev.includes(row.id)
-                                          ? prev
-                                          : [...prev, row.id]
-                                      );
-                                    }
-                                  }}
-                                />
                               </TableCell>
                             </TableRow>
                           );
@@ -1023,14 +1095,14 @@ export default function AdminStockInPage() {
           </CardContent>
         </Card>
 
-        {branchId && vendorId ? (
+        {branchId ? (
           <aside className="hidden h-[calc(100dvh-8rem)] w-full shrink-0 overflow-hidden rounded-xl border bg-muted/20 lg:sticky lg:top-4 lg:block lg:w-[300px] xl:w-[320px]">
             {selectionPanel}
           </aside>
         ) : null}
       </div>
 
-      {branchId && vendorId && selectedIds.length > 0 ? (
+      {branchId && selectedIds.length > 0 ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 backdrop-blur lg:hidden">
           <Button
             type="button"
@@ -1075,6 +1147,114 @@ export default function AdminStockInPage() {
               onPageChange={setHistoryPage}
             />
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmDialogOpen}
+        onOpenChange={(open) => {
+          if (submitting) return;
+          setConfirmDialogOpen(open);
+        }}
+      >
+        <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="shrink-0 border-b p-4 pr-12">
+            <DialogTitle>Confirm stock in</DialogTitle>
+            <DialogDescription>
+              Review quantities before adding stock
+              {branch ? ` at ${branch.name}` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+            <div className="grid grid-cols-3 gap-2 rounded-lg border bg-muted/30 p-3 text-center">
+              <div>
+                <p className="text-xs text-muted-foreground">Variants</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {linesToSubmit.length}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total qty</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {totalQtyIn}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Suppliers</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {submitGroups.length}
+                </p>
+              </div>
+            </div>
+
+            {notes.trim() ? (
+              <div className="rounded-lg border p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Notes
+                </p>
+                <p className="mt-1 text-sm whitespace-pre-wrap">{notes.trim()}</p>
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              {submitGroups.map((group) => {
+                const groupQty = group.items.reduce(
+                  (sum, item) => sum + item.quantity,
+                  0
+                );
+                return (
+                  <div
+                    key={group.vendorId}
+                    className="overflow-hidden rounded-lg border"
+                  >
+                    <div className="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2">
+                      <p className="min-w-0 truncate text-sm font-medium">
+                        {group.vendorName}
+                      </p>
+                      <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {group.items.length} · qty {groupQty}
+                      </p>
+                    </div>
+                    <ul className="divide-y">
+                      {group.items.map((item) => (
+                        <li
+                          key={item.variantId}
+                          className="flex items-start justify-between gap-3 px-3 py-2 text-sm"
+                        >
+                          <span className="min-w-0 break-words">
+                            {item.productName}
+                          </span>
+                          <span className="shrink-0 tabular-nums font-medium text-green-700">
+                            +{item.quantity}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <DialogFooter className="mx-0 mb-0 shrink-0 gap-2 border-t bg-muted/30 p-4 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submitting}
+              onClick={() => setConfirmDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={submitting || linesToSubmit.length === 0}
+              onClick={() => void handleSubmit()}
+            >
+              {submitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Confirm stock in
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

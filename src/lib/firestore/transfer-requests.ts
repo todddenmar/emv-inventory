@@ -83,6 +83,20 @@ export async function createTransferRequest(
   return ref.id;
 }
 
+/** Create one request per cart line (same destination / requester). */
+export async function createTransferRequests(
+  inputs: CreateTransferRequestInput[]
+): Promise<string[]> {
+  if (inputs.length === 0) {
+    throw new Error("Add at least one item to request");
+  }
+  const ids: string[] = [];
+  for (const input of inputs) {
+    ids.push(await createTransferRequest(input));
+  }
+  return ids;
+}
+
 async function fetchBranchSide(
   branchId: string,
   field: "fromBranchId" | "toBranchId"

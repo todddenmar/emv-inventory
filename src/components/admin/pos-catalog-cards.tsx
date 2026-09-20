@@ -100,7 +100,7 @@ function PosSingleVariantCard({
   product,
   catalogImageSource,
   cart,
-  isCashier,
+  findStockBasePath,
   isWholesale,
   paymentMethod,
   promoMap,
@@ -111,7 +111,7 @@ function PosSingleVariantCard({
   product: Product | undefined;
   catalogImageSource: CatalogImageSource;
   cart: PosCartLine[];
-  isCashier: boolean;
+  findStockBasePath: string | null;
   isWholesale: boolean;
   paymentMethod: PosPaymentMethod;
   promoMap: Map<string, EffectiveSalePrices>;
@@ -129,12 +129,15 @@ function PosSingleVariantCard({
   const outOfStock = row.stock <= 0;
   const inCart =
     cart.find((line) => line.variantId === row.id)?.quantity ?? 0;
+  const findStockHref = findStockBasePath
+    ? `${findStockBasePath}?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(row.productId)}`
+    : null;
 
   return (
     <div className="relative flex min-h-0 flex-row items-stretch gap-3 overflow-hidden rounded-xl border bg-card p-3 sm:min-h-[140px] sm:flex-col sm:gap-0 sm:p-0">
-      {isCashier ? (
+      {findStockHref ? (
         <Link
-          href={`/admin/cashier/find-stock?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(row.productId)}`}
+          href={findStockHref}
           title="Check other branches"
           aria-label={`Check other branches for ${displayName}`}
           className="absolute top-2 right-2 z-10 inline-flex size-8 items-center justify-center rounded-md border bg-background/95 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
@@ -183,7 +186,7 @@ function PosSingleVariantCard({
           <div className="flex items-start justify-between gap-2">
             <p
               className={`min-w-0 text-sm font-medium leading-snug break-words ${
-                isCashier ? "pr-8" : ""
+                findStockHref ? "pr-8" : ""
               }`}
             >
               {displayName}
@@ -221,7 +224,7 @@ function VariantRowActions({
   productName,
   product,
   cart,
-  isCashier,
+  findStockBasePath,
   isWholesale,
   paymentMethod,
   promoMap,
@@ -232,7 +235,7 @@ function VariantRowActions({
   productName: string;
   product: Product | undefined;
   cart: PosCartLine[];
-  isCashier: boolean;
+  findStockBasePath: string | null;
   isWholesale: boolean;
   paymentMethod: PosPaymentMethod;
   promoMap: Map<string, EffectiveSalePrices>;
@@ -244,6 +247,9 @@ function VariantRowActions({
   const outOfStock = row.stock <= 0;
   const inCart =
     cart.find((line) => line.variantId === row.id)?.quantity ?? 0;
+  const findStockHref = findStockBasePath
+    ? `${findStockBasePath}?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(productId)}`
+    : null;
 
   return (
     <li className="flex items-stretch">
@@ -277,9 +283,9 @@ function VariantRowActions({
         </div>
         <StockBadge stock={row.stock} inCart={inCart} />
       </button>
-      {isCashier ? (
+      {findStockHref ? (
         <Link
-          href={`/admin/cashier/find-stock?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(productId)}`}
+          href={findStockHref}
           title="Check other branches"
           aria-label={`Check other branches for ${productName} — ${label}`}
           className="inline-flex shrink-0 items-center justify-center border-l px-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
@@ -299,7 +305,7 @@ function PosDesktopGroupedCard({
   variants,
   product,
   cart,
-  isCashier,
+  findStockBasePath,
   isWholesale,
   paymentMethod,
   promoMap,
@@ -312,7 +318,7 @@ function PosDesktopGroupedCard({
   variants: VariantWithStock[];
   product: Product | undefined;
   cart: PosCartLine[];
-  isCashier: boolean;
+  findStockBasePath: string | null;
   isWholesale: boolean;
   paymentMethod: PosPaymentMethod;
   promoMap: Map<string, EffectiveSalePrices>;
@@ -353,7 +359,7 @@ function PosDesktopGroupedCard({
               productName={productName}
               product={product}
               cart={cart}
-              isCashier={isCashier}
+              findStockBasePath={findStockBasePath}
               isWholesale={isWholesale}
               paymentMethod={paymentMethod}
               promoMap={promoMap}
@@ -371,7 +377,7 @@ export function PosCatalogListCard({
   productsById,
   catalogImageSource,
   cart,
-  isCashier,
+  findStockBasePath,
   isWholesale,
   paymentMethod,
   promoMap,
@@ -382,7 +388,7 @@ export function PosCatalogListCard({
   productsById: Map<string, Product>;
   catalogImageSource: CatalogImageSource;
   cart: PosCartLine[];
-  isCashier: boolean;
+  findStockBasePath: string | null;
   isWholesale: boolean;
   paymentMethod: PosPaymentMethod;
   promoMap: Map<string, EffectiveSalePrices>;
@@ -402,7 +408,7 @@ export function PosCatalogListCard({
               product={product}
               catalogImageSource={catalogImageSource}
               cart={cart}
-              isCashier={isCashier}
+              findStockBasePath={findStockBasePath}
               isWholesale={isWholesale}
               paymentMethod={paymentMethod}
               promoMap={promoMap}
@@ -419,7 +425,7 @@ export function PosCatalogListCard({
             variants={item.variants}
             product={product}
             cart={cart}
-            isCashier={isCashier}
+            findStockBasePath={findStockBasePath}
             isWholesale={isWholesale}
             paymentMethod={paymentMethod}
             promoMap={promoMap}
@@ -437,7 +443,7 @@ export function PosCatalogListCard({
       product={productsById.get(item.row.productId)}
       catalogImageSource={catalogImageSource}
       cart={cart}
-      isCashier={isCashier}
+      findStockBasePath={findStockBasePath}
       isWholesale={isWholesale}
       paymentMethod={paymentMethod}
       promoMap={promoMap}
