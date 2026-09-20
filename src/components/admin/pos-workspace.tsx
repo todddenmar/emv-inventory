@@ -31,7 +31,7 @@ import {
   type PosCartLine,
   type PosCustomerDraft,
 } from "@/components/admin/pos-cart";
-import { PosCatalogListCard } from "@/components/admin/pos-catalog-cards";
+import { PosCatalogVariantCard } from "@/components/admin/pos-catalog-cards";
 import {
   FreebieShortfallDialog,
   type FreebieShortfall,
@@ -56,7 +56,6 @@ import {
   type VariantWithStock,
 } from "@/lib/inventory";
 import { isProductPublished } from "@/lib/products-catalog";
-import { buildPosCatalogListItems } from "@/lib/pos-catalog-list";
 import { formatVariantLabel } from "@/lib/product-variants";
 import {
   normalizeRetailPrice,
@@ -365,26 +364,6 @@ export function PosWorkspace({
     });
   }, [sellingVariants, search, productsById]);
 
-  const catalogListItems = useMemo(
-    () =>
-      buildPosCatalogListItems(
-        filteredVariants,
-        productsById,
-        catalogImageSource
-      ),
-    [filteredVariants, productsById, catalogImageSource]
-  );
-
-  /** Mobile pages flat variant cards (10); desktop pages grouped catalog items (20). */
-  const paginationItems = useMemo(() => {
-    if (pageSize === POS_PAGE_SIZE_MOBILE) {
-      return filteredVariants.map(
-        (row) => ({ kind: "single" as const, row })
-      );
-    }
-    return catalogListItems;
-  }, [pageSize, filteredVariants, catalogListItems]);
-
   useEffect(() => {
     setPage(1);
   }, [selectedCategoryId, search, activeBranchId, pageSize]);
@@ -392,11 +371,11 @@ export function PosWorkspace({
   const {
     page: safePage,
     totalPages,
-    pagedItems: pagedCatalogItems,
+    pagedItems: pagedVariants,
     total,
   } = useMemo(
-    () => paginateItems(paginationItems, page, pageSize),
-    [paginationItems, page, pageSize]
+    () => paginateItems(filteredVariants, page, pageSize),
+    [filteredVariants, page, pageSize]
   );
 
   useEffect(() => {
@@ -1101,33 +1080,29 @@ export function PosWorkspace({
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                  {pagedCatalogItems.map((item) => (
-                    <PosCatalogListCard
-                      key={
-                        item.kind === "group"
-                          ? `group:${item.productId}:${item.imageUrl}`
-                          : item.row.id
-                      }
-                      item={item}
-                      productsById={productsById}
-                      catalogImageSource={catalogImageSource}
-                      cart={cart}
-                      findStockBasePath={
-                        isCashier
-                          ? "/admin/cashier/find-stock"
-                          : isElevatedAdmin
-                            ? "/admin/find-stock"
-                            : null
-                      }
-                      isWholesale={isWholesale}
-                      paymentMethod={paymentMethod}
-                      promoMap={promoMap}
-                      onAdd={addVariant}
-                      onPreviewImage={(url, title) =>
-                        setImagePreview({ url, title })
-                      }
-                    />
-                  ))}
+                {pagedVariants.map((row) => (
+                  <PosCatalogVariantCard
+                    key={row.id}
+                    row={row}
+                    product={productsById.get(row.productId)}
+                    catalogImageSource={catalogImageSource}
+                    cart={cart}
+                    findStockBasePath={
+                      isCashier
+                        ? "/admin/cashier/find-stock"
+                        : isElevatedAdmin
+                          ? "/admin/find-stock"
+                          : null
+                    }
+                    isWholesale={isWholesale}
+                    paymentMethod={paymentMethod}
+                    promoMap={promoMap}
+                    onAdd={addVariant}
+                    onPreviewImage={(url, title) =>
+                      setImagePreview({ url, title })
+                    }
+                  />
+                ))}
               </div>
             )}
           </div>

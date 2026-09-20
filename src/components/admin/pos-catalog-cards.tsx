@@ -5,7 +5,6 @@ import { Expand, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { PosCartLine } from "@/components/admin/pos-cart";
 import type { VariantWithStock } from "@/lib/inventory";
-import type { PosCatalogListItem } from "@/lib/pos-catalog-list";
 import { resolvePosCatalogThumb } from "@/lib/pos-catalog-list";
 import { showCatalogImages, type CatalogImageSource } from "@/lib/products";
 import { formatVariantLabel } from "@/lib/product-variants";
@@ -95,7 +94,8 @@ function StockBadge({
   );
 }
 
-function PosSingleVariantCard({
+/** One POS catalog card per variant — image on all breakpoints. */
+export function PosCatalogVariantCard({
   row,
   product,
   catalogImageSource,
@@ -134,7 +134,7 @@ function PosSingleVariantCard({
     : null;
 
   return (
-    <div className="relative flex min-h-0 flex-row items-stretch gap-3 overflow-hidden rounded-xl border bg-card p-3 sm:min-h-[140px] sm:flex-col sm:gap-0 sm:p-0">
+    <div className="relative flex min-h-0 flex-row items-stretch gap-3 overflow-hidden rounded-xl border bg-card p-3 sm:min-h-0 sm:flex-col sm:gap-0 sm:p-0">
       {findStockHref ? (
         <Link
           href={findStockHref}
@@ -183,9 +183,9 @@ function PosSingleVariantCard({
           </div>
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col gap-1 sm:p-3">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col items-stretch gap-1.5 sm:pr-0">
             <p
-              className={`min-w-0 text-sm font-medium leading-snug break-words ${
+              className={`text-sm font-medium leading-snug break-words whitespace-normal ${
                 findStockHref ? "pr-8" : ""
               }`}
             >
@@ -194,7 +194,7 @@ function PosSingleVariantCard({
             {effective.onSale && effective.promotionName ? (
               <Badge
                 variant="outline"
-                className="max-w-[7.5rem] shrink-0 truncate text-[10px] text-amber-700"
+                className="w-fit max-w-full text-[10px] text-amber-700 whitespace-normal"
                 title={effective.promotionName}
               >
                 {effective.promotionName}
@@ -215,240 +215,5 @@ function PosSingleVariantCard({
         </div>
       </button>
     </div>
-  );
-}
-
-function VariantRowActions({
-  row,
-  productId,
-  productName,
-  product,
-  cart,
-  findStockBasePath,
-  isWholesale,
-  paymentMethod,
-  promoMap,
-  onAdd,
-}: {
-  row: VariantWithStock;
-  productId: string;
-  productName: string;
-  product: Product | undefined;
-  cart: PosCartLine[];
-  findStockBasePath: string | null;
-  isWholesale: boolean;
-  paymentMethod: PosPaymentMethod;
-  promoMap: Map<string, EffectiveSalePrices>;
-  onAdd: (row: VariantWithStock) => void;
-}) {
-  const variantLabel = formatVariantLabel(row, product?.options ?? []);
-  const label = variantLabel !== "Default" ? variantLabel : "Default";
-  const effective = resolveEffectivePrices(row, promoMap, row.id);
-  const outOfStock = row.stock <= 0;
-  const inCart =
-    cart.find((line) => line.variantId === row.id)?.quantity ?? 0;
-  const findStockHref = findStockBasePath
-    ? `${findStockBasePath}?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(productId)}`
-    : null;
-
-  return (
-    <li className="flex items-stretch">
-      <button
-        type="button"
-        disabled={outOfStock}
-        onClick={() => onAdd(row)}
-        className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left transition hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="truncate text-sm font-medium">{label}</span>
-            {effective.onSale && effective.promotionName ? (
-              <Badge
-                variant="outline"
-                className="max-w-[5.5rem] shrink-0 truncate text-[10px] text-amber-700"
-                title={effective.promotionName}
-              >
-                {effective.promotionName}
-              </Badge>
-            ) : null}
-          </div>
-          <span className="text-sm font-semibold tabular-nums">
-            <VariantPriceLabel
-              row={row}
-              isWholesale={isWholesale}
-              paymentMethod={paymentMethod}
-              promoMap={promoMap}
-            />
-          </span>
-        </div>
-        <StockBadge stock={row.stock} inCart={inCart} />
-      </button>
-      {findStockHref ? (
-        <Link
-          href={findStockHref}
-          title="Check other branches"
-          aria-label={`Check other branches for ${productName} — ${label}`}
-          className="inline-flex shrink-0 items-center justify-center border-l px-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-        >
-          <Search className="size-3.5" />
-        </Link>
-      ) : null}
-    </li>
-  );
-}
-
-/** Desktop: one product card with shared image + variant list. */
-function PosDesktopGroupedCard({
-  productId,
-  productName,
-  imageUrl,
-  variants,
-  product,
-  cart,
-  findStockBasePath,
-  isWholesale,
-  paymentMethod,
-  promoMap,
-  onAdd,
-  onPreviewImage,
-}: {
-  productId: string;
-  productName: string;
-  imageUrl: string;
-  variants: VariantWithStock[];
-  product: Product | undefined;
-  cart: PosCartLine[];
-  findStockBasePath: string | null;
-  isWholesale: boolean;
-  paymentMethod: PosPaymentMethod;
-  promoMap: Map<string, EffectiveSalePrices>;
-  onAdd: (row: VariantWithStock) => void;
-  onPreviewImage: (url: string, title: string) => void;
-}) {
-  return (
-    <div className="relative flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card">
-      <div className="relative">
-        <button
-          type="button"
-          title="View full image"
-          aria-label={`View full image for ${productName}`}
-          className="absolute top-2 left-2 z-10 inline-flex size-8 items-center justify-center rounded-md border bg-background/95 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
-          onClick={() => onPreviewImage(imageUrl, productName)}
-        >
-          <Expand className="size-3.5" />
-        </button>
-        <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageUrl}
-            alt=""
-            className="h-full w-full object-cover object-center"
-          />
-        </div>
-      </div>
-      <div className="flex min-w-0 flex-col gap-2 p-3">
-        <p className="text-sm font-medium leading-snug break-words">
-          {productName}
-        </p>
-        <ul className="divide-y rounded-lg border bg-muted/30">
-          {variants.map((row) => (
-            <VariantRowActions
-              key={row.id}
-              row={row}
-              productId={productId}
-              productName={productName}
-              product={product}
-              cart={cart}
-              findStockBasePath={findStockBasePath}
-              isWholesale={isWholesale}
-              paymentMethod={paymentMethod}
-              promoMap={promoMap}
-              onAdd={onAdd}
-            />
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
-export function PosCatalogListCard({
-  item,
-  productsById,
-  catalogImageSource,
-  cart,
-  findStockBasePath,
-  isWholesale,
-  paymentMethod,
-  promoMap,
-  onAdd,
-  onPreviewImage,
-}: {
-  item: PosCatalogListItem;
-  productsById: Map<string, Product>;
-  catalogImageSource: CatalogImageSource;
-  cart: PosCartLine[];
-  findStockBasePath: string | null;
-  isWholesale: boolean;
-  paymentMethod: PosPaymentMethod;
-  promoMap: Map<string, EffectiveSalePrices>;
-  onAdd: (row: VariantWithStock) => void;
-  onPreviewImage: (url: string, title: string) => void;
-}) {
-  if (item.kind === "group") {
-    const product = productsById.get(item.productId);
-
-    return (
-      <>
-        <div className="flex flex-col gap-3 sm:hidden">
-          {item.variants.map((row) => (
-            <PosSingleVariantCard
-              key={row.id}
-              row={row}
-              product={product}
-              catalogImageSource={catalogImageSource}
-              cart={cart}
-              findStockBasePath={findStockBasePath}
-              isWholesale={isWholesale}
-              paymentMethod={paymentMethod}
-              promoMap={promoMap}
-              onAdd={onAdd}
-              onPreviewImage={onPreviewImage}
-            />
-          ))}
-        </div>
-        <div className="hidden sm:block">
-          <PosDesktopGroupedCard
-            productId={item.productId}
-            productName={item.productName}
-            imageUrl={item.imageUrl}
-            variants={item.variants}
-            product={product}
-            cart={cart}
-            findStockBasePath={findStockBasePath}
-            isWholesale={isWholesale}
-            paymentMethod={paymentMethod}
-            promoMap={promoMap}
-            onAdd={onAdd}
-            onPreviewImage={onPreviewImage}
-          />
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <PosSingleVariantCard
-      row={item.row}
-      product={productsById.get(item.row.productId)}
-      catalogImageSource={catalogImageSource}
-      cart={cart}
-      findStockBasePath={findStockBasePath}
-      isWholesale={isWholesale}
-      paymentMethod={paymentMethod}
-      promoMap={promoMap}
-      onAdd={onAdd}
-      onPreviewImage={onPreviewImage}
-    />
   );
 }
