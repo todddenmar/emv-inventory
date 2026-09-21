@@ -324,8 +324,12 @@ export default function AdminInventoryPage() {
 
   useEffect(() => {
     setPage(1);
+  }, [search, selectedCategoryIds, stockFilter]);
+
+  useEffect(() => {
+    setPage(1);
     setSelectedIds([]);
-  }, [search, selectedCategoryIds, stockFilter, activeBranchId]);
+  }, [activeBranchId]);
 
   const {
     page: safePage,
