@@ -335,7 +335,7 @@ export default function FindStockPage({
   return (
     <div
       className={`mx-auto w-full max-w-lg space-y-6 ${
-        !viewOnly && cartCount > 0 ? "pb-24" : ""
+        !viewOnly && cartCount > 0 ? "pb-28 lg:pb-24" : ""
       }`}
     >
       <div>
@@ -572,7 +572,7 @@ export default function FindStockPage({
       )}
 
       {!viewOnly && cartCount > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 backdrop-blur lg:sticky lg:bottom-0">
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 border-t bg-background/95 p-3 backdrop-blur lg:sticky lg:bottom-0">
           <div className="mx-auto w-full max-w-lg">
             <Button
               type="button"
