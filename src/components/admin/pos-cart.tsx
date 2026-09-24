@@ -737,9 +737,14 @@ export function PosCheckoutDialog({
       : POS_TENDER_METHODS;
   const methodLabel = (key: string) =>
     paymentMethodName(key, tenderMethods);
+  const noCharge = isNonRevenueCustomerType(customerType);
+  const { itemCount, subtotal, voucherApplied, voucherMax, amountDue } =
+    cartTotals(lines, appliedVoucher, voucherAppliedOverride);
+  const paymentDue = noCharge ? 0 : amountDue;
   const paymentGroups = sanitizePaymentGroups(
     paymentGroupsProp ?? [],
-    lines
+    lines,
+    { targetTotal: paymentDue }
   );
   const [paymentEditor, setPaymentEditor] = useState<{
     target: { type: "group"; groupId: string };
@@ -747,8 +752,6 @@ export function PosCheckoutDialog({
     draft: PosCheckoutPaymentLine;
   } | null>(null);
   const [allowUnequalPayments, setAllowUnequalPayments] = useState(false);
-  const { itemCount, subtotal, voucherApplied, voucherMax, amountDue } =
-    cartTotals(lines, appliedVoucher, voucherAppliedOverride);
   const [voucherLessText, setVoucherLessText] = useState(() =>
     moneyInputText(voucherApplied)
   );
@@ -787,7 +790,6 @@ export function PosCheckoutDialog({
     setVoucherLessText(moneyInputText(clamped));
   };
 
-  const noCharge = isNonRevenueCustomerType(customerType);
   const paidLines = lines.filter((line) => !line.isFreebie);
   const payableLines = noCharge ? [] : lines.filter(cartLineNeedsPayment);
   const paymentAccountInvalid = (
@@ -805,15 +807,17 @@ export function PosCheckoutDialog({
   };
   const missingPaymentAccount =
     !noCharge &&
+    paymentDue > 0.01 &&
     paymentGroups.some((group) => group.payments.some(paymentAccountInvalid));
   const unbalancedItemPayments =
     !noCharge &&
+    paymentDue > 0.01 &&
     paymentGroups.some((group) => {
-      return !itemPaymentsCoverLineTotal(group.payments, amountDue);
+      return !itemPaymentsCoverLineTotal(group.payments, paymentDue);
     });
   const invalidItemPaymentAmount =
     !noCharge &&
-    amountDue > 0.01 &&
+    paymentDue > 0.01 &&
     paymentGroups.some(
       (group) =>
         group.payments.length === 0 ||
@@ -858,7 +862,9 @@ export function PosCheckoutDialog({
   };
 
   const commitGroups = (nextGroups: PosCheckoutPaymentGroup[]) => {
-    onPaymentGroupsChange?.(sanitizePaymentGroups(nextGroups, lines));
+    onPaymentGroupsChange?.(
+      sanitizePaymentGroups(nextGroups, lines, { targetTotal: paymentDue })
+    );
   };
 
   const updateGroupPayments = (
@@ -1302,6 +1308,10 @@ export function PosCheckoutDialog({
                       No charge for{" "}
                       {customerTypeLabel(customerType).toLowerCase()}.
                     </p>
+                  ) : paymentDue <= 0.01 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Voucher covers the cart — no payment line required.
+                    </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
                       One shared payment covers the whole cart. Amount due{" "}
@@ -1313,7 +1323,13 @@ export function PosCheckoutDialog({
                   )}
                 </div>
 
-                {!noCharge && paymentGroups.length > 0 ? (
+                {!noCharge && paymentDue <= 0.01 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No payment needed — amount due is {formatCurrency(0)}.
+                  </p>
+                ) : null}
+
+                {!noCharge && paymentDue > 0.01 && paymentGroups.length > 0 ? (
                   <div className="space-y-3">
                     {paymentGroups.map((group) => {
                       const members = group.variantIds
@@ -1546,7 +1562,9 @@ export function PosCheckoutDialog({
                   </div>
                 ) : null}
 
-                {!noCharge && payableLines.length === 0 ? (
+                {!noCharge &&
+                paymentDue > 0.01 &&
+                payableLines.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No payment needed — amount due is {formatCurrency(0)}.
                   </p>

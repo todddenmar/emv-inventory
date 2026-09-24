@@ -403,17 +403,41 @@ export function normalizeCheckoutPaymentLine(
 
 export function sanitizePaymentGroups(
   groups: PosCheckoutPaymentGroup[] | null | undefined,
-  lines: CartLineForPayment[]
+  lines: CartLineForPayment[],
+  options?: { targetTotal?: number }
 ): PosCheckoutPaymentGroup[] {
   const payableIds = lines
     .filter(cartLineNeedsPayment)
     .map((line) => line.variantId);
   if (payableIds.length === 0) return [];
 
+  const merchandiseTotal = roundMoney(
+    lines
+      .filter(cartLineNeedsPayment)
+      .reduce((sum, line) => sum + cartLineMerchandiseTotal(line), 0)
+  );
+  const target =
+    options?.targetTotal != null && Number.isFinite(options.targetTotal)
+      ? roundMoney(Math.max(0, options.targetTotal))
+      : null;
+  /** Post-voucher amount due when known; otherwise merchandise total. */
+  const dueTotal = target != null ? target : merchandiseTotal;
+
   const source =
     (groups ?? []).find(
       (group) => Array.isArray(group.payments) && group.payments.length > 0
     ) ?? (groups ?? [])[0];
+
+  // Full voucher / zero due: never keep or invent payment lines.
+  if (dueTotal <= PAYMENT_AMOUNT_TOLERANCE) {
+    return [
+      {
+        id: source?.id || createCheckoutPaymentGroupId(),
+        variantIds: payableIds,
+        payments: [],
+      },
+    ];
+  }
 
   const payments =
     Array.isArray(source?.payments) && source.payments.length > 0
@@ -423,13 +447,7 @@ export function sanitizePaymentGroups(
             tenderMethod: pay.tenderMethod ?? "cash",
           })
         )
-      : defaultItemPayments(
-          roundMoney(
-            lines
-              .filter(cartLineNeedsPayment)
-              .reduce((sum, line) => sum + cartLineMerchandiseTotal(line), 0)
-          )
-        );
+      : defaultItemPayments(dueTotal);
 
   return [
     {
@@ -469,7 +487,10 @@ export function syncPaymentGroupsToLineTotals(
     options?.targetTotal != null && Number.isFinite(options.targetTotal)
       ? roundMoney(Math.max(0, options.targetTotal))
       : null;
-  return groups.map((group) => {
+  const sanitized = sanitizePaymentGroups(groups, lines, {
+    targetTotal: override ?? undefined,
+  });
+  return sanitized.map((group) => {
     const total =
       override != null
         ? override
@@ -545,9 +566,10 @@ export function allocateGroupPaymentsToItems(
 
 export function allocatedPaymentsForCartLines(
   lines: CartLineForPayment[],
-  groups: PosCheckoutPaymentGroup[] | null | undefined
+  groups: PosCheckoutPaymentGroup[] | null | undefined,
+  options?: { targetTotal?: number }
 ): Map<string, PosCheckoutPaymentLine[]> {
-  const sanitized = sanitizePaymentGroups(groups, lines);
+  const sanitized = sanitizePaymentGroups(groups, lines, options);
   const byVariant = new Map<string, PosCheckoutPaymentLine[]>();
   for (const group of sanitized) {
     const allocated = allocateGroupPaymentsToItems(group, lines);
@@ -579,7 +601,9 @@ export function resolvePaymentsFromCartLines(
     throw new Error("Add at least one paid item");
   }
 
-  const groups = sanitizePaymentGroups(paymentGroups, paid);
+  const groups = sanitizePaymentGroups(paymentGroups, paid, {
+    targetTotal: amountDue,
+  });
 
   type Draft = {
     tenderMethod: PosTenderMethod;

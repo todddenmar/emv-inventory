@@ -138,7 +138,14 @@ export function loadPosCheckoutDraft(
       lines: parsed.lines.map((line) => ensureCartLinePaymentFields(line)),
       paymentGroups: sanitizePaymentGroups(
         parsed.paymentGroups,
-        parsed.lines
+        parsed.lines,
+        {
+          targetTotal: draftAmountDue({
+            lines: parsed.lines,
+            appliedVoucher: parsed.appliedVoucher,
+            voucherAppliedOverride,
+          }),
+        }
       ),
     };
   } catch {

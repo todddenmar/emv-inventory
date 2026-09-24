@@ -48,7 +48,6 @@ import {
   ensureCartLinePaymentFields,
   resolvePaymentsFromCartLines,
   roundMoney,
-  sanitizePaymentGroups,
   snapshotPaymentAccount,
   syncPaymentGroupsToLineTotals,
   syncPaymentsToLineTotal,
@@ -131,7 +130,7 @@ export function PosCheckoutWorkspace({
           voucherAppliedOverride: draft.voucherAppliedOverride ?? null,
         });
     const groups = syncPaymentGroupsToLineTotals(
-      sanitizePaymentGroups(draft.paymentGroups, draft.lines),
+      draft.paymentGroups,
       draft.lines,
       { resizeSingle: true, targetTotal: due }
     );
@@ -223,7 +222,7 @@ export function PosCheckoutWorkspace({
             voucherAppliedOverride: override,
           });
       return syncPaymentGroupsToLineTotals(
-        sanitizePaymentGroups(nextGroups, nextLines),
+        nextGroups,
         nextLines,
         { resizeSingle: true, targetTotal: due }
       );
@@ -246,7 +245,7 @@ export function PosCheckoutWorkspace({
             voucherAppliedOverride,
           }));
     const sanitized = syncPaymentGroupsToLineTotals(
-      sanitizePaymentGroups(nextGroupsInput, nextLines),
+      nextGroupsInput,
       nextLines,
       {
         ...options,
@@ -503,7 +502,10 @@ export function PosCheckoutWorkspace({
                 );
           const allocated = allocatedPaymentsForCartLines(
             lines,
-            paymentGroups
+            paymentGroups,
+            {
+              targetTotal: noCharge ? 0 : amountDue,
+            }
           );
 
           for (const line of lines) {
