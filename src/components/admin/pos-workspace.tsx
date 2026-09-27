@@ -1157,7 +1157,6 @@ export function PosWorkspace({
         <SheetContent
           side="bottom"
           className="flex h-[85dvh] flex-col gap-0 p-0 sm:max-w-none"
-          showCloseButton={false}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Current sale</SheetTitle>

@@ -4,8 +4,6 @@ import * as React from "react"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { XIcon } from "lucide-react"
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -36,15 +34,14 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
   )
 }
 
+/** Drawers close by tapping the backdrop (or Escape); no X button. */
 function SheetContent({
   className,
   children,
   side = "right",
-  showCloseButton = true,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left"
-  showCloseButton?: boolean
 }) {
   return (
     <SheetPortal>
@@ -60,22 +57,6 @@ function SheetContent({
           {...props}
         >
           {children}
-          {showCloseButton && (
-            <SheetPrimitive.Close
-              data-slot="sheet-close"
-              render={
-                <Button
-                  variant="ghost"
-                  className="absolute top-3 right-3"
-                  size="icon-sm"
-                />
-              }
-            >
-              <XIcon
-              />
-              <span className="sr-only">Close</span>
-            </SheetPrimitive.Close>
-          )}
         </SheetPrimitive.Popup>
       </SheetPrimitive.Viewport>
     </SheetPortal>

@@ -123,8 +123,7 @@ export function InventoryAdjustmentHistorySheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full gap-0 p-0 sm:max-w-lg"
-        showCloseButton
+        className="w-[88vw] gap-0 p-0 sm:max-w-lg"
       >
         <SheetHeader className="border-b">
           <SheetTitle className="flex items-center gap-2">

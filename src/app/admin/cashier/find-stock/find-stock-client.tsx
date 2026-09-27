@@ -571,8 +571,10 @@ export default function FindStockPage({
         </div>
       )}
 
-      {!viewOnly && cartCount > 0 ? (
-        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 border-t bg-background/95 p-3 backdrop-blur lg:sticky lg:bottom-0">
+      {!viewOnly && cartCount > 0 && !cartOpen ? (
+        <div
+          className="fixed inset-x-0 z-[51] border-t bg-background/95 p-3 backdrop-blur max-lg:bottom-[var(--mobile-bottom-nav-height,calc(4rem+env(safe-area-inset-bottom)))] lg:sticky lg:bottom-0"
+        >
           <div className="mx-auto w-full max-w-lg">
             <Button
               type="button"

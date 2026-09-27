@@ -203,7 +203,6 @@ function PaymentEditorShell({
         <SheetContent
           side="bottom"
           className="flex max-h-[90dvh] flex-col gap-0 p-0 sm:max-w-none"
-          showCloseButton
         >
           <div className="mx-auto mt-2 h-1.5 w-10 shrink-0 rounded-full bg-border" />
           <SheetHeader className="border-b px-4 py-3 text-left">

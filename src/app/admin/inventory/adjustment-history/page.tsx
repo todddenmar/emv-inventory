@@ -30,6 +30,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { SortableTableHead } from "@/components/admin/sortable-table-head";
+import { sortRows, useTableSort } from "@/hooks/use-table-sort";
+
+type AdjustmentSortKey = "name" | "change" | "available";
 import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
 import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -217,6 +221,8 @@ export default function AdminAdjustmentHistoryPage() {
     });
   }, [logs, reasonFilter, search, products, selectedCategoryIds]);
 
+  const { sort, toggleSort } = useTableSort<AdjustmentSortKey>();
+
   useEffect(() => {
     setPage(1);
   }, [
@@ -226,6 +232,7 @@ export default function AdminAdjustmentHistoryPage() {
     effectiveFrom,
     effectiveTo,
     selectedCategoryIds,
+    sort,
   ]);
 
   const {
@@ -233,7 +240,18 @@ export default function AdminAdjustmentHistoryPage() {
     totalPages,
     pagedItems,
     total,
-  } = useMemo(() => paginateItems(filtered, page), [filtered, page]);
+  } = useMemo(
+    () =>
+      paginateItems(
+        sortRows(filtered, sort, {
+          name: (log) => log.productName ?? log.productId,
+          change: (log) => log.delta,
+          available: (log) => log.newStock,
+        }),
+        page
+      ),
+    [filtered, sort, page]
+  );
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
@@ -431,11 +449,28 @@ export default function AdminAdjustmentHistoryPage() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Branch</TableHead>
-                    <TableHead>Product</TableHead>
+                    <SortableTableHead
+                      label="Product"
+                      sortKey="name"
+                      sort={sort}
+                      onSort={toggleSort}
+                    />
                     <TableHead>Activity</TableHead>
                     <TableHead>Adjusted by</TableHead>
-                    <TableHead className="text-right">Change</TableHead>
-                    <TableHead className="text-right">Available</TableHead>
+                    <SortableTableHead
+                      label="Change"
+                      sortKey="change"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                    />
+                    <SortableTableHead
+                      label="Available"
+                      sortKey="available"
+                      sort={sort}
+                      onSort={toggleSort}
+                      align="right"
+                    />
                     <TableHead className="w-12 text-right">
                       <span className="sr-only">Actions</span>
                     </TableHead>

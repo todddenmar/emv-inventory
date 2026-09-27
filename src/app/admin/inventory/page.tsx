@@ -53,6 +53,11 @@ import {
   type StockChangeMode,
 } from "@/components/admin/stock-change-popover";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { MobileSelectionBar } from "@/components/admin/mobile-selection-bar";
+import { SortableTableHead } from "@/components/admin/sortable-table-head";
+import { sortRows, useTableSort } from "@/hooks/use-table-sort";
+
+type StockLevelSortKey = "name" | "cash" | "retail" | "stock" | "lowAt";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { productIdsForCategoryFilter } from "@/lib/category-filters";
 import { getBranches } from "@/lib/firestore/branches";
@@ -322,9 +327,30 @@ export default function AdminInventoryPage() {
     });
   }, [variantsWithStock, products, search, selectedCategoryIds, stockFilter]);
 
+  const { sort, toggleSort } = useTableSort<StockLevelSortKey>();
+
+  const sortedVariants = useMemo(() => {
+    const productById = new Map(products.map((p) => [p.id, p]));
+    return sortRows(filteredVariants, sort, {
+      name: (row) => {
+        const label = formatVariantLabel(
+          row,
+          productById.get(row.productId)?.options ?? []
+        );
+        return label === "Default"
+          ? row.productName
+          : `${row.productName} ${label}`;
+      },
+      cash: (row) => row.price,
+      retail: (row) => row.retailPrice,
+      stock: (row) => row.stock,
+      lowAt: (row) => row.lowStockThreshold,
+    });
+  }, [filteredVariants, products, sort]);
+
   useEffect(() => {
     setPage(1);
-  }, [search, selectedCategoryIds, stockFilter]);
+  }, [search, selectedCategoryIds, stockFilter, sort]);
 
   useEffect(() => {
     setPage(1);
@@ -337,8 +363,8 @@ export default function AdminInventoryPage() {
     pagedItems,
     total,
   } = useMemo(
-    () => paginateItems(filteredVariants, page, INVENTORY_PAGE_SIZE),
-    [filteredVariants, page]
+    () => paginateItems(sortedVariants, page, INVENTORY_PAGE_SIZE),
+    [sortedVariants, page]
   );
 
   useEffect(() => {
@@ -732,12 +758,41 @@ export default function AdminInventoryPage() {
                                 />
                               </TableHead>
                             ) : null}
-                            <TableHead>Product / variant</TableHead>
+                            <SortableTableHead
+                              label="Product / variant"
+                              sortKey="name"
+                              sort={sort}
+                              onSort={toggleSort}
+                            />
                             <TableHead className="w-28">SKU</TableHead>
-                            <TableHead className="w-28">Cash</TableHead>
-                            <TableHead className="w-28">Retail</TableHead>
-                            <TableHead className="w-28">Stock</TableHead>
-                            <TableHead className="w-28">Low at</TableHead>
+                            <SortableTableHead
+                              label="Cash"
+                              sortKey="cash"
+                              sort={sort}
+                              onSort={toggleSort}
+                              className="w-28"
+                            />
+                            <SortableTableHead
+                              label="Retail"
+                              sortKey="retail"
+                              sort={sort}
+                              onSort={toggleSort}
+                              className="w-28"
+                            />
+                            <SortableTableHead
+                              label="Stock"
+                              sortKey="stock"
+                              sort={sort}
+                              onSort={toggleSort}
+                              className="w-28"
+                            />
+                            <SortableTableHead
+                              label="Low at"
+                              sortKey="lowAt"
+                              sort={sort}
+                              onSort={toggleSort}
+                              className="w-28"
+                            />
                             <TableHead className="w-14 text-right">
                               Actions
                             </TableHead>
@@ -943,16 +998,12 @@ export default function AdminInventoryPage() {
             </CardContent>
           </Card>
 
-          {canEditStock && selectedIds.length > 0 ? (
-            <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 backdrop-blur lg:hidden">
-              <Button
-                type="button"
-                className="h-11 w-full"
-                onClick={() => setSelectionSheetOpen(true)}
-              >
-                {selectedIds.length} selected — review & change stock
-              </Button>
-            </div>
+          {canEditStock && !selectionSheetOpen ? (
+            <MobileSelectionBar
+              count={selectedIds.length}
+              hint="Review and change stock"
+              onAction={() => setSelectionSheetOpen(true)}
+            />
           ) : null}
 
           {canEditStock ? (

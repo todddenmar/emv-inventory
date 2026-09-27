@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { useBottomNavHeightVar } from "@/hooks/use-bottom-nav-height";
 import { adminNavItems } from "@/components/admin/admin-sidebar";
 import { isOwnerNavHref } from "@/lib/post-login-redirect";
 import {
@@ -77,6 +78,7 @@ export function AdminBottomNav() {
   const { isElevatedAdmin, isOwner } = useBranchAccess();
   const [moreOpen, setMoreOpen] = useState(false);
   const { navRef, count: visibleSlotCount } = useVisibleSlotCount(true);
+  useBottomNavHeightVar(navRef);
 
   const navByHref = new Map(adminNavItems.map((item) => [item.href, item]));
 
@@ -170,7 +172,6 @@ export function AdminBottomNav() {
         <SheetContent
           side="bottom"
           className="max-h-[75dvh] gap-0 p-0 sm:max-w-none"
-          showCloseButton
         >
           <SheetHeader className="border-b px-4 py-3 text-left">
             <SheetTitle>More</SheetTitle>

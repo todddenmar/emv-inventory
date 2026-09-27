@@ -29,6 +29,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { SortableTableHead } from "@/components/admin/sortable-table-head";
+import { sortRows, useTableSort } from "@/hooks/use-table-sort";
+
+type DailyChangeSortKey = "name" | "opening" | "closing" | "change";
 import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
@@ -124,9 +128,11 @@ export default function AdminDailyStockChangesPage() {
     void load();
   }, [load]);
 
+  const { sort, toggleSort } = useTableSort<DailyChangeSortKey>();
+
   useEffect(() => {
     setPage(1);
-  }, [date, scopeBranchId, selectedCategoryIds]);
+  }, [date, scopeBranchId, selectedCategoryIds, sort]);
 
   const filteredLogs = useMemo(() => {
     const allowedProductIds = productIdsForCategoryFilter(
@@ -151,7 +157,19 @@ export default function AdminDailyStockChangesPage() {
     totalPages,
     pagedItems,
     total,
-  } = useMemo(() => paginateItems(changeRows, page), [changeRows, page]);
+  } = useMemo(
+    () =>
+      paginateItems(
+        sortRows(changeRows, sort, {
+          name: (row) => row.productLabel,
+          opening: (row) => row.openingStock,
+          closing: (row) => row.closingStock,
+          change: (row) => row.change,
+        }),
+        page
+      ),
+    [changeRows, sort, page]
+  );
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
@@ -287,18 +305,37 @@ export default function AdminDailyStockChangesPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Product</TableHead>
+                          <SortableTableHead
+                            label="Product"
+                            sortKey="name"
+                            sort={sort}
+                            onSort={toggleSort}
+                          />
                           <TableHead>Category</TableHead>
                           {canViewAllBranches && selectedBranchId === "all" ? (
                             <TableHead>Branch</TableHead>
                           ) : null}
-                          <TableHead className="text-right">
-                            Opening stock
-                          </TableHead>
-                          <TableHead className="text-right">
-                            Closing stock
-                          </TableHead>
-                          <TableHead className="text-right">Change</TableHead>
+                          <SortableTableHead
+                            label="Opening stock"
+                            sortKey="opening"
+                            sort={sort}
+                            onSort={toggleSort}
+                            align="right"
+                          />
+                          <SortableTableHead
+                            label="Closing stock"
+                            sortKey="closing"
+                            sort={sort}
+                            onSort={toggleSort}
+                            align="right"
+                          />
+                          <SortableTableHead
+                            label="Change"
+                            sortKey="change"
+                            sort={sort}
+                            onSort={toggleSort}
+                            align="right"
+                          />
                           <TableHead>Status</TableHead>
                         </TableRow>
                       </TableHeader>

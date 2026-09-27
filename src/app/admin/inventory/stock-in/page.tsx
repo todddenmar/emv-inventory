@@ -46,6 +46,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { MobileSelectionBar } from "@/components/admin/mobile-selection-bar";
+import { SortableTableHead } from "@/components/admin/sortable-table-head";
+import { sortRows, useTableSort } from "@/hooks/use-table-sort";
+
+type StockInSortKey = "name" | "supplier" | "stock" | "lowAt";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
 import { getBranches } from "@/lib/firestore/branches";
@@ -493,6 +498,29 @@ export default function AdminStockInPage() {
     });
   }, [supplierVariants, products, search, stockFilter]);
 
+  const { sort, toggleSort } = useTableSort<StockInSortKey>();
+
+  const sortedVariants = useMemo(() => {
+    const productById = new Map(products.map((p) => [p.id, p]));
+    return sortRows(filteredVariants, sort, {
+      name: (row) => {
+        const label = formatVariantLabel(
+          row,
+          productById.get(row.productId)?.options ?? []
+        );
+        return label === "Default"
+          ? row.productName
+          : `${row.productName} ${label}`;
+      },
+      supplier: (row) => {
+        const vendorId = productById.get(row.productId)?.vendorId;
+        return vendorId ? vendorsById.get(vendorId)?.name : null;
+      },
+      stock: (row) => row.stock,
+      lowAt: (row) => row.lowStockThreshold,
+    });
+  }, [filteredVariants, products, vendorsById, sort]);
+
   useEffect(() => {
     setQtyByVariant({});
     setSelectedIds([]);
@@ -502,7 +530,7 @@ export default function AdminStockInPage() {
 
   useEffect(() => {
     setProductPage(1);
-  }, [search, stockFilter, vendorId]);
+  }, [search, stockFilter, vendorId, sort]);
 
   useEffect(() => {
     setHistoryPage(1);
@@ -514,8 +542,8 @@ export default function AdminStockInPage() {
     pagedItems,
     total: productTotal,
   } = useMemo(
-    () => paginateItems(filteredVariants, productPage, STOCK_IN_PAGE_SIZE),
-    [filteredVariants, productPage]
+    () => paginateItems(sortedVariants, productPage, STOCK_IN_PAGE_SIZE),
+    [sortedVariants, productPage]
   );
 
   useEffect(() => {
@@ -944,13 +972,36 @@ export default function AdminStockInPage() {
                             aria-label="Select all on page"
                           />
                         </TableHead>
-                        <TableHead>Product / variant</TableHead>
+                        <SortableTableHead
+                          label="Product / variant"
+                          sortKey="name"
+                          sort={sort}
+                          onSort={toggleSort}
+                        />
                         {vendorId === "all" ? (
-                          <TableHead className="w-32">Supplier</TableHead>
+                          <SortableTableHead
+                            label="Supplier"
+                            sortKey="supplier"
+                            sort={sort}
+                            onSort={toggleSort}
+                            className="w-32"
+                          />
                         ) : null}
                         <TableHead className="w-24">SKU</TableHead>
-                        <TableHead className="w-20">Current</TableHead>
-                        <TableHead className="w-20">Low at</TableHead>
+                        <SortableTableHead
+                          label="Current"
+                          sortKey="stock"
+                          sort={sort}
+                          onSort={toggleSort}
+                          className="w-24"
+                        />
+                        <SortableTableHead
+                          label="Low at"
+                          sortKey="lowAt"
+                          sort={sort}
+                          onSort={toggleSort}
+                          className="w-24"
+                        />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1102,17 +1153,14 @@ export default function AdminStockInPage() {
         ) : null}
       </div>
 
-      {branchId && selectedIds.length > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 backdrop-blur lg:hidden">
-          <Button
-            type="button"
-            className="h-11 w-full"
-            onClick={() => setSelectionSheetOpen(true)}
-          >
-            {selectedIds.length} selected — review & set qty
-            {totalQtyIn > 0 ? ` · qty ${totalQtyIn}` : ""}
-          </Button>
-        </div>
+      {branchId && !selectionSheetOpen ? (
+        <MobileSelectionBar
+          count={selectedIds.length}
+          hint={
+            totalQtyIn > 0 ? `Total qty ${totalQtyIn}` : "Review and set qty"
+          }
+          onAction={() => setSelectionSheetOpen(true)}
+        />
       ) : null}
 
       <Sheet open={selectionSheetOpen} onOpenChange={setSelectionSheetOpen}>

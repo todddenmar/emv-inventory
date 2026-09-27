@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useBottomNavHeightVar } from "@/hooks/use-bottom-nav-height";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -119,6 +120,8 @@ function StaffSidebar() {
 function StaffBottomNav() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const navRef = useRef<HTMLElement | null>(null);
+  useBottomNavHeightVar(navRef);
 
   const primaryItems = staffNavItems.filter((item) =>
     (primaryBottomHrefs as readonly string[]).includes(item.href)
@@ -133,6 +136,7 @@ function StaffBottomNav() {
   return (
     <>
       <nav
+        ref={navRef}
         className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90 lg:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         aria-label="Staff"
@@ -180,7 +184,6 @@ function StaffBottomNav() {
         <SheetContent
           side="bottom"
           className="max-h-[75dvh] gap-0 p-0 sm:max-w-none"
-          showCloseButton
         >
           <SheetHeader className="border-b px-4 py-3 text-left">
             <SheetTitle>More</SheetTitle>
