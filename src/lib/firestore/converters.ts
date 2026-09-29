@@ -589,6 +589,7 @@ export const transferRequestConverter: FirestoreDataConverter<TransferRequest> =
   {
     toFirestore(request: TransferRequest): DocumentData {
       return {
+        batchId: request.batchId,
         productId: request.productId,
         productName: request.productName,
         variantId: request.variantId,
@@ -625,6 +626,7 @@ export const transferRequestConverter: FirestoreDataConverter<TransferRequest> =
       const data = snapshot.data(options);
       return {
         id: snapshot.id,
+        batchId: typeof data.batchId === "string" ? data.batchId : null,
         productId: data.productId,
         productName: data.productName,
         variantId: data.variantId,

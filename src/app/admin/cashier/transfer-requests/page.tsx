@@ -43,11 +43,16 @@ import { getBranches } from "@/lib/firestore/branches";
 import {
   cancelTransferRequest,
   declineTransferRequest,
+  declineTransferRequests,
   getTransferRequestsForBranch,
+  groupTransferRequests,
   receiveTransferRequest,
+  receiveTransferRequests,
   releaseTransferRequest,
+  releaseTransferRequests,
   undoDeclineTransferRequest,
   undoReleaseTransferRequest,
+  type TransferRequestGroup,
 } from "@/lib/firestore/transfer-requests";
 import type {
   AppUser,
@@ -62,6 +67,17 @@ type ConfirmAction =
   | "receive"
   | "undo_release"
   | "undo_decline";
+
+type GroupAction = "release_group" | "decline_group" | "receive_group";
+
+type ConfirmState =
+  | { kind: "row"; action: ConfirmAction; row: TransferRequest }
+  | {
+      kind: "group";
+      action: GroupAction;
+      group: TransferRequestGroup;
+      ids: string[];
+    };
 
 type TimelineTone = "done" | "current" | "pending" | "failed";
 
@@ -475,6 +491,67 @@ function confirmCopy(
   }
 }
 
+function groupConfirmCopy(
+  action: GroupAction,
+  group: TransferRequestGroup,
+  ids: string[]
+): { title: string; description: string; confirm: string } {
+  const idSet = new Set(ids);
+  const rows = group.rows.filter((row) => idSet.has(row.id));
+  const totalQty = rows.reduce((sum, row) => sum + row.quantity, 0);
+  const items = `${rows.length} item${rows.length === 1 ? "" : "s"} (qty ${totalQty})`;
+  switch (action) {
+    case "release_group":
+      return {
+        title: "Release this group?",
+        description: `Release ${items} to ${group.toBranchName}? Stock will not move until they mark it received.`,
+        confirm: `Release ${rows.length}`,
+      };
+    case "decline_group":
+      return {
+        title: "Decline this group?",
+        description: `Decline ${items} requested by ${group.toBranchName}? You can undo each one later.`,
+        confirm: `Decline ${rows.length}`,
+      };
+    case "receive_group":
+      return {
+        title: "Mark group as received?",
+        description: `Confirm you received ${items} from ${group.fromBranchName}? This transfers stock into your branch as one transfer and cannot be undone.`,
+        confirm: `Receive ${rows.length}`,
+      };
+  }
+}
+
+function StatusPill({
+  status,
+  className,
+}: {
+  status: TransferRequestStatus;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase ring-1 ring-inset",
+        statusToneClass(status),
+        className
+      )}
+    >
+      {statusLabel(status)}
+    </span>
+  );
+}
+
+function groupStatusSummary(rows: TransferRequest[]): string {
+  const counts = new Map<TransferRequestStatus, number>();
+  for (const row of rows) {
+    counts.set(row.status, (counts.get(row.status) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([status, count]) => `${count} ${statusLabel(status).toLowerCase()}`)
+    .join(" · ");
+}
+
 export default function CashierTransferRequestsPage() {
   const user = useAuthStore((s) => s.user);
   const { assignedBranchId, canViewAllBranches } = useBranchAccess();
@@ -484,10 +561,7 @@ export default function CashierTransferRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
   const [tab, setTab] = useState<"incoming" | "outgoing">("incoming");
-  const [confirm, setConfirm] = useState<{
-    action: ConfirmAction;
-    row: TransferRequest;
-  } | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const activeBranchId = canViewAllBranches
     ? selectedBranchId
@@ -535,6 +609,7 @@ export default function CashierTransferRequestsPage() {
   );
 
   const visible = tab === "incoming" ? incoming : outgoing;
+  const groups = useMemo(() => groupTransferRequests(visible), [visible]);
 
   const runAction = async (
     id: string,
@@ -558,9 +633,52 @@ export default function CashierTransferRequestsPage() {
 
   const handleConfirm = async () => {
     if (!confirm || !user) return;
-    const { action, row } = confirm;
     setConfirm(null);
 
+    if (confirm.kind === "group") {
+      const { action, group, ids } = confirm;
+      switch (action) {
+        case "release_group":
+          await runAction(
+            group.key,
+            () =>
+              releaseTransferRequests({
+                requestIds: ids,
+                releasedBy: user.uid,
+                releasedByName: user.displayName,
+              }),
+            `Released ${ids.length} request${ids.length === 1 ? "" : "s"}`
+          );
+          break;
+        case "decline_group":
+          await runAction(
+            group.key,
+            () =>
+              declineTransferRequests({
+                requestIds: ids,
+                declinedBy: user.uid,
+                declinedByName: user.displayName,
+              }),
+            `Declined ${ids.length} request${ids.length === 1 ? "" : "s"}`
+          );
+          break;
+        case "receive_group":
+          await runAction(
+            group.key,
+            () =>
+              receiveTransferRequests({
+                requestIds: ids,
+                receivedBy: user.uid,
+                receivedByName: user.displayName,
+              }),
+            `Received ${ids.length} item${ids.length === 1 ? "" : "s"} — stock transferred`
+          );
+          break;
+      }
+      return;
+    }
+
+    const { action, row } = confirm;
     switch (action) {
       case "release":
         await runAction(
@@ -625,7 +743,27 @@ export default function CashierTransferRequestsPage() {
     );
   }
 
-  const dialogCopy = confirm ? confirmCopy(confirm.action, confirm.row) : null;
+  const dialogCopy = !confirm
+    ? null
+    : confirm.kind === "group"
+      ? groupConfirmCopy(confirm.action, confirm.group, confirm.ids)
+      : confirmCopy(confirm.action, confirm.row);
+
+  const cancelOutgoing = (row: TransferRequest) => {
+    if (!user) return;
+    void runAction(
+      row.id,
+      () =>
+        cancelTransferRequest({
+          requestId: row.id,
+          cancelledBy: user.uid,
+          cancelledByName: user.displayName,
+        }),
+      "Request cancelled"
+    );
+  };
+  const confirmRow = (action: ConfirmAction, row: TransferRequest) =>
+    setConfirm({ kind: "row", action, row });
   const branchSelectLabel = (value: string | null) => {
     if (!value) return null;
     const b = branches.find((row) => row.id === value);
@@ -690,60 +828,189 @@ export default function CashierTransferRequestsPage() {
         </p>
       ) : (
         <ul className="flex h-0 min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain">
-          {visible.map((row) => {
-            const busy = actingId === row.id;
-            const showActions = hasRequestActions(tab, row.status, user);
+          {groups.map((group) => {
+            if (group.rows.length === 1) {
+              const row = group.rows[0];
+              const busy = actingId === row.id;
+              const showActions = hasRequestActions(tab, row.status, user);
+              return (
+                <li key={group.key} className="max-h-full shrink-0">
+                  <Card className="flex max-h-full flex-col overflow-hidden">
+                    <CardHeader className="shrink-0 pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-base leading-snug">
+                          {itemLabel(row)}
+                        </CardTitle>
+                        <StatusPill status={row.status} />
+                      </div>
+                      <CardDescription>
+                        Qty {row.quantity}
+                        {tab === "incoming"
+                          ? ` · to ${row.toBranchName}`
+                          : ` · from ${row.fromBranchName}`}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="min-h-0 flex-1 overflow-y-auto text-sm">
+                      <RequestTimeline row={row} />
+                    </CardContent>
+                    {showActions ? (
+                      <CardFooter className="shrink-0 flex-wrap gap-2">
+                        <RequestActionBar
+                          tab={tab}
+                          row={row}
+                          busy={busy}
+                          user={user}
+                          onConfirm={confirmRow}
+                          onCancelOutgoing={cancelOutgoing}
+                        />
+                      </CardFooter>
+                    ) : null}
+                  </Card>
+                </li>
+              );
+            }
+
+            const groupBusy = actingId === group.key;
+            const pendingIds = group.rows
+              .filter((row) => row.status === "requested")
+              .map((row) => row.id);
+            const releasedIds = group.rows
+              .filter((row) => row.status === "released")
+              .map((row) => row.id);
+            const totalQty = group.rows.reduce(
+              (sum, row) => sum + row.quantity,
+              0
+            );
+            const showIncomingGroupActions =
+              user != null && tab === "incoming" && pendingIds.length > 0;
+            const showOutgoingGroupActions =
+              user != null && tab === "outgoing" && releasedIds.length > 0;
+
             return (
-              <li key={row.id} className="max-h-full shrink-0">
-                <Card className="flex max-h-full flex-col overflow-hidden">
+              <li key={group.key} className="shrink-0">
+                <Card className="flex flex-col overflow-hidden">
                   <CardHeader className="shrink-0 pb-2">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="text-base leading-snug">
-                        {itemLabel(row)}
+                        {group.rows.length} items · qty {totalQty}
                       </CardTitle>
-                      <span
-                        className={cn(
-                          "shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase ring-1 ring-inset",
-                          statusToneClass(row.status)
-                        )}
-                      >
-                        {statusLabel(row.status)}
+                      <span className="shrink-0 text-right text-[11px] font-medium text-muted-foreground">
+                        {groupStatusSummary(group.rows)}
                       </span>
                     </div>
                     <CardDescription>
-                      Qty {row.quantity}
                       {tab === "incoming"
-                        ? ` · to ${row.toBranchName}`
-                        : ` · from ${row.fromBranchName}`}
+                        ? `To ${group.toBranchName}`
+                        : `From ${group.fromBranchName}`}
+                      {" · "}
+                      <span
+                        title={`${formatDatePart(group.requestedAt)} ${formatTimePart(group.requestedAt)}`}
+                      >
+                        requested {formatRelative(group.requestedAt)}
+                      </span>
+                      {group.requestedByName
+                        ? ` by ${group.requestedByName}`
+                        : ""}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="min-h-0 flex-1 overflow-y-auto text-sm">
-                    <RequestTimeline row={row} />
+                  <CardContent className="text-sm">
+                    <ul className="divide-y rounded-lg border">
+                      {group.rows.map((row) => {
+                        const rowBusy = actingId === row.id || groupBusy;
+                        const showActions = hasRequestActions(
+                          tab,
+                          row.status,
+                          user
+                        );
+                        return (
+                          <li key={row.id} className="space-y-2 px-3 py-2.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-medium leading-snug break-words">
+                                  {itemLabel(row)}
+                                </p>
+                                <p className="text-xs text-muted-foreground tabular-nums">
+                                  Qty {row.quantity}
+                                </p>
+                              </div>
+                              <StatusPill status={row.status} />
+                            </div>
+                            {showActions ? (
+                              <div className="flex flex-wrap gap-2">
+                                <RequestActionBar
+                                  tab={tab}
+                                  row={row}
+                                  busy={rowBusy}
+                                  user={user}
+                                  onConfirm={confirmRow}
+                                  onCancelOutgoing={cancelOutgoing}
+                                />
+                              </div>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </CardContent>
-                  {showActions ? (
-                    <CardFooter className="shrink-0 flex-wrap gap-2">
-                      <RequestActionBar
-                        tab={tab}
-                        row={row}
-                        busy={busy}
-                        user={user}
-                        onConfirm={(action, nextRow) =>
-                          setConfirm({ action, row: nextRow })
-                        }
-                        onCancelOutgoing={(nextRow) => {
-                          if (!user) return;
-                          void runAction(
-                            nextRow.id,
-                            () =>
-                              cancelTransferRequest({
-                                requestId: nextRow.id,
-                                cancelledBy: user.uid,
-                                cancelledByName: user.displayName,
-                              }),
-                            "Request cancelled"
-                          );
-                        }}
-                      />
+                  {showIncomingGroupActions || showOutgoingGroupActions ? (
+                    <CardFooter className="shrink-0 flex-wrap gap-2 border-t bg-muted/20 pt-4">
+                      {showIncomingGroupActions ? (
+                        <>
+                          <Button
+                            type="button"
+                            className="flex-1"
+                            disabled={groupBusy}
+                            onClick={() =>
+                              setConfirm({
+                                kind: "group",
+                                action: "release_group",
+                                group,
+                                ids: pendingIds,
+                              })
+                            }
+                          >
+                            {groupBusy ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : null}
+                            Release all ({pendingIds.length})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={groupBusy}
+                            onClick={() =>
+                              setConfirm({
+                                kind: "group",
+                                action: "decline_group",
+                                group,
+                                ids: pendingIds,
+                              })
+                            }
+                          >
+                            Decline all
+                          </Button>
+                        </>
+                      ) : null}
+                      {showOutgoingGroupActions ? (
+                        <Button
+                          type="button"
+                          className="flex-1"
+                          disabled={groupBusy}
+                          onClick={() =>
+                            setConfirm({
+                              kind: "group",
+                              action: "receive_group",
+                              group,
+                              ids: releasedIds,
+                            })
+                          }
+                        >
+                          {groupBusy ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : null}
+                          Receive all ({releasedIds.length})
+                        </Button>
+                      ) : null}
                     </CardFooter>
                   ) : null}
                 </Card>
@@ -770,7 +1037,10 @@ export default function CashierTransferRequestsPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant={
-                confirm?.action === "decline" || confirm?.action === "receive"
+                confirm?.action === "decline" ||
+                confirm?.action === "receive" ||
+                confirm?.action === "decline_group" ||
+                confirm?.action === "receive_group"
                   ? "destructive"
                   : "default"
               }

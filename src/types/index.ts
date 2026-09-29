@@ -253,6 +253,8 @@ export type TransferRequestStatus =
 
 export interface TransferRequest {
   id: string;
+  /** Shared by every line submitted together from one request cart. */
+  batchId: string | null;
   productId: string;
   productName: string;
   variantId: string;
