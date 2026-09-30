@@ -1,6 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Layers } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -78,6 +89,37 @@ export function ProductVariantsEditor({
   const overrideFor = (variantId: string) =>
     isDefaultScope ? undefined : branchPrices[priceScope]?.[variantId];
 
+  const applyToAll = (prices: {
+    cash: number | null;
+    retail: number | null;
+    wholesale: number | null;
+  }) => {
+    if (isDefaultScope) {
+      onChange(
+        variants.map((variant) => ({
+          ...variant,
+          ...(prices.cash != null ? { price: prices.cash } : {}),
+          ...(prices.retail != null
+            ? { retailPrice: normalizeRetailPrice(prices.retail) }
+            : {}),
+          ...(prices.wholesale != null
+            ? { wholesalePrice: normalizeWholesalePrice(prices.wholesale) }
+            : {}),
+        }))
+      );
+      return;
+    }
+    const patch: { cashPrice?: number | null; retailPrice?: number | null } =
+      {};
+    if (prices.cash != null) patch.cashPrice = prices.cash;
+    if (prices.retail != null) {
+      patch.retailPrice = normalizeRetailPrice(prices.retail);
+    }
+    for (const variant of variants) {
+      onBranchPriceChange?.(variant.id, patch);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -89,6 +131,21 @@ export function ProductVariantsEditor({
               : "Empty cash or retail uses the default price. Wholesale stays on the catalog."}
           </p>
         </div>
+        <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
+        {variants.length > 1 ? (
+          <ApplyToAllPrices
+            variantCount={variants.length}
+            showWholesale={isDefaultScope}
+            scopeLabel={
+              isDefaultScope
+                ? null
+                : (branches.find((branch) => branch.id === priceScope)?.name ??
+                  "this branch")
+            }
+            disabled={disabled}
+            onApply={applyToAll}
+          />
+        ) : null}
         {onPriceScopeChange ? (
           <div className="w-full min-w-0 sm:w-64">
             <Label htmlFor="variant-price-scope" className="text-xs">
@@ -127,6 +184,7 @@ export function ProductVariantsEditor({
             </Select>
           </div>
         ) : null}
+        </div>
       </div>
 
       <div className="space-y-3 lg:hidden">
@@ -327,6 +385,146 @@ export function ProductVariantsEditor({
         </Table>
       </div>
     </div>
+  );
+}
+
+function ApplyToAllPrices({
+  variantCount,
+  showWholesale,
+  scopeLabel,
+  disabled,
+  onApply,
+}: {
+  variantCount: number;
+  showWholesale: boolean;
+  scopeLabel: string | null;
+  disabled?: boolean;
+  onApply: (prices: {
+    cash: number | null;
+    retail: number | null;
+    wholesale: number | null;
+  }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [cash, setCash] = useState("");
+  const [retail, setRetail] = useState("");
+  const [wholesale, setWholesale] = useState("");
+
+  const parse = (raw: string) =>
+    raw.trim() === "" ? null : parseMoneyInput(raw);
+
+  const cashValue = parse(cash);
+  const retailValue = parse(retail);
+  const wholesaleValue = showWholesale ? parse(wholesale) : null;
+  const hasValue =
+    cashValue != null || retailValue != null || wholesaleValue != null;
+
+  const reset = () => {
+    setCash("");
+    setRetail("");
+    setWholesale("");
+  };
+
+  const apply = () => {
+    if (!hasValue) return;
+    onApply({ cash: cashValue, retail: retailValue, wholesale: wholesaleValue });
+    toast.success(
+      scopeLabel
+        ? `Prices applied to ${variantCount} variants at ${scopeLabel}`
+        : `Prices applied to ${variantCount} variants`
+    );
+    reset();
+    setOpen(false);
+  };
+
+  const moneyInput = (
+    id: string,
+    label: string,
+    value: string,
+    setValue: (next: string) => void
+  ) => (
+    <div className="min-w-0 space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        inputMode="decimal"
+        placeholder="Leave unchanged"
+        value={value}
+        className="h-9 tabular-nums"
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (!isMoneyDraft(raw)) return;
+          setValue(raw);
+        }}
+      />
+    </div>
+  );
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        className="h-9 w-full sm:w-auto"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+      >
+        <Layers className="size-4" />
+        Set all prices
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) reset();
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          {/* Portaled, but React submit events still bubble to the product form. */}
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              apply();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Set prices for all variants</DialogTitle>
+              <DialogDescription>
+                {scopeLabel
+                  ? `Overrides cash and retail for all ${variantCount} variants at ${scopeLabel}. Blank fields are left unchanged.`
+                  : `Applies to all ${variantCount} variants. Blank fields are left unchanged.`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              {moneyInput("apply-all-cash", "Cash", cash, setCash)}
+              {moneyInput("apply-all-retail", "Retail", retail, setRetail)}
+              {showWholesale
+                ? moneyInput(
+                    "apply-all-wholesale",
+                    "Wholesale",
+                    wholesale,
+                    setWholesale
+                  )
+                : null}
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!hasValue}>
+                Apply to {variantCount} variants
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
