@@ -46,6 +46,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -103,6 +104,7 @@ export default function AdminVouchersPage() {
     useState<VoucherDiscountType>("amount");
   const [discountValue, setDiscountValue] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  const [singleUse, setSingleUse] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
   const [usageVoucher, setUsageVoucher] = useState<Voucher | null>(null);
@@ -191,6 +193,7 @@ export default function AdminVouchersPage() {
     setDiscountType("amount");
     setDiscountValue("");
     setExpiresAt("");
+    setSingleUse(false);
   };
 
   const openIssue = () => {
@@ -213,6 +216,7 @@ export default function AdminVouchersPage() {
       String(voucher.discountValue)
     );
     setExpiresAt(toDateInputValue(voucher.expiresAt));
+    setSingleUse(voucher.singleUse);
     setDialogOpen(true);
   };
 
@@ -261,6 +265,7 @@ export default function AdminVouchersPage() {
           resellerName: linked?.name ?? null,
           discountValue: value,
           expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`) : null,
+          singleUse,
         });
         toast.success(`Updated ${updated.code}`);
       } else {
@@ -273,6 +278,7 @@ export default function AdminVouchersPage() {
           discountType,
           discountValue: value,
           expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`) : null,
+          singleUse,
           createdBy: user.uid,
           createdByName: user.displayName ?? user.email,
         });
@@ -313,7 +319,7 @@ export default function AdminVouchersPage() {
 
   const statusBadge = (status: VoucherStatus) => {
     if (status === "active") return <Badge>Active</Badge>;
-    if (status === "depleted") return <Badge variant="secondary">Depleted</Badge>;
+    if (status === "depleted") return <Badge variant="secondary">Used</Badge>;
     return <Badge variant="outline">Void</Badge>;
   };
 
@@ -366,16 +372,19 @@ export default function AdminVouchersPage() {
                   {(value) =>
                     value === "all"
                       ? "All statuses"
-                      : value
-                        ? String(value).charAt(0).toUpperCase() +
-                          String(value).slice(1)
-                        : null
+                      : value === "depleted"
+                        ? "Used"
+                        : value
+                          ? String(value).charAt(0).toUpperCase() +
+                            String(value).slice(1)
+                          : null
                   }
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="depleted">Used</SelectItem>
                 <SelectItem value="void">Void</SelectItem>
               </SelectContent>
             </Select>
@@ -432,7 +441,14 @@ export default function AdminVouchersPage() {
                       <TableCell className="tabular-nums">
                         {valueLabel(voucher)}
                       </TableCell>
-                      <TableCell>{statusBadge(voucher.status)}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {statusBadge(voucher.status)}
+                          {voucher.singleUse ? (
+                            <Badge variant="outline">Single use</Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {voucher.expiresAt ? formatDate(voucher.expiresAt) : "—"}
                       </TableCell>
@@ -619,9 +635,31 @@ export default function AdminVouchersPage() {
               />
               <p className="text-xs text-muted-foreground">
                 {discountType === "percent"
-                  ? "Percent less on each sale. Reusable until voided or expired."
-                  : "Peso less on each sale (capped at cart total). Reusable until voided or expired."}
+                  ? "Percent less on each sale."
+                  : "Peso less on each sale (capped at cart total)."}{" "}
+                {singleUse
+                  ? "Can be redeemed once."
+                  : "Reusable until voided or expired."}
               </p>
+            </div>
+            <div className="flex items-start gap-3 rounded-lg border p-3">
+              <Checkbox
+                id="voucher-single-use"
+                checked={singleUse}
+                onCheckedChange={(checked) => setSingleUse(checked === true)}
+                className="mt-0.5"
+              />
+              <div className="space-y-1">
+                <Label htmlFor="voucher-single-use" className="cursor-pointer">
+                  Single use
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {editingVoucher?.singleUse &&
+                  editingVoucher.status === "depleted"
+                    ? "Already used. Untick to make it reusable again."
+                    : "The voucher can only be redeemed on one sale, then it's marked used."}
+                </p>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="voucher-expires">Expires (optional)</Label>

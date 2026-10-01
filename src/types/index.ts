@@ -533,6 +533,8 @@ export interface Voucher {
   initialAmount: number;
   /** Legacy field; amount vouchers no longer deplete a balance. */
   remainingAmount: number;
+  /** When true, the first redemption marks the voucher "depleted" (used). */
+  singleUse: boolean;
   status: VoucherStatus;
   expiresAt: Date | null;
   createdBy: string;

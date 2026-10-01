@@ -108,6 +108,7 @@ function parseVoucherDoc(
     discountValue,
     initialAmount,
     remainingAmount: Number(data.remainingAmount ?? 0),
+    singleUse: data.singleUse === true,
     status:
       data.status === "void" || data.status === "depleted"
         ? data.status
@@ -212,7 +213,7 @@ export function isVoucherRedeemable(
   voucher: Voucher,
   now = new Date()
 ): boolean {
-  // Unlimited reuse until voided (legacy "depleted" still blocked).
+  // Reusable until voided; "depleted" = used single-use (or legacy) voucher.
   if (voucher.status === "void" || voucher.status === "depleted") return false;
   if (voucher.status !== "active") return false;
   if (voucher.expiresAt && voucher.expiresAt.getTime() <= now.getTime()) {
@@ -252,6 +253,7 @@ export async function issueVoucher(input: {
   /** Optional custom code. Auto-generated when omitted. */
   code?: string | null;
   expiresAt?: Date | null;
+  singleUse?: boolean;
   createdBy: string;
   createdByName?: string | null;
 }): Promise<Voucher> {
@@ -308,6 +310,7 @@ export async function issueVoucher(input: {
   const initialAmount =
     discountType === "amount" ? storedDiscountValue : 0;
   const remainingAmount = initialAmount;
+  const singleUse = input.singleUse === true;
 
   const docRef = await addDoc(collection(getClientDb(), COLLECTIONS.vouchers), {
     code,
@@ -319,6 +322,7 @@ export async function issueVoucher(input: {
     discountValue: storedDiscountValue,
     initialAmount,
     remainingAmount,
+    singleUse,
     status: "active" satisfies VoucherStatus,
     expiresAt: input.expiresAt ?? null,
     createdBy: input.createdBy,
@@ -338,6 +342,7 @@ export async function issueVoucher(input: {
     discountValue: storedDiscountValue,
     initialAmount,
     remainingAmount,
+    singleUse,
     status: "active",
     expiresAt: input.expiresAt ?? null,
     createdBy: input.createdBy,
@@ -369,6 +374,7 @@ export async function updateVoucher(
     /** Percent (1–100) or less-amount pesos. */
     discountValue: number;
     expiresAt?: Date | null;
+    singleUse?: boolean;
   }
 ): Promise<Voucher> {
   const existing = await getVoucher(id);
@@ -423,7 +429,10 @@ export async function updateVoucher(
   const initialAmount =
     discountType === "amount" ? storedDiscountValue : 0;
   const remainingAmount = initialAmount;
-  const status: VoucherStatus = "active";
+  const singleUse = input.singleUse ?? existing.singleUse;
+  // A used single-use voucher stays used; unticking single-use makes it reusable again.
+  const status: VoucherStatus =
+    singleUse && existing.status === "depleted" ? "depleted" : "active";
   const expiresAt = input.expiresAt ?? null;
 
   await updateDoc(doc(getClientDb(), COLLECTIONS.vouchers, id), {
@@ -436,6 +445,7 @@ export async function updateVoucher(
     discountValue: storedDiscountValue,
     initialAmount,
     remainingAmount,
+    singleUse,
     status,
     expiresAt,
     updatedAt: serverTimestamp(),
@@ -452,6 +462,7 @@ export async function updateVoucher(
     discountValue: storedDiscountValue,
     initialAmount,
     remainingAmount,
+    singleUse,
     status,
     expiresAt,
     updatedAt: new Date(),

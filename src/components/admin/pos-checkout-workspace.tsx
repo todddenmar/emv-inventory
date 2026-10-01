@@ -347,7 +347,11 @@ export function PosCheckoutWorkspace({
     try {
       const voucher = await getVoucherByCode(code);
       if (!voucher || !isVoucherRedeemable(voucher)) {
-        toast.error("Invalid or unusable voucher");
+        toast.error(
+          voucher?.singleUse && voucher.status === "depleted"
+            ? "This single-use voucher has already been used"
+            : "Invalid or unusable voucher"
+        );
         return;
       }
       const subtotal = lines.reduce(

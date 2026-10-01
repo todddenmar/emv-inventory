@@ -364,6 +364,7 @@ export async function completePosSale(
     let voucherId: string | null = null;
     let voucherCode: string | null = null;
     let voucherRef: ReturnType<typeof doc> | null = null;
+    let voucherSingleUse = false;
 
     if (!noCharge && input.voucherId) {
       if (!input.customer?.name?.trim()) {
@@ -380,6 +381,7 @@ export async function completePosSale(
         remainingAmount?: number;
         discountType?: string;
         discountValue?: number;
+        singleUse?: boolean;
         status?: string;
         expiresAt?: { toDate?: () => Date } | Date | null;
       };
@@ -411,6 +413,7 @@ export async function completePosSale(
         discountValue,
         initialAmount: 0,
         remainingAmount: Number(voucherData.remainingAmount ?? 0),
+        singleUse: voucherData.singleUse === true,
         status:
           voucherData.status === "void" || voucherData.status === "depleted"
             ? voucherData.status
@@ -423,8 +426,13 @@ export async function completePosSale(
       };
 
       if (!isVoucherRedeemable(voucherLike)) {
-        throw new Error("Voucher is not redeemable");
+        throw new Error(
+          voucherLike.singleUse && voucherLike.status === "depleted"
+            ? "This single-use voucher has already been used"
+            : "Voucher is not redeemable"
+        );
       }
+      voucherSingleUse = voucherLike.singleUse;
       if (
         input.resellerId &&
         voucherLike.resellerId &&
@@ -518,6 +526,12 @@ export async function completePosSale(
         redeemedByName: input.createdByName ?? null,
         createdAt: serverTimestamp(),
       });
+      if (voucherSingleUse) {
+        tx.update(voucherRef, {
+          status: "depleted",
+          updatedAt: serverTimestamp(),
+        });
+      }
     }
 
     tx.set(saleRef, {
