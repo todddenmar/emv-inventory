@@ -414,6 +414,7 @@ export async function completePosSale(
         initialAmount: 0,
         remainingAmount: Number(voucherData.remainingAmount ?? 0),
         singleUse: voucherData.singleUse === true,
+        groupId: null,
         status:
           voucherData.status === "void" || voucherData.status === "depleted"
             ? voucherData.status

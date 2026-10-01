@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Loader2, MoreHorizontal, Plus, Search } from "lucide-react";
+import {
+  Copy,
+  FolderInput,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,8 +61,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { VoucherGroupsPanel } from "@/components/admin/voucher-groups-panel";
 import { getResellers } from "@/lib/firestore/resellers";
+import {
+  assignVouchersToGroup,
+  getVoucherGroups,
+} from "@/lib/firestore/voucher-groups";
 import {
   getVoucherRedemptions,
   getVouchers,
@@ -72,9 +85,12 @@ import type {
   Reseller,
   Voucher,
   VoucherDiscountType,
+  VoucherGroup,
   VoucherRedemption,
   VoucherStatus,
 } from "@/types";
+
+type VouchersTab = "vouchers" | "groups";
 
 function toDateInputValue(date: Date | null | undefined): string {
   if (!date) return "";
@@ -88,11 +104,18 @@ export default function AdminVouchersPage() {
   const user = useAuthStore((s) => s.user);
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [resellers, setResellers] = useState<Reseller[]>([]);
+  const [groups, setGroups] = useState<VoucherGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<VouchersTab>("vouchers");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<VoucherStatus | "all">(
     "all"
   );
+  /** "all", "none" (ungrouped), or a group id. */
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [assigning, setAssigning] = useState(false);
+  const [formGroupId, setFormGroupId] = useState("none");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
   const [voidId, setVoidId] = useState<string | null>(null);
@@ -114,10 +137,11 @@ export default function AdminVouchersPage() {
   const isEditing = editingVoucher != null;
 
   const load = () => {
-    Promise.all([getVouchers(), getResellers(true)])
-      .then(([v, r]) => {
+    Promise.all([getVouchers(), getResellers(true), getVoucherGroups()])
+      .then(([v, r, g]) => {
         setVouchers(v);
         setResellers(r);
+        setGroups(g);
       })
       .catch((err) => {
         console.error(err);
@@ -134,6 +158,14 @@ export default function AdminVouchersPage() {
     const q = search.trim().toLowerCase();
     return vouchers.filter((v) => {
       if (statusFilter !== "all" && v.status !== statusFilter) return false;
+      if (groupFilter === "none" && v.groupId) return false;
+      if (
+        groupFilter !== "all" &&
+        groupFilter !== "none" &&
+        v.groupId !== groupFilter
+      ) {
+        return false;
+      }
       if (!q) return true;
       const owner = voucherOwnerLabel(v).toLowerCase();
       return (
@@ -144,11 +176,16 @@ export default function AdminVouchersPage() {
         (v.resellerName?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [vouchers, search, statusFilter]);
+  }, [vouchers, search, statusFilter, groupFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, groupFilter]);
+
+  const groupNameById = useMemo(
+    () => new Map(groups.map((g) => [g.id, g.name])),
+    [groups]
+  );
 
   const {
     page: safePage,
@@ -160,6 +197,71 @@ export default function AdminVouchersPage() {
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+
+  const pageAllSelected =
+    pagedItems.length > 0 && pagedItems.every((v) => selectedIds.has(v.id));
+  const pageSomeSelected = pagedItems.some((v) => selectedIds.has(v.id));
+  const filteredAllSelected =
+    filtered.length > 0 && filtered.every((v) => selectedIds.has(v.id));
+
+  const toggleSelected = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const togglePageSelected = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const v of pagedItems) {
+        if (checked) next.add(v.id);
+        else next.delete(v.id);
+      }
+      return next;
+    });
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const v of filtered) next.add(v.id);
+      return next;
+    });
+  };
+
+  const handleBulkAssign = async (groupId: string | null) => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setAssigning(true);
+    try {
+      const count = await assignVouchersToGroup(ids, groupId);
+      toast.success(
+        groupId
+          ? `Assigned ${count} voucher${count === 1 ? "" : "s"} to ${
+              groupNameById.get(groupId) ?? "group"
+            }`
+          : `Removed ${count} voucher${count === 1 ? "" : "s"} from their group`
+      );
+      setSelectedIds(new Set());
+      load();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update vouchers"
+      );
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const viewGroup = (groupId: string) => {
+    setGroupFilter(groupId);
+    setStatusFilter("all");
+    setSearch("");
+    setTab("vouchers");
+  };
 
   useEffect(() => {
     if (!usageVoucher) {
@@ -194,10 +296,14 @@ export default function AdminVouchersPage() {
     setDiscountValue("");
     setExpiresAt("");
     setSingleUse(false);
+    setFormGroupId("none");
   };
 
   const openIssue = () => {
     resetForm();
+    if (groupFilter !== "all" && groupFilter !== "none") {
+      setFormGroupId(groupFilter);
+    }
     setDialogOpen(true);
   };
 
@@ -217,6 +323,7 @@ export default function AdminVouchersPage() {
     );
     setExpiresAt(toDateInputValue(voucher.expiresAt));
     setSingleUse(voucher.singleUse);
+    setFormGroupId(voucher.groupId ?? "none");
     setDialogOpen(true);
   };
 
@@ -266,6 +373,7 @@ export default function AdminVouchersPage() {
           discountValue: value,
           expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`) : null,
           singleUse,
+          groupId: formGroupId === "none" ? null : formGroupId,
         });
         toast.success(`Updated ${updated.code}`);
       } else {
@@ -279,6 +387,7 @@ export default function AdminVouchersPage() {
           discountValue: value,
           expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`) : null,
           singleUse,
+          groupId: formGroupId === "none" ? null : formGroupId,
           createdBy: user.uid,
           createdByName: user.displayName ?? user.email,
         });
@@ -345,13 +454,74 @@ export default function AdminVouchersPage() {
         </Button>
       </div>
 
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as VouchersTab)}
+        className="gap-4"
+      >
+        <TabsList>
+          <TabsTrigger value="vouchers" className="px-3">
+            Vouchers
+          </TabsTrigger>
+          <TabsTrigger value="groups" className="px-3">
+            Groups
+            {groups.length > 0 ? (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {groups.length}
+              </span>
+            ) : null}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="groups">
+          <VoucherGroupsPanel
+            groups={groups}
+            vouchers={vouchers}
+            loading={loading}
+            onChanged={load}
+            onViewGroup={viewGroup}
+          />
+        </TabsContent>
+
+        <TabsContent value="vouchers">
       <Card>
-        <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <CardHeader className="gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <CardTitle>All vouchers</CardTitle>
+            <CardTitle>
+              {groupFilter === "all"
+                ? "All vouchers"
+                : groupFilter === "none"
+                  ? "Vouchers without a group"
+                  : (groupNameById.get(groupFilter) ?? "Group")}
+            </CardTitle>
             <CardDescription>Codes, less value, and status</CardDescription>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:max-w-md sm:flex-row">
+          <div className="flex w-full flex-col gap-2 sm:flex-row xl:max-w-2xl">
+            <Select
+              value={groupFilter}
+              onValueChange={(v) => setGroupFilter(v ?? "all")}
+            >
+              <SelectTrigger className="sm:w-44">
+                <SelectValue>
+                  {(value) =>
+                    !value || value === "all"
+                      ? "All groups"
+                      : value === "none"
+                        ? "No group"
+                        : (groupNameById.get(String(value)) ?? "Group")
+                  }
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All groups</SelectItem>
+                <SelectItem value="none">No group</SelectItem>
+                {groups.map((group) => (
+                  <SelectItem key={group.id} value={group.id}>
+                    {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -397,11 +567,91 @@ export default function AdminVouchersPage() {
             <p className="text-muted-foreground">No vouchers found.</p>
           ) : (
             <div className="space-y-4">
+              {selectedIds.size > 0 ? (
+                <div className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm">
+                    <span className="font-medium tabular-nums">
+                      {selectedIds.size} selected
+                    </span>
+                    {!filteredAllSelected && filtered.length > pagedItems.length ? (
+                      <>
+                        {" · "}
+                        <button
+                          type="button"
+                          className="text-primary underline-offset-4 hover:underline"
+                          onClick={selectAllFiltered}
+                        >
+                          Select all {filtered.length} matching
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedIds(new Set())}
+                      disabled={assigning}
+                    >
+                      Clear
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button type="button" size="sm" disabled={assigning}>
+                            {assigning ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <FolderInput className="mr-2 h-4 w-4" />
+                            )}
+                            Assign to group
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent align="end" className="min-w-48">
+                        {groups.length === 0 ? (
+                          <DropdownMenuItem onClick={() => setTab("groups")}>
+                            Create a group first…
+                          </DropdownMenuItem>
+                        ) : (
+                          groups.map((group) => (
+                            <DropdownMenuItem
+                              key={group.id}
+                              onClick={() => handleBulkAssign(group.id)}
+                            >
+                              {group.name}
+                            </DropdownMenuItem>
+                          ))
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => handleBulkAssign(null)}
+                        >
+                          Remove from group
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ) : null}
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={pageAllSelected}
+                        indeterminate={pageSomeSelected && !pageAllSelected}
+                        onCheckedChange={(checked) =>
+                          togglePageSelected(checked === true)
+                        }
+                        aria-label="Select all on this page"
+                      />
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Code</TableHead>
+                    <TableHead>Group</TableHead>
                     <TableHead>Owner</TableHead>
                     <TableHead>Less</TableHead>
                     <TableHead>Status</TableHead>
@@ -412,7 +662,19 @@ export default function AdminVouchersPage() {
                 </TableHeader>
                 <TableBody>
                   {pagedItems.map((voucher) => (
-                    <TableRow key={voucher.id}>
+                    <TableRow
+                      key={voucher.id}
+                      data-state={selectedIds.has(voucher.id) ? "selected" : undefined}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(voucher.id)}
+                          onCheckedChange={(checked) =>
+                            toggleSelected(voucher.id, checked === true)
+                          }
+                          aria-label={`Select ${voucher.code}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">
@@ -436,6 +698,19 @@ export default function AdminVouchersPage() {
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {voucher.groupId ? (
+                          <button
+                            type="button"
+                            className="text-left text-sm underline-offset-4 hover:underline"
+                            onClick={() => setGroupFilter(voucher.groupId!)}
+                          >
+                            {groupNameById.get(voucher.groupId) ?? "—"}
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>{voucherOwnerLabel(voucher)}</TableCell>
                       <TableCell className="tabular-nums">
@@ -508,6 +783,8 @@ export default function AdminVouchersPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
 
       <Dialog
         open={dialogOpen}
@@ -561,6 +838,31 @@ export default function AdminVouchersPage() {
                 placeholder="Notes for staff or the customer"
                 rows={3}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Group</Label>
+              <Select
+                value={formGroupId}
+                onValueChange={(v) => setFormGroupId(v ?? "none")}
+              >
+                <SelectTrigger>
+                  <SelectValue>
+                    {(value) =>
+                      !value || value === "none"
+                        ? "No group"
+                        : (groupNameById.get(String(value)) ?? "Group")
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No group</SelectItem>
+                  {groups.map((group) => (
+                    <SelectItem key={group.id} value={group.id}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Owner</Label>

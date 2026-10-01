@@ -366,6 +366,10 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /physicalVoucherGroups/{groupId} {
+      allow read, create, update, delete: if isStaff();
+    }
+
     match /physicalVoucherRedemptions/{redemptionId} {
       allow read: if isStaff();
       allow create: if isStaff();

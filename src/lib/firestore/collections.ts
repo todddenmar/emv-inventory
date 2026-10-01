@@ -19,6 +19,7 @@ export const COLLECTIONS = {
   loyaltyCards: "physicalLoyaltyCards",
   vouchers: "physicalVouchers",
   voucherRedemptions: "physicalVoucherRedemptions",
+  voucherGroups: "physicalVoucherGroups",
   paymentAccounts: "physicalPaymentAccounts",
   paymentMethods: "physicalPaymentMethods",
   pricePromotions: "physicalPricePromotions",

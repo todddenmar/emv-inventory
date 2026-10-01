@@ -535,6 +535,7 @@ export interface Voucher {
   remainingAmount: number;
   /** When true, the first redemption marks the voucher "depleted" (used). */
   singleUse: boolean;
+  groupId: string | null;
   status: VoucherStatus;
   expiresAt: Date | null;
   createdBy: string;
@@ -544,6 +545,16 @@ export interface Voucher {
 }
 
 /** One redemption of a voucher at checkout (customer who used it). */
+export interface VoucherGroup {
+  id: string;
+  name: string;
+  description: string;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface VoucherRedemption {
   id: string;
   voucherId: string;

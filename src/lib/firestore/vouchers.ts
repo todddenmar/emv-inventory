@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
   type CollectionReference,
   type QueryConstraint,
 } from "firebase/firestore";
@@ -109,6 +110,7 @@ function parseVoucherDoc(
     initialAmount,
     remainingAmount: Number(data.remainingAmount ?? 0),
     singleUse: data.singleUse === true,
+    groupId: (data.groupId as string | null | undefined) ?? null,
     status:
       data.status === "void" || data.status === "depleted"
         ? data.status
@@ -254,6 +256,7 @@ export async function issueVoucher(input: {
   code?: string | null;
   expiresAt?: Date | null;
   singleUse?: boolean;
+  groupId?: string | null;
   createdBy: string;
   createdByName?: string | null;
 }): Promise<Voucher> {
@@ -311,6 +314,7 @@ export async function issueVoucher(input: {
     discountType === "amount" ? storedDiscountValue : 0;
   const remainingAmount = initialAmount;
   const singleUse = input.singleUse === true;
+  const groupId = input.groupId ?? null;
 
   const docRef = await addDoc(collection(getClientDb(), COLLECTIONS.vouchers), {
     code,
@@ -323,6 +327,7 @@ export async function issueVoucher(input: {
     initialAmount,
     remainingAmount,
     singleUse,
+    groupId,
     status: "active" satisfies VoucherStatus,
     expiresAt: input.expiresAt ?? null,
     createdBy: input.createdBy,
@@ -343,6 +348,7 @@ export async function issueVoucher(input: {
     initialAmount,
     remainingAmount,
     singleUse,
+    groupId,
     status: "active",
     expiresAt: input.expiresAt ?? null,
     createdBy: input.createdBy,
@@ -350,6 +356,146 @@ export async function issueVoucher(input: {
     createdAt: new Date(),
     updatedAt: new Date(),
   };
+}
+
+export const MAX_GENERATED_VOUCHERS = 1000;
+
+/** No 0/O/1/I/L so printed codes are easy to read back. */
+const BULK_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+
+function randomBulkCodeChunk(length: number): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  let out = "";
+  for (const byte of bytes) {
+    out += BULK_CODE_ALPHABET[byte % BULK_CODE_ALPHABET.length];
+  }
+  return out;
+}
+
+/** Creates `quantity` vouchers with unique random codes in one go. */
+export async function generateVouchers(input: {
+  quantity: number;
+  /** Optional code prefix, e.g. "XMAS" → XMAS-7KQ2M9TA. */
+  prefix?: string | null;
+  name: string;
+  description?: string | null;
+  discountType: VoucherDiscountType;
+  discountValue: number;
+  expiresAt?: Date | null;
+  singleUse?: boolean;
+  groupId?: string | null;
+  createdBy: string;
+  createdByName?: string | null;
+}): Promise<Voucher[]> {
+  const quantity = Math.floor(Number(input.quantity));
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    throw new Error("Enter how many vouchers to generate");
+  }
+  if (quantity > MAX_GENERATED_VOUCHERS) {
+    throw new Error(
+      `You can generate up to ${MAX_GENERATED_VOUCHERS} vouchers at a time`
+    );
+  }
+
+  const name = input.name.trim();
+  if (!name) throw new Error("Voucher name is required");
+
+  const discountType = parseVoucherDiscountType(input.discountType);
+  const discountValue = Number(input.discountValue);
+  if (discountType === "percent") {
+    if (!Number.isFinite(discountValue) || discountValue <= 0 || discountValue > 100) {
+      throw new Error("Percent must be between 0 and 100");
+    }
+  } else if (!Number.isFinite(discountValue) || discountValue <= 0) {
+    throw new Error("Voucher amount must be greater than zero");
+  }
+
+  const prefix = normalizeVoucherCode(input.prefix ?? "").replace(/-+$/, "");
+  if (prefix && !/^[A-Z0-9][A-Z0-9_-]{0,15}$/.test(prefix)) {
+    throw new Error(
+      "Prefix must be up to 16 letters, numbers, hyphens, or underscores"
+    );
+  }
+
+  const db = getClientDb();
+  const existingSnap = await getDocs(collection(db, COLLECTIONS.vouchers));
+  const takenCodes = new Set(
+    existingSnap.docs.map((d) =>
+      String((d.data() as { code?: string }).code ?? "").toUpperCase()
+    )
+  );
+
+  const codes: string[] = [];
+  let attempts = 0;
+  while (codes.length < quantity) {
+    if (++attempts > quantity * 20) {
+      throw new Error("Could not generate enough unique codes; try another prefix");
+    }
+    const chunk = randomBulkCodeChunk(8);
+    const code = prefix ? `${prefix}-${chunk}` : `VCH-${chunk}`;
+    if (takenCodes.has(code)) continue;
+    takenCodes.add(code);
+    codes.push(code);
+  }
+
+  const description = input.description?.trim() ?? "";
+  const storedDiscountValue = roundMoney(discountValue);
+  const initialAmount = discountType === "amount" ? storedDiscountValue : 0;
+  const singleUse = input.singleUse === true;
+  const groupId = input.groupId ?? null;
+  const expiresAt = input.expiresAt ?? null;
+  const createdByName = input.createdByName ?? null;
+  const now = new Date();
+
+  const created: Voucher[] = [];
+  const BATCH_LIMIT = 450;
+  for (let i = 0; i < codes.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    for (const code of codes.slice(i, i + BATCH_LIMIT)) {
+      const ref = doc(collection(db, COLLECTIONS.vouchers));
+      batch.set(ref, {
+        code,
+        name,
+        description,
+        resellerId: null,
+        resellerName: null,
+        discountType,
+        discountValue: storedDiscountValue,
+        initialAmount,
+        remainingAmount: initialAmount,
+        singleUse,
+        groupId,
+        status: "active" satisfies VoucherStatus,
+        expiresAt,
+        createdBy: input.createdBy,
+        createdByName,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      created.push({
+        id: ref.id,
+        code,
+        name,
+        description,
+        resellerId: null,
+        resellerName: null,
+        discountType,
+        discountValue: storedDiscountValue,
+        initialAmount,
+        remainingAmount: initialAmount,
+        singleUse,
+        groupId,
+        status: "active",
+        expiresAt,
+        createdBy: input.createdBy,
+        createdByName,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    await batch.commit();
+  }
+  return created;
 }
 
 export async function voidVoucher(id: string): Promise<void> {
@@ -375,6 +521,7 @@ export async function updateVoucher(
     discountValue: number;
     expiresAt?: Date | null;
     singleUse?: boolean;
+    groupId?: string | null;
   }
 ): Promise<Voucher> {
   const existing = await getVoucher(id);
@@ -430,6 +577,8 @@ export async function updateVoucher(
     discountType === "amount" ? storedDiscountValue : 0;
   const remainingAmount = initialAmount;
   const singleUse = input.singleUse ?? existing.singleUse;
+  const groupId =
+    input.groupId !== undefined ? input.groupId : existing.groupId;
   // A used single-use voucher stays used; unticking single-use makes it reusable again.
   const status: VoucherStatus =
     singleUse && existing.status === "depleted" ? "depleted" : "active";
@@ -446,6 +595,7 @@ export async function updateVoucher(
     initialAmount,
     remainingAmount,
     singleUse,
+    groupId,
     status,
     expiresAt,
     updatedAt: serverTimestamp(),
@@ -463,6 +613,7 @@ export async function updateVoucher(
     initialAmount,
     remainingAmount,
     singleUse,
+    groupId,
     status,
     expiresAt,
     updatedAt: new Date(),
