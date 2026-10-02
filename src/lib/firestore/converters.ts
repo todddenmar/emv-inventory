@@ -463,6 +463,11 @@ export const inventoryLogConverter: FirestoreDataConverter<InventoryLog> = {
       performedBy: log.performedBy,
       performedByName: log.performedByName,
       createdAt: log.createdAt,
+      undoneAt: log.undoneAt,
+      undoneBy: log.undoneBy,
+      undoneByName: log.undoneByName,
+      undoLogId: log.undoLogId,
+      undoOfLogId: log.undoOfLogId,
     };
   },
   fromFirestore(
@@ -486,6 +491,11 @@ export const inventoryLogConverter: FirestoreDataConverter<InventoryLog> = {
       performedBy: data.performedBy,
       performedByName: data.performedByName ?? null,
       createdAt: toDate(data.createdAt),
+      undoneAt: data.undoneAt ? toDate(data.undoneAt) : null,
+      undoneBy: data.undoneBy ?? null,
+      undoneByName: data.undoneByName ?? null,
+      undoLogId: data.undoLogId ?? null,
+      undoOfLogId: data.undoOfLogId ?? null,
     };
   },
 };

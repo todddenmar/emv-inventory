@@ -1,8 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { History } from "lucide-react";
+import { History, Loader2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,10 +59,15 @@ import { getBranches } from "@/lib/firestore/branches";
 import { getCategories } from "@/lib/firestore/categories";
 import { getCategoryGroups } from "@/lib/firestore/category-groups";
 import {
+  canUndoInventoryLog,
   getInventoryLogs,
   inventoryLogLinksToSale,
   inventoryLogReasonLabel,
 } from "@/lib/firestore/inventory-logs";
+import {
+  undoManualAdjustment,
+  undoSupplierStockIn,
+} from "@/lib/firestore/inventory-undo";
 import { getProducts } from "@/lib/firestore/products";
 import { formatDate } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
@@ -79,6 +93,7 @@ const REASON_OPTIONS: { value: ReasonFilter; label: string }[] = [
   { value: "transfer_in", label: "Transfer in" },
   { value: "transfer_out", label: "Transfer out" },
   { value: "reseller_transfer_out", label: "Reseller transfer" },
+  { value: "undo", label: "Undo" },
 ];
 
 function applyPreset(preset: Preset): {
@@ -107,7 +122,10 @@ function applyPreset(preset: Preset): {
 }
 
 export default function AdminAdjustmentHistoryPage() {
-  const { canViewAllBranches, assignedBranchId } = useBranchAccess();
+  const { canViewAllBranches, assignedBranchId, isElevatedAdmin, user } =
+    useBranchAccess();
+  const [undoTarget, setUndoTarget] = useState<InventoryLog | null>(null);
+  const [undoing, setUndoing] = useState(false);
   const initial = applyPreset("today");
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -268,6 +286,41 @@ export default function AdminAdjustmentHistoryPage() {
       REASON_OPTIONS.find((opt) => opt.value === value)?.label ??
       "All activities"
     );
+  };
+
+  const undoStockInLines = useMemo(() => {
+    if (undoTarget?.reason !== "supplier_stock_in" || !undoTarget.referenceId) {
+      return [];
+    }
+    return logs.filter(
+      (log) =>
+        log.reason === "supplier_stock_in" &&
+        log.referenceId === undoTarget.referenceId
+    );
+  }, [logs, undoTarget]);
+
+  const handleUndo = async () => {
+    if (!undoTarget || !user) return;
+    const actor = { uid: user.uid, name: user.displayName ?? user.email ?? null };
+    setUndoing(true);
+    try {
+      if (undoTarget.reason === "supplier_stock_in") {
+        if (!undoTarget.referenceId) throw new Error("Missing stock-in reference");
+        const count = await undoSupplierStockIn(undoTarget.referenceId, actor);
+        toast.success(
+          `Stock-in undone · ${count} item${count === 1 ? "" : "s"} reversed`
+        );
+      } else {
+        await undoManualAdjustment(undoTarget.id, actor);
+        toast.success("Adjustment undone");
+      }
+      setUndoTarget(null);
+      void load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to undo");
+    } finally {
+      setUndoing(false);
+    }
   };
 
   const selectPreset = (next: Preset) => {
@@ -506,20 +559,35 @@ export default function AdminAdjustmentHistoryPage() {
                           ) : null}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-xs">
-                            {inventoryLogReasonLabel(log.reason)}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <Badge variant="outline" className="text-xs">
+                              {inventoryLogReasonLabel(log.reason)}
+                            </Badge>
+                            {log.undoneAt ? (
+                              <Badge
+                                variant="secondary"
+                                className="text-xs"
+                                title={`Undone ${formatDate(log.undoneAt)}${
+                                  log.undoneByName ? ` by ${log.undoneByName}` : ""
+                                }`}
+                              >
+                                Undone
+                              </Badge>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {log.performedByName ?? "Staff"}
                         </TableCell>
                         <TableCell
                           className={`text-right font-medium tabular-nums ${
-                            log.delta > 0
-                              ? "text-green-600"
-                              : log.delta < 0
-                                ? "text-red-600"
-                                : ""
+                            log.undoneAt
+                              ? "text-muted-foreground line-through"
+                              : log.delta > 0
+                                ? "text-green-600"
+                                : log.delta < 0
+                                  ? "text-red-600"
+                                  : ""
                           }`}
                         >
                           {log.delta > 0 ? "+" : ""}
@@ -529,9 +597,23 @@ export default function AdminAdjustmentHistoryPage() {
                           {log.previousStock} → {log.newStock}
                         </TableCell>
                         <TableCell className="text-right">
-                          {inventoryLogLinksToSale(log.reason) && log.referenceId ? (
-                            <SaleInvoiceButton saleId={log.referenceId} />
-                          ) : null}
+                          <div className="flex items-center justify-end gap-1">
+                            {inventoryLogLinksToSale(log.reason) && log.referenceId ? (
+                              <SaleInvoiceButton saleId={log.referenceId} />
+                            ) : null}
+                            {isElevatedAdmin && canUndoInventoryLog(log) ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-1 px-2 text-xs"
+                                onClick={() => setUndoTarget(log)}
+                              >
+                                <Undo2 className="h-3.5 w-3.5" />
+                                Undo
+                              </Button>
+                            ) : null}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -550,6 +632,72 @@ export default function AdminAdjustmentHistoryPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={undoTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !undoing) setUndoTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {undoTarget?.reason === "supplier_stock_in"
+                ? "Undo this stock-in?"
+                : "Undo this adjustment?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {undoTarget?.reason === "supplier_stock_in"
+                ? `Removes every item received in ${
+                    undoTarget.referenceLabel ?? "this stock-in"
+                  } from ${undoTarget.branchName ?? "the branch"}. An undo entry is added to the history.`
+                : undoTarget
+                  ? `Reverses ${undoTarget.delta > 0 ? "+" : ""}${undoTarget.delta} for ${
+                      undoTarget.productName ?? "this item"
+                    } at ${undoTarget.branchName ?? "the branch"}. An undo entry is added to the history.`
+                  : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {undoTarget?.reason === "supplier_stock_in" ? (
+            <ul className="max-h-56 divide-y overflow-y-auto rounded-lg border text-sm">
+              {(undoStockInLines.length > 0 ? undoStockInLines : [undoTarget]).map(
+                (line) => (
+                  <li
+                    key={line.id}
+                    className="flex items-center justify-between gap-3 px-3 py-2"
+                  >
+                    <span className="min-w-0 break-words">
+                      {line.productName ?? line.productId}
+                    </span>
+                    <span className="shrink-0 font-medium tabular-nums text-red-600">
+                      −{line.delta}
+                    </span>
+                  </li>
+                )
+              )}
+            </ul>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Fails if current stock is lower than what needs to be removed.
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={undoing}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleUndo}
+              disabled={undoing}
+            >
+              {undoing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Undo2 className="mr-2 h-4 w-4" />
+              )}
+              Undo
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

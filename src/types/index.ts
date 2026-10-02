@@ -184,7 +184,8 @@ export type InventoryLogReason =
   | "pos_sale"
   | "pos_sale_restock"
   | "supplier_stock_in"
-  | "reseller_transfer_out";
+  | "reseller_transfer_out"
+  | "undo";
 
 export interface InventoryLog {
   id: string;
@@ -202,6 +203,13 @@ export interface InventoryLog {
   performedBy: string;
   performedByName: string | null;
   createdAt: Date;
+  undoneAt: Date | null;
+  undoneBy: string | null;
+  undoneByName: string | null;
+  /** The reversing log written when this entry was undone. */
+  undoLogId: string | null;
+  /** On "undo" entries: the log that was reversed. */
+  undoOfLogId: string | null;
 }
 
 export type PriceChangeDirection = "increase" | "decrease";

@@ -267,7 +267,20 @@ export function inventoryLogReasonLabel(reason: InventoryLogReason): string {
       return "Supplier stock in";
     case "reseller_transfer_out":
       return "Reseller transfer";
+    case "undo":
+      return "Undo";
   }
+}
+
+export const UNDOABLE_INVENTORY_LOG_REASONS: readonly InventoryLogReason[] = [
+  "manual_adjustment",
+  "supplier_stock_in",
+];
+
+export function canUndoInventoryLog(log: InventoryLog): boolean {
+  return (
+    UNDOABLE_INVENTORY_LOG_REASONS.includes(log.reason) && log.undoneAt == null
+  );
 }
 
 export function inventoryLogLinksToSale(reason: InventoryLogReason): boolean {

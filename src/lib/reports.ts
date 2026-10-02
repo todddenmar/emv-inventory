@@ -238,6 +238,7 @@ export function summarizeStockMovements(
     "transfer_out",
     "reseller_transfer_out",
     "manual_adjustment",
+    "undo",
   ];
   const map = new Map<InventoryLogReason, StockMovementSummary>();
 

@@ -224,7 +224,11 @@ service cloud.firestore {
         request.resource.data.branchId != null &&
         (canAccessBranch(request.resource.data.branchId) ||
           request.resource.data.reason in ['transfer_out', 'transfer_in']);
-      allow update, delete: if false;
+      // Logs are append-only; admins may only stamp an entry as undone.
+      allow update: if isElevatedAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['undoneAt', 'undoneBy', 'undoneByName', 'undoLogId']);
+      allow delete: if false;
     }
 
     match /physicalProductPriceLogs/{logId} {
@@ -324,7 +328,10 @@ service cloud.firestore {
       allow create: if canMutateStock() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
-      allow update, delete: if false;
+      allow update: if isElevatedAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['undoneAt', 'undoneBy', 'undoneByName']);
+      allow delete: if false;
     }
 
     match /physicalResellerTransfers/{transferId} {
