@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, FileSpreadsheet, Loader2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +50,11 @@ import {
   regroupRemainingStockProducts,
   type RemainingStockCategoryGroup,
 } from "@/lib/remaining-stock";
+import {
+  downloadRemainingStockCsv,
+  printRemainingStock,
+  type RemainingStockExportMeta,
+} from "@/lib/remaining-stock-export";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import type {
@@ -319,6 +324,52 @@ export default function RemainingStocksPage() {
     return `${selectedBranches.length} of ${branches.length} branches`;
   })();
 
+  const canExport =
+    !loading && selectedBranches.length > 0 && productEntries.length > 0;
+
+  const buildExportMeta = (): RemainingStockExportMeta => {
+    const parts: string[] = [];
+    if (selectedGroupId !== "all") {
+      const groupName = activeGroups.find((g) => g.id === selectedGroupId)?.name;
+      if (groupName) parts.push(`Category group: ${groupName}`);
+    }
+    if (selectedCategoryId !== "all") {
+      const categoryName =
+        selectedCategoryId === UNCATEGORIZED_CATEGORY_ID
+          ? "Uncategorized"
+          : categories.find((c) => c.id === selectedCategoryId)?.name;
+      if (categoryName) parts.push(`Category: ${categoryName}`);
+    }
+    if (search.trim()) parts.push(`Search: ${search.trim()}`);
+    return {
+      title: `Remaining stocks · ${branchTriggerLabel}`,
+      generatedAt: new Date(),
+      filterSummary: parts.join(" · "),
+    };
+  };
+
+  const handlePrint = () => {
+    try {
+      printRemainingStock(filteredGroups, selectedBranches, buildExportMeta());
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to print");
+    }
+  };
+
+  const handleDownloadCsv = () => {
+    try {
+      downloadRemainingStockCsv(
+        filteredGroups,
+        selectedBranches,
+        buildExportMeta()
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to create Excel file"
+      );
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -498,16 +549,40 @@ export default function RemainingStocksPage() {
         </div>
       ) : (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Stock by branch</CardTitle>
-            <CardDescription>
-              {total} product{total === 1 ? "" : "s"}
-              {selectedBranches.length === 1
-                ? ` · ${selectedBranches[0].name}`
-                : selectedBranches.length > 1
-                  ? ` · ${selectedBranches.length} branches`
-                  : ""}
-            </CardDescription>
+          <CardHeader className="flex flex-col gap-3 pb-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1.5">
+              <CardTitle className="text-base">Stock by branch</CardTitle>
+              <CardDescription>
+                {total} product{total === 1 ? "" : "s"}
+                {selectedBranches.length === 1
+                  ? ` · ${selectedBranches[0].name}`
+                  : selectedBranches.length > 1
+                    ? ` · ${selectedBranches.length} branches`
+                    : ""}
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                disabled={!canExport}
+              >
+                <Printer className="mr-1.5 h-4 w-4" />
+                Print
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadCsv}
+                disabled={!canExport}
+              >
+                <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+                Excel
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {branches.length === 0 ? (
