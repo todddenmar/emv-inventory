@@ -274,6 +274,60 @@ export function filterRemainingStockGroups(
     .filter((group) => group.products.length > 0);
 }
 
+export type RemainingStockLevelFilter =
+  | "all"
+  | "low"
+  | "in_stock"
+  | "out_of_stock";
+
+export function remainingStockLevelLabel(
+  level: RemainingStockLevelFilter
+): string {
+  switch (level) {
+    case "low":
+      return "Low stock";
+    case "in_stock":
+      return "In stock";
+    case "out_of_stock":
+      return "Out of stock";
+    default:
+      return "All stock levels";
+  }
+}
+
+/**
+ * Keeps variants where at least one of `branchIds` (that carries the variant)
+ * matches the level. Low stock = above 0 and at or below the threshold.
+ */
+export function filterRemainingStockByLevel(
+  groups: RemainingStockCategoryGroup[],
+  level: RemainingStockLevelFilter,
+  branchIds: string[]
+): RemainingStockCategoryGroup[] {
+  if (level === "all") return groups;
+
+  const matches = (variant: RemainingStockVariantRow) =>
+    branchIds.some((branchId) => {
+      if (variant.assigned[branchId] !== true) return false;
+      const stock = variant.stocks[branchId] ?? 0;
+      if (level === "out_of_stock") return stock <= 0;
+      if (level === "in_stock") return stock > 0;
+      return stock > 0 && stock <= variant.lowStockThreshold;
+    });
+
+  return groups
+    .map((group) => ({
+      ...group,
+      products: group.products
+        .map((product) => ({
+          ...product,
+          variants: product.variants.filter(matches),
+        }))
+        .filter((product) => product.variants.length > 0),
+    }))
+    .filter((group) => group.products.length > 0);
+}
+
 export function flattenRemainingStockProducts(
   groups: RemainingStockCategoryGroup[]
 ): RemainingStockProductEntry[] {

@@ -45,10 +45,13 @@ import { paginateItems } from "@/lib/pagination";
 import {
   UNCATEGORIZED_CATEGORY_ID,
   buildRemainingStockGroups,
+  filterRemainingStockByLevel,
   filterRemainingStockGroups,
   flattenRemainingStockProducts,
   regroupRemainingStockProducts,
+  remainingStockLevelLabel,
   type RemainingStockCategoryGroup,
+  type RemainingStockLevelFilter,
 } from "@/lib/remaining-stock";
 import {
   downloadRemainingStockCsv,
@@ -162,6 +165,8 @@ export default function RemainingStocksPage() {
   const [selectedGroupId, setSelectedGroupId] = useState("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([]);
+  const [stockLevel, setStockLevel] =
+    useState<RemainingStockLevelFilter>("all");
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
@@ -248,17 +253,20 @@ export default function RemainingStocksPage() {
     ) {
       return [];
     }
-    return filterRemainingStockGroups(groups, {
+    const matched = filterRemainingStockGroups(groups, {
       search,
       selectedCategoryIds,
       categories,
     });
+    return filterRemainingStockByLevel(matched, stockLevel, selectedBranchIds);
   }, [
     groups,
     search,
     selectedCategoryIds,
     categories,
     categoryIdsInGroup,
+    stockLevel,
+    selectedBranchIds,
   ]);
 
   const productEntries = useMemo(
@@ -268,7 +276,7 @@ export default function RemainingStocksPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, selectedGroupId, selectedCategoryId]);
+  }, [search, selectedGroupId, selectedCategoryId, stockLevel]);
 
   const {
     page: safePage,
@@ -339,6 +347,9 @@ export default function RemainingStocksPage() {
           ? "Uncategorized"
           : categories.find((c) => c.id === selectedCategoryId)?.name;
       if (categoryName) parts.push(`Category: ${categoryName}`);
+    }
+    if (stockLevel !== "all") {
+      parts.push(`Stock level: ${remainingStockLevelLabel(stockLevel)}`);
     }
     if (search.trim()) parts.push(`Search: ${search.trim()}`);
     return {
@@ -535,6 +546,31 @@ export default function RemainingStocksPage() {
                       Uncategorized
                     </SelectItem>
                   ) : null}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex min-w-0 flex-col gap-2">
+              <Label>Stock level</Label>
+              <Select
+                value={stockLevel}
+                onValueChange={(value) =>
+                  setStockLevel((value as RemainingStockLevelFilter) || "all")
+                }
+              >
+                <SelectTrigger size="sm" className="w-full sm:w-44">
+                  <SelectValue>
+                    {(value) =>
+                      remainingStockLevelLabel(
+                        (value as RemainingStockLevelFilter) || "all"
+                      )
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All stock levels</SelectItem>
+                  <SelectItem value="low">Low stock</SelectItem>
+                  <SelectItem value="in_stock">In stock</SelectItem>
+                  <SelectItem value="out_of_stock">Out of stock</SelectItem>
                 </SelectContent>
               </Select>
             </div>
