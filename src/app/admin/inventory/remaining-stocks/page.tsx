@@ -4,6 +4,8 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronDown, FileSpreadsheet, Loader2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { SortableTableHead } from "@/components/admin/sortable-table-head";
+import { sortRows, useTableSort, type SortState } from "@/hooks/use-table-sort";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,6 +69,54 @@ import type {
   CategoryGroup,
   Product,
 } from "@/types";
+
+/** "name", or `stock:${branchId}` for a branch column. */
+type RemainingStockSortKey = string;
+
+/** Sorts products within each category and variants within each product. */
+function sortRemainingStockGroups(
+  groups: RemainingStockCategoryGroup[],
+  sort: SortState<RemainingStockSortKey>
+): RemainingStockCategoryGroup[] {
+  if (!sort) return groups;
+  const branchId = sort.key.startsWith("stock:")
+    ? sort.key.slice("stock:".length)
+    : null;
+
+  type Variant = RemainingStockCategoryGroup["products"][number]["variants"][number];
+  type ProductRow = RemainingStockCategoryGroup["products"][number];
+
+  const variantValue = (variant: Variant) =>
+    branchId == null
+      ? variant.label
+      : variant.assigned[branchId] === true
+        ? (variant.stocks[branchId] ?? 0)
+        : null;
+
+  const productValue = (product: ProductRow) => {
+    if (branchId == null) return product.productName;
+    let total: number | null = null;
+    for (const variant of product.variants) {
+      if (variant.assigned[branchId] !== true) continue;
+      total = (total ?? 0) + (variant.stocks[branchId] ?? 0);
+    }
+    return total;
+  };
+
+  return groups.map((group) => ({
+    ...group,
+    products: sortRows(
+      group.products.map((product) => ({
+        ...product,
+        variants: sortRows(product.variants, sort, {
+          [sort.key]: variantValue,
+        }),
+      })),
+      sort,
+      { [sort.key]: productValue }
+    ),
+  }));
+}
 
 function StockCell({
   amount,
@@ -169,6 +219,7 @@ export default function RemainingStocksPage() {
     useState<RemainingStockLevelFilter>("all");
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const { sort, toggleSort } = useTableSort<RemainingStockSortKey>();
 
   useEffect(() => {
     Promise.all([
@@ -258,8 +309,12 @@ export default function RemainingStocksPage() {
       selectedCategoryIds,
       categories,
     });
-    return filterRemainingStockByLevel(matched, stockLevel, selectedBranchIds);
+    return sortRemainingStockGroups(
+      filterRemainingStockByLevel(matched, stockLevel, selectedBranchIds),
+      sort
+    );
   }, [
+    sort,
     groups,
     search,
     selectedCategoryIds,
@@ -276,7 +331,7 @@ export default function RemainingStocksPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, selectedGroupId, selectedCategoryId, stockLevel]);
+  }, [search, selectedGroupId, selectedCategoryId, stockLevel, sort]);
 
   const {
     page: safePage,
@@ -638,22 +693,28 @@ export default function RemainingStocksPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="sticky left-0 z-20 min-w-[8rem] bg-background sm:min-w-[10rem]">
-                        Variant
-                      </TableHead>
+                      <SortableTableHead
+                        label="Name"
+                        sortKey="name"
+                        sort={sort}
+                        onSort={toggleSort}
+                        className="sticky left-0 z-20 min-w-[8rem] bg-background sm:min-w-[10rem]"
+                      />
                       <TableHead className="min-w-[6rem]">SKU</TableHead>
                       {selectedBranches.map((branch) => (
-                        <TableHead
+                        <SortableTableHead
                           key={branch.id}
-                          className="min-w-[7rem] text-right"
-                        >
-                          <span className="block truncate" title={branch.name}>
-                            {branch.name}
-                          </span>
-                          <span className="block text-xs font-normal text-muted-foreground">
-                            {branch.code}
-                          </span>
-                        </TableHead>
+                          label={
+                            branch.code
+                              ? `${branch.name} (${branch.code})`
+                              : branch.name
+                          }
+                          sortKey={`stock:${branch.id}`}
+                          sort={sort}
+                          onSort={toggleSort}
+                          align="right"
+                          className="min-w-[7rem]"
+                        />
                       ))}
                     </TableRow>
                   </TableHeader>
