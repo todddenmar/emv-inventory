@@ -20,8 +20,11 @@ import {
   PricePromotionIncludedItems,
   applyPriceDrafts,
   draftsFromItems,
+  promotionBranchLabel,
+  promotionBranchNames,
   type PriceDraft,
 } from "@/components/admin/price-promotion-editor";
+import { getBranches } from "@/lib/firestore/branches";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -34,7 +37,7 @@ import {
   pricePromotionDisplayStatus,
 } from "@/lib/product-pricing";
 import { formatDate } from "@/lib/format";
-import type { PricePromotion, PricePromotionItem } from "@/types";
+import type { Branch, PricePromotion, PricePromotionItem } from "@/types";
 
 export default function PricePromotionDetailPage({
   params,
@@ -53,6 +56,11 @@ export default function PricePromotionDetailPage({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, PriceDraft>>({});
+  const [branches, setBranches] = useState<Branch[]>([]);
+
+  useEffect(() => {
+    getBranches(true).then(setBranches).catch(console.error);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,14 +110,22 @@ export default function PricePromotionDetailPage({
 
   const persist = async (
     items: PricePromotionItem[],
-    extra?: { name: string; startsAt: Date; endsAt: Date | null }
+    extra?: {
+      name: string;
+      startsAt: Date;
+      endsAt: Date | null;
+      branchIds: string[] | null;
+    }
   ) => {
     if (!user || !promo) return;
+    const branchIds = extra ? extra.branchIds : promo.branchIds;
     await updatePricePromotion(promo.id, {
       name: extra?.name ?? promo.name,
       startsAt: extra?.startsAt ?? promo.startsAt,
       endsAt: extra ? extra.endsAt : promo.endsAt,
       items,
+      branchIds,
+      branchScopeLabel: promotionBranchNames(branchIds, branches),
       performedBy: user.uid,
       performedByName: user.displayName ?? user.email ?? null,
     });
@@ -136,6 +152,7 @@ export default function PricePromotionDetailPage({
     name: string;
     startsAt: Date;
     endsAt: Date | null;
+    branchIds: string[] | null;
   }) => {
     if (!promo) return;
     setSavingDetails(true);
@@ -243,6 +260,17 @@ export default function PricePromotionDetailPage({
               {" → "}
               {promo.endsAt ? formatDate(promo.endsAt) : "until ended manually"}
             </p>
+            <p
+              className="text-sm text-muted-foreground"
+              title={promotionBranchNames(promo.branchIds, branches) || undefined}
+            >
+              Branches:{" "}
+              <span className="font-medium text-foreground">
+                {promo.branchIds && promo.branchIds.length > 1
+                  ? promotionBranchNames(promo.branchIds, branches)
+                  : promotionBranchLabel(promo.branchIds, branches)}
+              </span>
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -299,6 +327,7 @@ export default function PricePromotionDetailPage({
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
         promo={promo}
+        branches={branches}
         submitting={savingDetails}
         onSave={handleSaveDetails}
       />

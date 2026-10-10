@@ -98,6 +98,7 @@ import type {
   PosCustomerType,
   PosPaymentMethod,
   PosSaleChannel,
+  PricePromotion,
   Product,
   Voucher,
 } from "@/types";
@@ -187,8 +188,8 @@ export function PosWorkspace({
     useState<FreebieShortfall | null>(null);
   const [freebiePickerOpen, setFreebiePickerOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
-  const [promoMap, setPromoMap] = useState<Map<string, EffectiveSalePrices>>(
-    () => new Map()
+  const [activePromotions, setActivePromotions] = useState<PricePromotion[]>(
+    []
   );
   const [imagePreview, setImagePreview] = useState<{
     url: string;
@@ -209,6 +210,11 @@ export function PosWorkspace({
 
   const activeBranch = branches.find((b) => b.id === activeBranchId);
 
+  const promoMap = useMemo<Map<string, EffectiveSalePrices>>(
+    () => buildActivePromotionPriceMap(activePromotions, activeBranchId),
+    [activePromotions, activeBranchId]
+  );
+
   useEffect(() => {
     async function bootstrap() {
       try {
@@ -221,7 +227,7 @@ export function PosWorkspace({
           ? branchListRaw.filter((b) => b.supportsWholesale)
           : branchListRaw;
         setBranches(branchList);
-        setPromoMap(buildActivePromotionPriceMap(promotions));
+        setActivePromotions(promotions);
         const activeCats = cats.filter((c) => !c.isArchived);
         setCategories(activeCats);
 

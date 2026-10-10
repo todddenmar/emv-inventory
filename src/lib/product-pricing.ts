@@ -66,6 +66,14 @@ export function isPricePromotionCurrentlyActive(
   return promo.status === "active" || promo.status === "scheduled";
 }
 
+export function pricePromotionAppliesToBranch(
+  promo: Pick<PricePromotion, "branchIds">,
+  branchId: string | null | undefined
+): boolean {
+  if (promo.branchIds == null) return true;
+  return branchId != null && promo.branchIds.includes(branchId);
+}
+
 export function pricePromotionDisplayStatus(
   promo: Pick<PricePromotion, "status" | "startsAt" | "endsAt" | "endedAt">,
   now: Date = new Date()

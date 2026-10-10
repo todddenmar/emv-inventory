@@ -16,6 +16,7 @@ import { pricePromotionConverter } from "@/lib/firestore/converters";
 import { createProductPriceLogs } from "@/lib/firestore/price-logs";
 import {
   isPricePromotionCurrentlyActive,
+  pricePromotionAppliesToBranch,
   type EffectiveSalePrices,
 } from "@/lib/product-pricing";
 import type {
@@ -54,11 +55,13 @@ export async function getActivePricePromotions(
 
 export function buildActivePromotionPriceMap(
   promotions: PricePromotion[],
+  branchId: string | null | undefined,
   now: Date = new Date()
 ): Map<string, EffectiveSalePrices> {
   const map = new Map<string, EffectiveSalePrices>();
   for (const promo of promotions) {
     if (!isPricePromotionCurrentlyActive(promo, now)) continue;
+    if (!pricePromotionAppliesToBranch(promo, branchId)) continue;
     for (const item of promo.items) {
       if (map.has(item.variantId)) continue;
       map.set(item.variantId, {
@@ -72,11 +75,34 @@ export function buildActivePromotionPriceMap(
   return map;
 }
 
+function branchScopesIntersect(
+  a: string[] | null,
+  b: string[] | null
+): boolean {
+  if (a == null || b == null) return true;
+  const set = new Set(a);
+  return b.some((id) => set.has(id));
+}
+
+function normalizeBranchIds(branchIds: string[] | null | undefined): string[] | null {
+  if (branchIds == null) return null;
+  const unique = [...new Set(branchIds.filter(Boolean))];
+  if (unique.length === 0) {
+    throw new Error("Select at least one branch, or choose all branches");
+  }
+  return unique;
+}
+
+function withBranchScope(note: string, branchScopeLabel?: string | null) {
+  return branchScopeLabel ? `${note} (${branchScopeLabel})` : note;
+}
+
 function findOverlappingVariantIds(
   existing: PricePromotion[],
   items: PricePromotionItem[],
   startsAt: Date,
   endsAt: Date | null,
+  branchIds: string[] | null,
   excludeId?: string
 ): string[] {
   const candidateIds = new Set(items.map((i) => i.variantId));
@@ -85,6 +111,7 @@ function findOverlappingVariantIds(
   for (const promo of existing) {
     if (excludeId && promo.id === excludeId) continue;
     if (promo.status === "ended") continue;
+    if (!branchScopesIntersect(branchIds, promo.branchIds)) continue;
 
     // Treat as overlapping if windows could both be live at some point.
     const otherStart = promo.startsAt.getTime();
@@ -115,6 +142,10 @@ export interface CreatePricePromotionInput {
   startsAt: Date;
   endsAt: Date | null;
   items: PricePromotionItem[];
+  /** null = all branches. */
+  branchIds: string[] | null;
+  /** Branch names for price-log notes, e.g. "Main, Mall". Omit for all branches. */
+  branchScopeLabel?: string | null;
   createdBy: string;
   createdByName: string | null;
 }
@@ -134,12 +165,14 @@ export async function createPricePromotion(
     }
   }
 
+  const branchIds = normalizeBranchIds(input.branchIds);
   const existing = await getPricePromotions();
   const overlaps = findOverlappingVariantIds(
     existing,
     input.items,
     input.startsAt,
-    input.endsAt
+    input.endsAt,
+    branchIds
   );
   if (overlaps.length > 0) {
     throw new Error(
@@ -157,6 +190,7 @@ export async function createPricePromotion(
       endsAt: input.endsAt,
       items: input.items,
       itemCount: input.items.length,
+      branchIds,
       createdBy: input.createdBy,
       createdByName: input.createdByName,
       createdAt: serverTimestamp(),
@@ -183,7 +217,10 @@ export async function createPricePromotion(
           | "decrease",
         performedBy: input.createdBy,
         performedByName: input.createdByName,
-        note: `Sale started: ${input.name.trim()}`,
+        note: withBranchScope(
+          `Sale started: ${input.name.trim()}`,
+          branchIds ? input.branchScopeLabel : null
+        ),
         promotionId: docRef.id,
       };
     })
@@ -246,6 +283,9 @@ export interface UpdatePricePromotionInput {
   startsAt: Date;
   endsAt: Date | null;
   items: PricePromotionItem[];
+  /** null = all branches. */
+  branchIds: string[] | null;
+  branchScopeLabel?: string | null;
   performedBy: string;
   performedByName: string | null;
 }
@@ -264,12 +304,14 @@ export async function updatePricePromotion(
     throw new Error("Promotion not found");
   }
 
+  const branchIds = normalizeBranchIds(input.branchIds);
   const all = await getPricePromotions();
   const overlaps = findOverlappingVariantIds(
     all,
     input.items,
     input.startsAt,
     input.endsAt,
+    branchIds,
     id
   );
   if (overlaps.length > 0) {
@@ -292,9 +334,11 @@ export async function updatePricePromotion(
     endsAt: input.endsAt,
     items: input.items,
     itemCount: input.items.length,
+    branchIds,
     endedAt: null,
     updatedAt: serverTimestamp(),
   });
+  const scopeLabel = branchIds ? input.branchScopeLabel : null;
 
   const wasLive = isPricePromotionCurrentlyActive(existing);
   const willBeLive = isPricePromotionCurrentlyActive({
@@ -313,7 +357,7 @@ export async function updatePricePromotion(
       input.items,
       null,
       actor,
-      `Sale started: ${name}`,
+      withBranchScope(`Sale started: ${name}`, scopeLabel),
       id
     );
     if (logs.length > 0) await createProductPriceLogs(logs);
@@ -325,11 +369,47 @@ export async function updatePricePromotion(
       input.items,
       previousByVariant,
       actor,
-      `Sale updated: ${name}`,
+      withBranchScope(`Sale updated: ${name}`, scopeLabel),
       id
     );
     if (logs.length > 0) await createProductPriceLogs(logs);
   }
+}
+
+export async function updatePricePromotionBranches(
+  id: string,
+  branchIds: string[] | null
+): Promise<void> {
+  const existing = await getPricePromotion(id);
+  if (!existing) {
+    throw new Error("Promotion not found");
+  }
+
+  const normalized = normalizeBranchIds(branchIds);
+  const finished =
+    existing.status === "ended" ||
+    (existing.endsAt != null && existing.endsAt.getTime() < Date.now());
+  if (!finished) {
+    const all = await getPricePromotions();
+    const overlaps = findOverlappingVariantIds(
+      all,
+      existing.items,
+      existing.startsAt,
+      existing.endsAt,
+      normalized,
+      id
+    );
+    if (overlaps.length > 0) {
+      throw new Error(
+        `Some variants already have an overlapping promotion at those branches (${overlaps.length}). End or adjust the other sale first.`
+      );
+    }
+  }
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.pricePromotions, id), {
+    branchIds: normalized,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function endPricePromotion(

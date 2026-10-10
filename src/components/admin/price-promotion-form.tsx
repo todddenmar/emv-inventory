@@ -26,18 +26,25 @@ import {
   PricePromotionIncludedItems,
   applyPriceDrafts,
   draftsFromItems,
+  promotionBranchNames,
   promotionItemFromCatalog,
   resolvePromotionWindow,
   type PriceDraft,
 } from "@/components/admin/price-promotion-editor";
 import { toDateInputValue } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
+import { getBranches } from "@/lib/firestore/branches";
 import { getProducts } from "@/lib/firestore/products";
 import { paginateItems } from "@/lib/pagination";
 import { isProductPublished } from "@/lib/products-catalog";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { normalizeRetailPrice } from "@/lib/product-pricing";
-import type { PricePromotionItem, Product, ProductVariant } from "@/types";
+import type {
+  Branch,
+  PricePromotionItem,
+  Product,
+  ProductVariant,
+} from "@/types";
 
 const CATALOG_PAGE_SIZE = 10;
 
@@ -46,6 +53,10 @@ export interface PricePromotionFormValues {
   startsAt: Date;
   endsAt: Date | null;
   items: PricePromotionItem[];
+  /** null = all branches. */
+  branchIds: string[] | null;
+  /** Branch names for audit notes; empty for all branches. */
+  branchScopeLabel: string;
 }
 
 type CatalogRow = {
@@ -74,6 +85,17 @@ export function PricePromotionForm({
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchIds, setBranchIds] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    getBranches(true)
+      .then(setBranches)
+      .catch((err) => {
+        console.error(err);
+        toast.error("Failed to load branches");
+      });
+  }, []);
 
   useEffect(() => {
     getProducts()
@@ -167,6 +189,10 @@ export function PricePromotionForm({
       toast.error("Name is required");
       return;
     }
+    if (branchIds != null && branchIds.length === 0) {
+      toast.error("Select at least one branch");
+      return;
+    }
     try {
       const window = resolvePromotionWindow(startDate, endDate, untilManual);
       const nextItems = applyPriceDrafts(items, drafts);
@@ -178,6 +204,8 @@ export function PricePromotionForm({
         name: name.trim(),
         ...window,
         items: nextItems,
+        branchIds,
+        branchScopeLabel: promotionBranchNames(branchIds, branches),
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create sale");
@@ -191,7 +219,8 @@ export function PricePromotionForm({
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Sale details</CardTitle>
             <CardDescription>
-              Catalog prices stay unchanged; POS uses sale prices while live.
+              Catalog prices stay unchanged; POS uses sale prices while live at
+              the selected branches.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -205,6 +234,9 @@ export function PricePromotionForm({
               onEndDateChange={setEndDate}
               untilManual={untilManual}
               onUntilManualChange={setUntilManual}
+              branches={branches}
+              branchIds={branchIds}
+              onBranchIdsChange={setBranchIds}
             />
             <div className="rounded-md border p-3 text-sm">
               <p className="text-muted-foreground">Selected variants</p>

@@ -43,11 +43,115 @@ import {
   pricePromotionDisplayStatus,
 } from "@/lib/product-pricing";
 import type {
+  Branch,
   PricePromotion,
   PricePromotionItem,
   Product,
   ProductVariant,
 } from "@/types";
+
+type PromotionBranch = Pick<Branch, "id" | "name" | "code">;
+
+/** Comma-separated branch names for a scope; empty string for all branches. */
+export function promotionBranchNames(
+  branchIds: string[] | null,
+  branches: PromotionBranch[]
+): string {
+  if (branchIds == null) return "";
+  return branchIds
+    .map((id) => branches.find((b) => b.id === id)?.name ?? "Unknown branch")
+    .join(", ");
+}
+
+/** Short summary: "All branches", one branch name, or "3 branches". */
+export function promotionBranchLabel(
+  branchIds: string[] | null,
+  branches: PromotionBranch[]
+): string {
+  if (branchIds == null) return "All branches";
+  if (branchIds.length === 1) {
+    return branches.find((b) => b.id === branchIds[0])?.name ?? "1 branch";
+  }
+  return `${branchIds.length} branches`;
+}
+
+export function PromotionBranchPicker({
+  idPrefix,
+  branches,
+  branchIds,
+  onBranchIdsChange,
+}: {
+  idPrefix: string;
+  branches: PromotionBranch[];
+  branchIds: string[] | null;
+  onBranchIdsChange: (value: string[] | null) => void;
+}) {
+  const allBranches = branchIds == null;
+  const toggle = (id: string, checked: boolean) => {
+    const current = branchIds ?? [];
+    onBranchIdsChange(
+      checked ? [...new Set([...current, id])] : current.filter((b) => b !== id)
+    );
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>Branches</Label>
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={`${idPrefix}-all-branches`}
+          checked={allBranches}
+          onCheckedChange={(v) => onBranchIdsChange(v === true ? null : [])}
+        />
+        <Label
+          htmlFor={`${idPrefix}-all-branches`}
+          className="font-normal"
+        >
+          All branches
+        </Label>
+      </div>
+      {!allBranches ? (
+        <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
+          {branches.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No active branches.</p>
+          ) : (
+            branches.map((branch) => (
+              <div key={branch.id} className="flex items-center gap-2 py-0.5">
+                <Checkbox
+                  id={`${idPrefix}-branch-${branch.id}`}
+                  checked={branchIds.includes(branch.id)}
+                  onCheckedChange={(v) => toggle(branch.id, v === true)}
+                />
+                <Label
+                  htmlFor={`${idPrefix}-branch-${branch.id}`}
+                  className="font-normal"
+                >
+                  {branch.name}
+                  {branch.code ? (
+                    <span className="text-muted-foreground"> ({branch.code})</span>
+                  ) : null}
+                </Label>
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
+      <p
+        className={
+          !allBranches && branchIds.length === 0
+            ? "text-xs text-destructive"
+            : "text-xs text-muted-foreground"
+        }
+      >
+        {allBranches
+          ? "Applies at every branch, including ones added later."
+          : branchIds.length === 0
+            ? "Select at least one branch."
+            : `POS uses sale prices only at ${branchIds.length === 1 ? "this branch" : "these branches"}.`}
+      </p>
+    </div>
+  );
+}
 
 const SEARCH_MIN_CHARS = 2;
 const SEARCH_MAX_RESULTS = 20;
@@ -136,6 +240,9 @@ export function PricePromotionDetailsFields({
   onEndDateChange,
   untilManual,
   onUntilManualChange,
+  branches,
+  branchIds,
+  onBranchIdsChange,
 }: {
   idPrefix: string;
   name: string;
@@ -146,6 +253,9 @@ export function PricePromotionDetailsFields({
   onEndDateChange: (value: string) => void;
   untilManual: boolean;
   onUntilManualChange: (value: boolean) => void;
+  branches: PromotionBranch[];
+  branchIds: string[] | null;
+  onBranchIdsChange: (value: string[] | null) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -189,6 +299,12 @@ export function PricePromotionDetailsFields({
           <p className="text-xs text-muted-foreground">Ends at end of this day</p>
         </div>
       ) : null}
+      <PromotionBranchPicker
+        idPrefix={idPrefix}
+        branches={branches}
+        branchIds={branchIds}
+        onBranchIdsChange={onBranchIdsChange}
+      />
     </div>
   );
 }
@@ -197,17 +313,20 @@ export function PricePromotionDetailsDialog({
   open,
   onOpenChange,
   promo,
+  branches,
   submitting,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   promo: PricePromotion;
+  branches: PromotionBranch[];
   submitting: boolean;
   onSave: (values: {
     name: string;
     startsAt: Date;
     endsAt: Date | null;
+    branchIds: string[] | null;
   }) => Promise<void>;
 }) {
   const restarting = useMemo(() => {
@@ -219,10 +338,12 @@ export function PricePromotionDetailsDialog({
   const [startDate, setStartDate] = useState(toDateInputValue());
   const [endDate, setEndDate] = useState(toDateInputValue());
   const [untilManual, setUntilManual] = useState(false);
+  const [branchIds, setBranchIds] = useState<string[] | null>(promo.branchIds);
 
   useEffect(() => {
     if (!open) return;
     setName(promo.name);
+    setBranchIds(promo.branchIds);
     setStartDate(
       restarting ? toDateInputValue() : toDateInputValue(promo.startsAt)
     );
@@ -239,9 +360,13 @@ export function PricePromotionDetailsDialog({
       toast.error("Name is required");
       return;
     }
+    if (branchIds != null && branchIds.length === 0) {
+      toast.error("Select at least one branch");
+      return;
+    }
     try {
       const window = resolvePromotionWindow(startDate, endDate, untilManual);
-      await onSave({ name: name.trim(), ...window });
+      await onSave({ name: name.trim(), ...window, branchIds });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid dates");
     }
@@ -257,7 +382,7 @@ export function PricePromotionDetailsDialog({
           <DialogDescription>
             {restarting
               ? "Choose a new window. Catalog prices stay the same; POS uses sale prices while live."
-              : "Name and date range. Sale prices are edited on the included variants."}
+              : "Name, date range, and branches. Sale prices are edited on the included variants."}
           </DialogDescription>
         </DialogHeader>
         <PricePromotionDetailsFields
@@ -270,6 +395,9 @@ export function PricePromotionDetailsDialog({
           onEndDateChange={setEndDate}
           untilManual={untilManual}
           onUntilManualChange={setUntilManual}
+          branches={branches}
+          branchIds={branchIds}
+          onBranchIdsChange={setBranchIds}
         />
         <DialogFooter>
           <Button
@@ -285,6 +413,71 @@ export function PricePromotionDetailsDialog({
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : null}
             {restarting ? "Start sale again" : "Save details"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function PromotionBranchesDialog({
+  open,
+  onOpenChange,
+  promo,
+  branches,
+  submitting,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  promo: PricePromotion | null;
+  branches: PromotionBranch[];
+  submitting: boolean;
+  onSave: (branchIds: string[] | null) => Promise<void>;
+}) {
+  const [branchIds, setBranchIds] = useState<string[] | null>(
+    promo?.branchIds ?? null
+  );
+
+  const handleSave = async () => {
+    if (branchIds != null && branchIds.length === 0) {
+      toast.error("Select at least one branch");
+      return;
+    }
+    await onSave(branchIds);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Branches</DialogTitle>
+          <DialogDescription>
+            {promo
+              ? `Choose where "${promo.name}" sale prices apply on the POS.`
+              : null}
+          </DialogDescription>
+        </DialogHeader>
+        <PromotionBranchPicker
+          idPrefix="promo-branches"
+          branches={branches}
+          branchIds={branchIds}
+          onBranchIdsChange={setBranchIds}
+        />
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+          <Button disabled={submitting} onClick={() => void handleSave()}>
+            {submitting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            Save branches
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1233,6 +1233,7 @@ export const pricePromotionConverter: FirestoreDataConverter<PricePromotion> = {
       endsAt: promo.endsAt,
       items: promo.items,
       itemCount: promo.itemCount,
+      branchIds: promo.branchIds,
       createdBy: promo.createdBy,
       createdByName: promo.createdByName,
       createdAt: promo.createdAt,
@@ -1260,6 +1261,10 @@ export const pricePromotionConverter: FirestoreDataConverter<PricePromotion> = {
       endsAt: data.endsAt ? toDate(data.endsAt) : null,
       items: rawItems.map(mapPricePromotionItem),
       itemCount: data.itemCount ?? rawItems.length,
+      branchIds:
+        Array.isArray(data.branchIds) && data.branchIds.length > 0
+          ? (data.branchIds as string[])
+          : null,
       createdBy: data.createdBy ?? "",
       createdByName: data.createdByName ?? null,
       createdAt: toDate(data.createdAt),

@@ -647,6 +647,8 @@ export interface PricePromotion {
   endsAt: Date | null;
   items: PricePromotionItem[];
   itemCount: number;
+  /** null = all branches (including branches added later). */
+  branchIds: string[] | null;
   createdBy: string;
   createdByName: string | null;
   createdAt: Date;

@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, MoreHorizontal, Pencil, Plus, StopCircle } from "lucide-react";
+import {
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  StopCircle,
+  Store,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,11 +43,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TablePagination } from "@/components/admin/table-pagination";
+import {
+  PromotionBranchesDialog,
+  promotionBranchLabel,
+  promotionBranchNames,
+} from "@/components/admin/price-promotion-editor";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { getBranches } from "@/lib/firestore/branches";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   endPricePromotion,
   getPricePromotions,
+  updatePricePromotionBranches,
 } from "@/lib/firestore/price-promotions";
 import {
   isPricePromotionCurrentlyActive,
@@ -48,7 +62,7 @@ import {
 } from "@/lib/product-pricing";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
-import type { PricePromotion } from "@/types";
+import type { Branch, PricePromotion } from "@/types";
 
 type StatusFilter = "all" | "live" | "active" | "scheduled" | "ended" | "expired";
 
@@ -75,11 +89,13 @@ function PromoRowActions({
   status,
   ending,
   onEnd,
+  onEditBranches,
 }: {
   promo: PricePromotion;
   status: string;
   ending: boolean;
   onEnd: () => void;
+  onEditBranches: () => void;
 }) {
   const canEnd = status === "active" || status === "scheduled";
   const editLabel =
@@ -108,6 +124,10 @@ function PromoRowActions({
             </Link>
           }
         />
+        <DropdownMenuItem disabled={ending} onClick={onEditBranches}>
+          <Store className="h-4 w-4" />
+          Branches
+        </DropdownMenuItem>
         {canEnd ? (
           <DropdownMenuItem disabled={ending} onClick={onEnd}>
             <StopCircle className="h-4 w-4" />
@@ -143,7 +163,16 @@ export default function AdminPricePromotionsPage() {
   const [endingId, setEndingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchesPromo, setBranchesPromo] = useState<PricePromotion | null>(
+    null
+  );
+  const [savingBranches, setSavingBranches] = useState(false);
   const now = useMemo(() => new Date(), [promotions]);
+
+  useEffect(() => {
+    getBranches(true).then(setBranches).catch(console.error);
+  }, []);
 
   const load = () => {
     getPricePromotions()
@@ -193,6 +222,25 @@ export default function AdminPricePromotionsPage() {
       toast.error(err instanceof Error ? err.message : "Failed to end sale");
     } finally {
       setEndingId(null);
+    }
+  };
+
+  const handleSaveBranches = async (branchIds: string[] | null) => {
+    if (!branchesPromo) return;
+    setSavingBranches(true);
+    try {
+      await updatePricePromotionBranches(branchesPromo.id, branchIds);
+      toast.success(
+        `Branches updated: ${promotionBranchLabel(branchIds, branches)}`
+      );
+      setBranchesPromo(null);
+      load();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to update branches"
+      );
+    } finally {
+      setSavingBranches(false);
     }
   };
 
@@ -307,6 +355,15 @@ export default function AdminPricePromotionsPage() {
                               ? formatDate(promo.endsAt)
                               : "until ended"}
                           </p>
+                          <p
+                            className="mt-0.5 text-xs text-muted-foreground"
+                            title={
+                              promotionBranchNames(promo.branchIds, branches) ||
+                              undefined
+                            }
+                          >
+                            {promotionBranchLabel(promo.branchIds, branches)}
+                          </p>
                           {preview ? (
                             <p className="mt-2 text-sm">
                               {preview}
@@ -324,6 +381,7 @@ export default function AdminPricePromotionsPage() {
                           status={status}
                           ending={endingId === promo.id}
                           onEnd={() => void handleEnd(promo.id)}
+                          onEditBranches={() => setBranchesPromo(promo)}
                         />
                       </div>
                     </li>
@@ -338,6 +396,7 @@ export default function AdminPricePromotionsPage() {
                       <TableHead>Name</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Window</TableHead>
+                      <TableHead>Branches</TableHead>
                       <TableHead>Items</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -376,6 +435,15 @@ export default function AdminPricePromotionsPage() {
                               ? formatDate(promo.endsAt)
                               : "until ended"}
                           </TableCell>
+                          <TableCell
+                            className="text-sm"
+                            title={
+                              promotionBranchNames(promo.branchIds, branches) ||
+                              undefined
+                            }
+                          >
+                            {promotionBranchLabel(promo.branchIds, branches)}
+                          </TableCell>
                           <TableCell className="tabular-nums">
                             {promo.itemCount}
                           </TableCell>
@@ -385,6 +453,7 @@ export default function AdminPricePromotionsPage() {
                               status={status}
                               ending={endingId === promo.id}
                               onEnd={() => void handleEnd(promo.id)}
+                              onEditBranches={() => setBranchesPromo(promo)}
                             />
                           </TableCell>
                         </TableRow>
@@ -404,6 +473,18 @@ export default function AdminPricePromotionsPage() {
           )}
         </CardContent>
       </Card>
+
+      <PromotionBranchesDialog
+        key={branchesPromo?.id ?? "none"}
+        open={branchesPromo != null}
+        onOpenChange={(open) => {
+          if (!open && !savingBranches) setBranchesPromo(null);
+        }}
+        promo={branchesPromo}
+        branches={branches}
+        submitting={savingBranches}
+        onSave={handleSaveBranches}
+      />
     </div>
   );
 }
