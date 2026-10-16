@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -20,6 +21,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
+import { TableBulkBar } from "@/components/admin/table-bulk-bar";
 import { TablePagination } from "@/components/admin/table-pagination";
 import {
   PricePromotionDetailsFields,
@@ -31,9 +34,12 @@ import {
   resolvePromotionWindow,
   type PriceDraft,
 } from "@/components/admin/price-promotion-editor";
+import { productIdsForCategoryFilter } from "@/lib/category-filters";
 import { toDateInputValue } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import { getBranches } from "@/lib/firestore/branches";
+import { getCategories } from "@/lib/firestore/categories";
+import { getCategoryGroups } from "@/lib/firestore/category-groups";
 import { getProducts } from "@/lib/firestore/products";
 import { paginateItems } from "@/lib/pagination";
 import { isProductPublished } from "@/lib/products-catalog";
@@ -41,6 +47,8 @@ import { formatVariantLabel } from "@/lib/product-variants";
 import { normalizeRetailPrice } from "@/lib/product-pricing";
 import type {
   Branch,
+  Category,
+  CategoryGroup,
   PricePromotionItem,
   Product,
   ProductVariant,
@@ -82,6 +90,10 @@ export function PricePromotionForm({
   const [items, setItems] = useState<PricePromotionItem[]>([]);
   const [drafts, setDrafts] = useState<Record<string, PriceDraft>>({});
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [pickIds, setPickIds] = useState<string[]>([]);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -98,10 +110,12 @@ export function PricePromotionForm({
   }, []);
 
   useEffect(() => {
-    getProducts()
-      .then((list) =>
-        setProducts(list.filter((p) => !p.isArchived && isProductPublished(p)))
-      )
+    Promise.all([getProducts(), getCategories(), getCategoryGroups()])
+      .then(([list, cats, groups]) => {
+        setProducts(list.filter((p) => !p.isArchived && isProductPublished(p)));
+        setCategories(cats.filter((c) => !c.isArchived));
+        setCategoryGroups(groups);
+      })
       .catch((err) => {
         console.error(err);
         toast.error("Failed to load products");
@@ -116,8 +130,13 @@ export function PricePromotionForm({
 
   const catalogRows = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const allowedProductIds = productIdsForCategoryFilter(
+      products,
+      selectedCategoryIds
+    );
     const rows: CatalogRow[] = [];
     for (const product of products) {
+      if (allowedProductIds && !allowedProductIds.has(product.id)) continue;
       for (const variant of product.variants) {
         if (selectedIds.has(variant.id)) continue;
         const variantLabel = formatVariantLabel(variant, product.options);
@@ -137,11 +156,7 @@ export function PricePromotionForm({
       }
     }
     return rows;
-  }, [products, selectedIds, search]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
+  }, [products, selectedIds, search, selectedCategoryIds]);
 
   const {
     page: safePage,
@@ -153,26 +168,64 @@ export function PricePromotionForm({
     [catalogRows, page]
   );
 
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage);
-  }, [page, safePage]);
+  const pageIds = useMemo(
+    () => pagedItems.map((row) => row.variant.id),
+    [pagedItems]
+  );
+  const allPagePicked =
+    pageIds.length > 0 && pageIds.every((id) => pickIds.includes(id));
+  const somePagePicked = pageIds.some((id) => pickIds.includes(id));
 
-  const handleAdd = (row: CatalogRow) => {
-    const item = promotionItemFromCatalog(
-      row.product,
-      row.variant,
-      row.variant.price,
-      normalizeRetailPrice(row.variant.retailPrice)
+  const togglePick = (id: string) => {
+    setPickIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-    setItems((prev) => [...prev, item]);
-    setDrafts((prev) => ({
-      ...prev,
-      [item.variantId]: {
+  };
+
+  const togglePickPage = (checked: boolean) => {
+    if (checked) {
+      setPickIds((prev) => [...new Set([...prev, ...pageIds])]);
+      return;
+    }
+    setPickIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+  };
+
+  const addRows = (rows: CatalogRow[]) => {
+    if (rows.length === 0) return;
+    const nextItems: PricePromotionItem[] = [];
+    const nextDrafts: Record<string, PriceDraft> = {};
+    const seen = new Set(selectedIds);
+    for (const row of rows) {
+      if (seen.has(row.variant.id)) continue;
+      seen.add(row.variant.id);
+      const item = promotionItemFromCatalog(
+        row.product,
+        row.variant,
+        row.variant.price,
+        normalizeRetailPrice(row.variant.retailPrice)
+      );
+      nextItems.push(item);
+      nextDrafts[item.variantId] = {
         salePrice: String(item.salePrice),
         saleRetailPrice:
           item.saleRetailPrice != null ? String(item.saleRetailPrice) : "",
-      },
-    }));
+      };
+    }
+    if (nextItems.length === 0) return;
+    setItems((prev) => [...prev, ...nextItems]);
+    setDrafts((prev) => ({ ...prev, ...nextDrafts }));
+    setPickIds((prev) =>
+      prev.filter((id) => !nextItems.some((item) => item.variantId === id))
+    );
+  };
+
+  const handleAdd = (row: CatalogRow) => {
+    addRows([row]);
+  };
+
+  const handleAddSelected = () => {
+    const pickSet = new Set(pickIds);
+    addRows(catalogRows.filter((row) => pickSet.has(row.variant.id)));
   };
 
   const handleRemove = (variantId: string) => {
@@ -211,6 +264,16 @@ export function PricePromotionForm({
       toast.error(err instanceof Error ? err.message : "Failed to create sale");
     }
   };
+
+  const emptyCatalogMessage =
+    catalogRows.length === 0 &&
+    items.length > 0 &&
+    !search.trim() &&
+    selectedCategoryIds.length === 0
+      ? "Every matching variant is already selected."
+      : selectedCategoryIds.length > 0 || search.trim()
+        ? "No variants match your filters."
+        : "No variants match your search.";
 
   return (
     <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
@@ -276,6 +339,9 @@ export function PricePromotionForm({
                   },
                 }))
               }
+              onReplaceDrafts={(next) =>
+                setDrafts((prev) => ({ ...prev, ...next }))
+              }
               onRemove={handleRemove}
               emptyMessage="Add variants from the catalog below. They will appear here with sale prices."
             />
@@ -287,21 +353,35 @@ export function PricePromotionForm({
             <div>
               <CardTitle className="text-base">Catalog</CardTitle>
               <CardDescription>
-                {CATALOG_PAGE_SIZE} variants per page. Add a variant to move it
-                into the selected list.
+                {CATALOG_PAGE_SIZE} variants per page. Check rows to add many at
+                once, or use Add for a single variant.
               </CardDescription>
             </div>
-            <div className="relative max-w-md">
-              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search product, SKU, or variant…"
-                className="pl-9"
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1 max-w-md">
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search product, SKU, or variant…"
+                  className="pl-9"
+                />
+              </div>
+              <CategoryFilterPanel
+                categories={categories}
+                groups={categoryGroups}
+                selectedCategoryIds={selectedCategoryIds}
+                onChange={(ids) => {
+                  setSelectedCategoryIds(ids);
+                  setPage(1);
+                }}
               />
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             {loadingCatalog ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -309,19 +389,38 @@ export function PricePromotionForm({
               </p>
             ) : pagedItems.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                {catalogRows.length === 0 && items.length > 0 && !search.trim()
-                  ? "Every matching variant is already selected."
-                  : "No variants match your search."}
+                {emptyCatalogMessage}
               </p>
             ) : (
               <>
+                <TableBulkBar
+                  selectedCount={pickIds.length}
+                  visibleCount={catalogRows.length}
+                  itemLabel="variants"
+                  onSelectAllVisible={() =>
+                    setPickIds(catalogRows.map((row) => row.variant.id))
+                  }
+                  onClear={() => setPickIds([])}
+                >
+                  <Button type="button" size="sm" onClick={handleAddSelected}>
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Add selected
+                  </Button>
+                </TableBulkBar>
+
                 <ul className="space-y-2 md:hidden">
                   {pagedItems.map((row) => (
                     <li
                       key={row.variant.id}
-                      className="flex items-start justify-between gap-3 rounded-lg border p-3"
+                      className="flex items-start gap-3 rounded-lg border p-3"
                     >
-                      <div className="min-w-0">
+                      <Checkbox
+                        checked={pickIds.includes(row.variant.id)}
+                        onCheckedChange={() => togglePick(row.variant.id)}
+                        aria-label={`Select ${row.productName}`}
+                        className="mt-1"
+                      />
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium">{row.productName}</p>
                         {row.variantLabel !== "Default" ? (
                           <p className="text-sm text-muted-foreground">
@@ -357,6 +456,16 @@ export function PricePromotionForm({
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={allPagePicked}
+                            indeterminate={somePagePicked && !allPagePicked}
+                            onCheckedChange={(checked) =>
+                              togglePickPage(checked === true)
+                            }
+                            aria-label="Select all on this page"
+                          />
+                        </TableHead>
                         <TableHead>Product / variant</TableHead>
                         <TableHead>Cash</TableHead>
                         <TableHead>Retail</TableHead>
@@ -366,6 +475,13 @@ export function PricePromotionForm({
                     <TableBody>
                       {pagedItems.map((row) => (
                         <TableRow key={row.variant.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={pickIds.includes(row.variant.id)}
+                              onCheckedChange={() => togglePick(row.variant.id)}
+                              aria-label={`Select ${row.productName}`}
+                            />
+                          </TableCell>
                           <TableCell>
                             <p className="font-medium">{row.productName}</p>
                             {row.variantLabel !== "Default" ? (

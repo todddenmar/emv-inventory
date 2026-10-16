@@ -26,6 +26,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -33,9 +40,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TablePagination } from "@/components/admin/table-pagination";
 import { endOfLocalDay, toDateInputValue } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
 import { getProducts } from "@/lib/firestore/products";
+import { paginateItems, TABLE_PAGE_SIZE } from "@/lib/pagination";
+import { roundMoney } from "@/lib/pos-payments";
 import { isProductPublished } from "@/lib/products-catalog";
 import { formatVariantLabel } from "@/lib/product-variants";
 import {
@@ -157,6 +167,54 @@ const SEARCH_MIN_CHARS = 2;
 const SEARCH_MAX_RESULTS = 20;
 
 export type PriceDraft = { salePrice: string; saleRetailPrice: string };
+
+export type SaleDiscountMode = "percent" | "amount";
+
+/** Sale price from a base price after % off or exact amount off. Floors at 0. */
+export function discountedSalePrice(
+  base: number,
+  mode: SaleDiscountMode,
+  value: number
+): number {
+  if (!Number.isFinite(base) || !Number.isFinite(value) || value < 0) {
+    return roundMoney(Math.max(0, base));
+  }
+  if (mode === "percent") {
+    return roundMoney(Math.max(0, base * (1 - value / 100)));
+  }
+  return roundMoney(Math.max(0, base - value));
+}
+
+export type SaleDiscountTargets = { cash: boolean; retail: boolean };
+
+export function draftsFromDiscount(
+  items: PricePromotionItem[],
+  mode: SaleDiscountMode,
+  value: number,
+  targets: SaleDiscountTargets,
+  currentDrafts: Record<string, PriceDraft> = {}
+): Record<string, PriceDraft> {
+  const next: Record<string, PriceDraft> = {};
+  for (const item of items) {
+    const existing = currentDrafts[item.variantId];
+    const keepCash =
+      existing?.salePrice ?? String(item.salePrice);
+    const keepRetail =
+      existing?.saleRetailPrice ??
+      (item.saleRetailPrice != null ? String(item.saleRetailPrice) : "");
+    next[item.variantId] = {
+      salePrice: targets.cash
+        ? String(discountedSalePrice(item.basePrice, mode, value))
+        : keepCash,
+      saleRetailPrice: targets.retail
+        ? item.baseRetailPrice != null
+          ? String(discountedSalePrice(item.baseRetailPrice, mode, value))
+          : ""
+        : keepRetail,
+    };
+  }
+  return next;
+}
 
 export function draftsFromItems(
   items: PricePromotionItem[]
@@ -740,6 +798,7 @@ export function PricePromotionIncludedItems({
   items,
   drafts,
   onDraftChange,
+  onReplaceDrafts,
   onRemove,
   onAddClick,
   saving,
@@ -750,6 +809,8 @@ export function PricePromotionIncludedItems({
   items: PricePromotionItem[];
   drafts: Record<string, PriceDraft>;
   onDraftChange: (variantId: string, patch: Partial<PriceDraft>) => void;
+  /** Replace sale drafts for many variants at once (bulk discount). */
+  onReplaceDrafts?: (next: Record<string, PriceDraft>) => void;
   onRemove?: (variantId: string) => void;
   onAddClick?: () => void;
   saving?: boolean;
@@ -759,6 +820,22 @@ export function PricePromotionIncludedItems({
 }) {
   const [pendingRemove, setPendingRemove] =
     useState<PricePromotionItem | null>(null);
+  const [discountMode, setDiscountMode] =
+    useState<SaleDiscountMode>("percent");
+  const [discountValue, setDiscountValue] = useState("");
+  const [applyToCash, setApplyToCash] = useState(true);
+  const [applyToRetail, setApplyToRetail] = useState(true);
+  const [page, setPage] = useState(1);
+
+  const {
+    page: safePage,
+    totalPages,
+    pagedItems,
+    total,
+  } = useMemo(
+    () => paginateItems(items, page, TABLE_PAGE_SIZE),
+    [items, page]
+  );
 
   const draftFor = (item: PricePromotionItem): PriceDraft =>
     drafts[item.variantId] ?? {
@@ -771,6 +848,53 @@ export function PricePromotionIncludedItems({
     if (!pendingRemove || !onRemove) return;
     onRemove(pendingRemove.variantId);
     setPendingRemove(null);
+  };
+
+  const applyDiscount = () => {
+    if (items.length === 0) return;
+    if (!applyToCash && !applyToRetail) {
+      toast.error("Choose sale cash and/or sale retail");
+      return;
+    }
+    const value = Number(discountValue);
+    if (!Number.isFinite(value) || value < 0) {
+      toast.error(
+        discountMode === "percent"
+          ? "Enter a valid percent (0 or more)"
+          : "Enter a valid amount (0 or more)"
+      );
+      return;
+    }
+    if (discountMode === "percent" && value > 100) {
+      toast.error("Percent cannot be more than 100");
+      return;
+    }
+    const targets = { cash: applyToCash, retail: applyToRetail };
+    const next = draftsFromDiscount(
+      items,
+      discountMode,
+      value,
+      targets,
+      drafts
+    );
+    if (onReplaceDrafts) {
+      onReplaceDrafts(next);
+    } else {
+      for (const [variantId, draft] of Object.entries(next)) {
+        onDraftChange(variantId, draft);
+      }
+    }
+    const targetLabel =
+      applyToCash && applyToRetail
+        ? "sale cash and retail"
+        : applyToCash
+          ? "sale cash"
+          : "sale retail";
+    toast.success(
+      discountMode === "percent"
+        ? `Applied ${value}% off to ${targetLabel} (${items.length} variant${items.length === 1 ? "" : "s"})`
+        : `Applied ${formatCurrency(value)} off to ${targetLabel} (${items.length} variant${items.length === 1 ? "" : "s"})`
+    );
   };
 
   return (
@@ -802,8 +926,90 @@ export function PricePromotionIncludedItems({
         </p>
       ) : (
         <>
+          <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+            <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[10rem_9rem_auto]">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="sale-discount-mode" className="text-xs leading-none">
+                  Discount type
+                </Label>
+                <Select
+                  value={discountMode}
+                  onValueChange={(v) =>
+                    setDiscountMode((v as SaleDiscountMode) ?? "percent")
+                  }
+                >
+                  <SelectTrigger id="sale-discount-mode" className="h-9 w-full">
+                    <SelectValue>
+                      {(value) =>
+                        value === "amount" ? "Exact amount" : "Percentage"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percent">Percentage</SelectItem>
+                    <SelectItem value="amount">Exact amount</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="sale-discount-value" className="text-xs leading-none">
+                  {discountMode === "percent" ? "Percent off" : "Amount off"}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="sale-discount-value"
+                    type="number"
+                    min={0}
+                    max={discountMode === "percent" ? 100 : undefined}
+                    step="any"
+                    inputMode="decimal"
+                    value={discountValue}
+                    placeholder={discountMode === "percent" ? "e.g. 10" : "e.g. 50"}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    className={`h-9 ${discountMode === "percent" ? "pr-8" : ""}`}
+                  />
+                  {discountMode === "percent" ? (
+                    <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+                      %
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <Button type="button" className="h-9" onClick={applyDiscount}>
+                Apply to all
+              </Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="sale-discount-cash"
+                  checked={applyToCash}
+                  onCheckedChange={(v) => setApplyToCash(v === true)}
+                />
+                <Label htmlFor="sale-discount-cash" className="font-normal">
+                  Sale cash
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="sale-discount-retail"
+                  checked={applyToRetail}
+                  onCheckedChange={(v) => setApplyToRetail(v === true)}
+                />
+                <Label htmlFor="sale-discount-retail" className="font-normal">
+                  Sale retail
+                </Label>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Fills the checked sale fields from each variant&apos;s base
+              prices. Unchecked fields are left as they are. You can still edit
+              rows afterward.
+            </p>
+          </div>
+
           <ul className="space-y-3 md:hidden">
-            {items.map((item) => {
+            {pagedItems.map((item) => {
               const draft = draftFor(item);
               return (
                 <li key={item.variantId} className="space-y-3 rounded-lg border p-3">
@@ -878,7 +1084,7 @@ export function PricePromotionIncludedItems({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((item) => {
+                {pagedItems.map((item) => {
                   const draft = draftFor(item);
                   return (
                     <TableRow key={item.variantId}>
@@ -939,6 +1145,15 @@ export function PricePromotionIncludedItems({
               </TableBody>
             </Table>
           </div>
+
+          <TablePagination
+            page={safePage}
+            totalPages={totalPages}
+            total={total}
+            pageSize={TABLE_PAGE_SIZE}
+            onPageChange={setPage}
+            className="mt-2"
+          />
         </>
       )}
 

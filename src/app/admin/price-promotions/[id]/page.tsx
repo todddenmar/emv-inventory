@@ -314,6 +314,9 @@ export default function PricePromotionDetailPage({
                 [variantId]: { ...prev[variantId], ...patch },
               }))
             }
+            onReplaceDrafts={(next) =>
+              setDrafts((prev) => ({ ...prev, ...next }))
+            }
             onRemove={(variantId) => void handleRemove(variantId)}
             onAddClick={() => setAddOpen(true)}
             saving={savingPrices}
