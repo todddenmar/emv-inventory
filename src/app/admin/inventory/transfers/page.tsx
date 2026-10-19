@@ -22,6 +22,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -86,6 +93,8 @@ export default function AdminTransfersPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [page, setPage] = useState(1);
+  const [detailsTransfer, setDetailsTransfer] =
+    useState<BranchTransfer | null>(null);
 
   const defaultFromBranch = isElevatedAdmin ? "" : assignedBranchId ?? "";
 
@@ -418,23 +427,44 @@ export default function AdminTransfersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedItems.map((transfer) => (
-                    <TableRow key={transfer.id}>
-                      <TableCell className="whitespace-nowrap text-sm">
-                        {formatDate(transfer.createdAt)}
-                      </TableCell>
-                      <TableCell>{transfer.fromBranchName}</TableCell>
-                      <TableCell>{transfer.toBranchName}</TableCell>
-                      <TableCell className="max-w-xs text-sm">
-                        {transfer.items
-                          .map((i) => `${i.productName} ×${i.quantity}`)
-                          .join(", ")}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {transfer.createdByName ?? "Staff"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {pagedItems.map((transfer) => {
+                    const first = transfer.items[0];
+                    const itemCount = transfer.items.length;
+                    return (
+                      <TableRow key={transfer.id}>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {formatDate(transfer.createdAt)}
+                        </TableCell>
+                        <TableCell>{transfer.fromBranchName}</TableCell>
+                        <TableCell>{transfer.toBranchName}</TableCell>
+                        <TableCell className="max-w-xs text-sm">
+                          {first ? (
+                            <div className="space-y-1">
+                              <p className="truncate">
+                                {first.productName} ×{first.quantity}
+                              </p>
+                              {itemCount > 1 ? (
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  size="sm"
+                                  className="h-auto p-0"
+                                  onClick={() => setDetailsTransfer(transfer)}
+                                >
+                                  Show all ({itemCount}) items
+                                </Button>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {transfer.createdByName ?? "Staff"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -450,6 +480,95 @@ export default function AdminTransfersPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={detailsTransfer != null}
+        onOpenChange={(open) => {
+          if (!open) setDetailsTransfer(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Transfer details</DialogTitle>
+            <DialogDescription>
+              {detailsTransfer
+                ? `${formatDate(detailsTransfer.createdAt)} · ${detailsTransfer.fromBranchName} → ${detailsTransfer.toBranchName}`
+                : null}
+            </DialogDescription>
+          </DialogHeader>
+          {detailsTransfer ? (
+            <div className="space-y-4">
+              <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-muted-foreground">From</dt>
+                  <dd className="font-medium">
+                    {detailsTransfer.fromBranchName}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">To</dt>
+                  <dd className="font-medium">
+                    {detailsTransfer.toBranchName}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">By</dt>
+                  <dd>{detailsTransfer.createdByName ?? "Staff"}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Date</dt>
+                  <dd>{formatDate(detailsTransfer.createdAt)}</dd>
+                </div>
+              </dl>
+              <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Total items</p>
+                  <p className="text-lg font-semibold tabular-nums">
+                    {detailsTransfer.items.reduce(
+                      (sum, item) => sum + item.quantity,
+                      0
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Unique items</p>
+                  <p className="text-lg font-semibold tabular-nums">
+                    {detailsTransfer.items.length}
+                  </p>
+                </div>
+              </div>
+              {detailsTransfer.notes ? (
+                <div className="text-sm">
+                  <p className="text-muted-foreground">Notes</p>
+                  <p className="mt-0.5 whitespace-pre-wrap">
+                    {detailsTransfer.notes}
+                  </p>
+                </div>
+              ) : null}
+              <div className="max-h-[min(50vh,24rem)] overflow-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item</TableHead>
+                      <TableHead className="w-24 text-right">Qty</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detailsTransfer.items.map((item) => (
+                      <TableRow key={item.variantId}>
+                        <TableCell>{item.productName}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {item.quantity}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <InventoryActivityFeed
         branchId={isElevatedAdmin ? null : assignedBranchId}
