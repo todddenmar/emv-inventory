@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -29,6 +30,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Table,
   TableBody,
   TableCell,
@@ -36,11 +43,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  VariantPickerButton,
-  VariantSearchDialog,
-} from "@/components/admin/variant-search-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InventoryActivityFeed } from "@/components/admin/inventory-activity-feed";
+import { MobileSelectionBar } from "@/components/admin/mobile-selection-bar";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAuthStore } from "@/stores/auth-store";
@@ -57,19 +62,212 @@ import {
 } from "@/lib/inventory";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { formatDate } from "@/lib/format";
-import { paginateItems } from "@/lib/pagination";
+import { cn } from "@/lib/utils";
+import { paginateItems, TABLE_PAGE_SIZE } from "@/lib/pagination";
 import type { Branch, BranchTransfer, Product } from "@/types";
-
-interface TransferLine {
-  productId: string;
-  productName: string;
-  variantId: string;
-  quantity: number;
-  available: number;
-}
 
 function firstDestinationId(branches: Branch[], fromId: string) {
   return branches.find((b) => b.id !== fromId)?.id ?? "";
+}
+
+function rowLabel(row: VariantWithStock, products: Product[]) {
+  const product = products.find((p) => p.id === row.productId);
+  const variantLabel = formatVariantLabel(row, product?.options ?? []);
+  return variantLabel === "Default"
+    ? row.productName
+    : `${row.productName} — ${variantLabel}`;
+}
+
+function TransferSelectionPanel({
+  selectedRows,
+  products,
+  qtyByVariant,
+  bulkQtyText,
+  notes,
+  submitting,
+  canSubmit,
+  lineCount,
+  totalUnits,
+  visibleCount,
+  onBulkQtyTextChange,
+  onSetQty,
+  onRemove,
+  onClear,
+  onSelectAllVisible,
+  onNotesChange,
+  onSubmit,
+}: {
+  selectedRows: VariantWithStock[];
+  products: Product[];
+  qtyByVariant: Record<string, number>;
+  bulkQtyText: string;
+  notes: string;
+  submitting: boolean;
+  canSubmit: boolean;
+  lineCount: number;
+  totalUnits: number;
+  visibleCount: number;
+  onBulkQtyTextChange: (value: string) => void;
+  onSetQty: (variantId: string, value: number) => void;
+  onRemove: (id: string) => void;
+  onClear: () => void;
+  onSelectAllVisible: () => void;
+  onNotesChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 items-start justify-between gap-2 border-b px-4 py-3">
+        <div className="min-w-0">
+          <p className="font-semibold">Selected</p>
+          <p className="text-sm text-muted-foreground">
+            {selectedRows.length === 0
+              ? "Select items in the table"
+              : `${selectedRows.length} item${selectedRows.length === 1 ? "" : "s"}`}
+          </p>
+        </div>
+        {selectedRows.length > 0 ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={submitting}
+            onClick={onClear}
+          >
+            Clear
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        {selectedRows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No items selected yet.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {selectedRows.map((row) => {
+              const label = rowLabel(row, products);
+              const qty = qtyByVariant[row.id] ?? 1;
+              return (
+                <li
+                  key={row.id}
+                  className="flex items-start gap-2 rounded-lg border bg-background px-2.5 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium leading-snug break-words">
+                      {label}
+                    </p>
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                      Available {row.stock}
+                      {row.sku ? ` · ${row.sku}` : ""}
+                    </p>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={row.stock}
+                      value={qty}
+                      className="mt-2 h-8"
+                      disabled={submitting}
+                      onChange={(e) =>
+                        onSetQty(
+                          row.id,
+                          Math.min(
+                            row.stock,
+                            Math.max(1, Number(e.target.value) || 1)
+                          )
+                        )
+                      }
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="size-7 shrink-0"
+                    disabled={submitting}
+                    aria-label={`Remove ${label}`}
+                    onClick={() => onRemove(row.id)}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div className="shrink-0 space-y-3 border-t p-4">
+        {selectedRows.length < visibleCount ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={submitting || visibleCount === 0}
+            onClick={onSelectAllVisible}
+          >
+            Select all on page ({visibleCount})
+          </Button>
+        ) : null}
+        <div className="space-y-1.5">
+          <Input
+            type="number"
+            min={1}
+            placeholder="Qty for all"
+            value={bulkQtyText}
+            disabled={submitting || selectedRows.length === 0}
+            className="h-8"
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "" || /^\d*$/.test(raw)) onBulkQtyTextChange(raw);
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            {selectedRows.length === 0
+              ? "Select items to set qty for all at once."
+              : `Updates qty on all ${selectedRows.length} selected item${
+                  selectedRows.length === 1 ? "" : "s"
+                } (capped by available stock).`}
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="transfer-notes">Notes (optional)</Label>
+          <Textarea
+            id="transfer-notes"
+            value={notes}
+            onChange={(e) => onNotesChange(e.target.value)}
+            placeholder="Reason or reference for this transfer..."
+            rows={2}
+            disabled={submitting}
+          />
+        </div>
+        {lineCount > 0 ? (
+          <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">Ready to transfer</span>
+              <span className="tabular-nums font-semibold">
+                {lineCount} variant{lineCount === 1 ? "" : "s"} · {totalUnits}{" "}
+                unit{totalUnits === 1 ? "" : "s"}
+              </span>
+            </div>
+          </div>
+        ) : null}
+        <Button
+          className="w-full"
+          onClick={onSubmit}
+          disabled={submitting || !canSubmit}
+        >
+          {submitting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : null}
+          Complete transfer
+          {lineCount > 0 ? ` · ${lineCount}` : ""}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export default function AdminTransfersPage() {
@@ -80,21 +278,22 @@ export default function AdminTransfersPage() {
   const [fromBranchId, setFromBranchId] = useState("");
   const [toBranchId, setToBranchId] = useState("");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<TransferLine[]>([]);
-  const [selectedVariant, setSelectedVariant] = useState<VariantWithStock | null>(
-    null
-  );
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [quantity, setQuantity] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [qtyByVariant, setQtyByVariant] = useState<Record<string, number>>({});
+  const [bulkQtyText, setBulkQtyText] = useState("");
   const [sellingVariants, setSellingVariants] = useState<VariantWithStock[]>(
     []
   );
   const [transfers, setTransfers] = useState<BranchTransfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [page, setPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [detailsTransfer, setDetailsTransfer] =
     useState<BranchTransfer | null>(null);
+  const [selectionSheetOpen, setSelectionSheetOpen] = useState(false);
+  const [tab, setTab] = useState("history");
 
   const defaultFromBranch = isElevatedAdmin ? "" : assignedBranchId ?? "";
 
@@ -115,12 +314,11 @@ export default function AdminTransfersPage() {
   }, [defaultFromBranch]);
 
   useEffect(() => {
-    if (!fromBranchId) {
-      setSellingVariants([]);
-      return;
-    }
+    if (!fromBranchId) return;
+    let cancelled = false;
     getBranchInventory(fromBranchId)
       .then((inv) => {
+        if (cancelled) return;
         const rows = mergeSellingVariantsWithInventory(
           products.filter((x) => !x.isArchived),
           inv
@@ -128,6 +326,9 @@ export default function AdminTransfersPage() {
         setSellingVariants(rows);
       })
       .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
   }, [fromBranchId, products]);
 
   const fromBranch = branches.find((b) => b.id === fromBranchId);
@@ -140,70 +341,152 @@ export default function AdminTransfersPage() {
     return branch ? `${branch.name} (${branch.code})` : null;
   };
 
-  const availableVariants = useMemo(
-    () =>
-      sellingVariants.filter(
-        (v) => v.stock > 0 && !lines.some((l) => l.variantId === v.id)
-      ),
-    [sellingVariants, lines]
+  const inStockVariants = useMemo(
+    () => sellingVariants.filter((v) => v.stock > 0),
+    [sellingVariants]
+  );
+
+  const filteredCatalog = useMemo(() => {
+    const q = catalogSearch.trim().toLowerCase();
+    if (!q) return inStockVariants;
+    return inStockVariants.filter((row) => {
+      const product = products.find((p) => p.id === row.productId);
+      const label = formatVariantLabel(row, product?.options ?? []);
+      return (
+        row.productName.toLowerCase().includes(q) ||
+        row.sku.toLowerCase().includes(q) ||
+        label.toLowerCase().includes(q)
+      );
+    });
+  }, [inStockVariants, catalogSearch, products]);
+
+  const {
+    page: safeCatalogPage,
+    totalPages: catalogTotalPages,
+    pagedItems: pagedCatalog,
+    total: catalogTotal,
+  } = useMemo(
+    () => paginateItems(filteredCatalog, catalogPage, TABLE_PAGE_SIZE),
+    [filteredCatalog, catalogPage]
   );
 
   const {
-    page: safePage,
-    totalPages,
-    pagedItems,
-    total,
-  } = useMemo(() => paginateItems(transfers, page), [transfers, page]);
+    page: safeHistoryPage,
+    totalPages: historyTotalPages,
+    pagedItems: pagedHistory,
+    total: historyTotal,
+  } = useMemo(
+    () => paginateItems(transfers, historyPage),
+    [transfers, historyPage]
+  );
 
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage);
-  }, [page, safePage]);
+  const pageIds = useMemo(
+    () => pagedCatalog.map((row) => row.id),
+    [pagedCatalog]
+  );
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.includes(id));
 
-  const selectedVariantLabel = useMemo(() => {
-    if (!selectedVariant) return null;
-    const product = products.find((p) => p.id === selectedVariant.productId);
-    const label = formatVariantLabel(
-      selectedVariant,
-      product?.options ?? []
-    );
-    return `${selectedVariant.productName}${
-      label !== "Default" ? ` — ${label}` : ""
-    } (${selectedVariant.stock} available)`;
-  }, [selectedVariant, products]);
+  const selectedRows = useMemo(() => {
+    const byId = new Map(inStockVariants.map((row) => [row.id, row]));
+    return selectedIds
+      .map((id) => byId.get(id))
+      .filter((row): row is VariantWithStock => row != null);
+  }, [selectedIds, inStockVariants]);
 
-  const addLine = () => {
-    if (!selectedVariant) {
-      toast.error("Select a variant");
-      return;
-    }
-    const row = selectedVariant;
-    const product = products.find((p) => p.id === row.productId);
-    const variantLabel = formatVariantLabel(row, product?.options ?? []);
-    const productName =
-      variantLabel === "Default"
-        ? row.productName
-        : `${row.productName} — ${variantLabel}`;
+  const linesToSubmit = useMemo(() => {
+    return selectedRows
+      .map((row) => {
+        const quantity = qtyByVariant[row.id] ?? 1;
+        if (quantity < 1 || quantity > row.stock) return null;
+        return {
+          productId: row.productId,
+          productName: rowLabel(row, products),
+          variantId: row.id,
+          quantity,
+        };
+      })
+      .filter((line): line is NonNullable<typeof line> => line != null);
+  }, [selectedRows, qtyByVariant, products]);
 
-    if (quantity <= 0 || quantity > row.stock) {
-      toast.error(`Enter a quantity between 1 and ${row.stock}`);
-      return;
-    }
-    setLines((prev) => [
-      ...prev,
-      {
-        productId: row.productId,
-        productName,
-        variantId: row.id,
-        quantity,
-        available: row.stock,
-      },
-    ]);
-    setSelectedVariant(null);
-    setQuantity(1);
+  const totalUnits = useMemo(
+    () => linesToSubmit.reduce((sum, line) => sum + line.quantity, 0),
+    [linesToSubmit]
+  );
+
+  const canSubmit =
+    Boolean(user && fromBranch && toBranch) && linesToSubmit.length > 0;
+
+  const clearSelection = () => {
+    setSelectedIds([]);
+    setQtyByVariant({});
+    setBulkQtyText("");
   };
 
-  const removeLine = (variantId: string) => {
-    setLines((prev) => prev.filter((l) => l.variantId !== variantId));
+  const setQty = (variantId: string, value: number) => {
+    setQtyByVariant((prev) => ({ ...prev, [variantId]: value }));
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) {
+        setQtyByVariant((qty) => {
+          const next = { ...qty };
+          delete next[id];
+          return next;
+        });
+        return prev.filter((x) => x !== id);
+      }
+      setQtyByVariant((qty) => ({ ...qty, [id]: qty[id] ?? 1 }));
+      return [...prev, id];
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedIds((prev) => [...new Set([...prev, ...pageIds])]);
+    setQtyByVariant((prev) => {
+      const next = { ...prev };
+      for (const id of pageIds) {
+        if (next[id] == null) next[id] = 1;
+      }
+      return next;
+    });
+  };
+
+  const deselectPage = () => {
+    const pageSet = new Set(pageIds);
+    setSelectedIds((prev) => prev.filter((id) => !pageSet.has(id)));
+    setQtyByVariant((prev) => {
+      const next = { ...prev };
+      for (const id of pageIds) delete next[id];
+      return next;
+    });
+  };
+
+  const handleBulkQtyTextChange = (raw: string) => {
+    setBulkQtyText(raw);
+    if (raw === "") return;
+    const amount = Math.floor(Number(raw));
+    if (!Number.isFinite(amount) || amount < 1) return;
+    if (selectedRows.length === 0) return;
+
+    setQtyByVariant((prev) => {
+      const next = { ...prev };
+      for (const row of selectedRows) {
+        next[row.id] = Math.min(row.stock, amount);
+      }
+      return next;
+    });
+  };
+
+  const handleFromBranchChange = (nextFrom: string) => {
+    setFromBranchId(nextFrom);
+    setSellingVariants([]);
+    clearSelection();
+    setCatalogSearch("");
+    setCatalogPage(1);
+    setToBranchId(firstDestinationId(branches, nextFrom));
   };
 
   const handleTransfer = async () => {
@@ -211,8 +494,8 @@ export default function AdminTransfersPage() {
       toast.error("Select source and destination branches");
       return;
     }
-    if (lines.length === 0) {
-      toast.error("Add at least one variant");
+    if (linesToSubmit.length === 0) {
+      toast.error("Select at least one variant with a valid quantity");
       return;
     }
 
@@ -223,19 +506,15 @@ export default function AdminTransfersPage() {
         fromBranchName: fromBranch.name,
         toBranchId: toBranch.id,
         toBranchName: toBranch.name,
-        items: lines.map((l) => ({
-          productId: l.productId,
-          productName: l.productName,
-          variantId: l.variantId,
-          quantity: l.quantity,
-        })),
+        items: linesToSubmit,
         notes: notes.trim() || null,
         createdBy: user.uid,
         createdByName: user.displayName ?? user.email,
       });
       toast.success("Transfer completed");
-      setLines([]);
+      clearSelection();
       setNotes("");
+      setSelectionSheetOpen(false);
       setToBranchId(firstDestinationId(branches, fromBranch.id));
       const [inv, t] = await Promise.all([
         getBranchInventory(fromBranch.id),
@@ -248,12 +527,42 @@ export default function AdminTransfersPage() {
         )
       );
       setTransfers(t);
+      setTab("history");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Transfer failed");
     } finally {
       setSubmitting(false);
     }
   };
+
+  const selectionPanel = (
+    <TransferSelectionPanel
+      selectedRows={selectedRows}
+      products={products}
+      qtyByVariant={qtyByVariant}
+      bulkQtyText={bulkQtyText}
+      notes={notes}
+      submitting={submitting}
+      canSubmit={canSubmit}
+      lineCount={linesToSubmit.length}
+      totalUnits={totalUnits}
+      visibleCount={pageIds.length}
+      onBulkQtyTextChange={handleBulkQtyTextChange}
+      onSetQty={setQty}
+      onRemove={(id) => {
+        setSelectedIds((prev) => prev.filter((x) => x !== id));
+        setQtyByVariant((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      }}
+      onClear={clearSelection}
+      onSelectAllVisible={selectAllVisible}
+      onNotesChange={setNotes}
+      onSubmit={() => void handleTransfer()}
+    />
+  );
 
   if (loading) {
     return <p className="text-muted-foreground">Loading transfers...</p>;
@@ -268,218 +577,358 @@ export default function AdminTransfersPage() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>New transfer</CardTitle>
-          <CardDescription>
-            {isElevatedAdmin
-              ? "Transfer selling variants from any branch to another"
-              : `Transfer stock out of ${fromBranch?.name ?? "your branch"}`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>From branch</Label>
-              <Select
-                value={fromBranchId}
-                onValueChange={(v) => {
-                  const nextFrom = v ?? "";
-                  setFromBranchId(nextFrom);
-                  setLines([]);
-                  setSelectedVariant(null);
-                  setToBranchId(firstDestinationId(branches, nextFrom));
-                }}
-                disabled={!isElevatedAdmin}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select source branch">
-                    {(value) => branchSelectLabel(value as string | null)}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name} ({branch.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>To branch</Label>
-              <Select
-                value={toBranchId}
-                onValueChange={(v) => setToBranchId(v ?? "")}
-                disabled={!fromBranchId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select destination branch">
-                    {(value) => branchSelectLabel(value as string | null)}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {destinationOptions.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name} ({branch.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value ?? "history")}
+        className="gap-4"
+      >
+        <TabsList>
+          <TabsTrigger value="history" className="px-3">
+            Transfer history
+          </TabsTrigger>
+          <TabsTrigger value="activity" className="px-3">
+            Recent activity
+          </TabsTrigger>
+          <TabsTrigger value="new" className="px-3">
+            New transfer
+          </TabsTrigger>
+        </TabsList>
 
-          {fromBranchId && (
-            <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end">
-              <div className="flex-1 space-y-2">
-                <Label>Variant</Label>
-                <VariantPickerButton
-                  selectedLabel={selectedVariantLabel}
-                  placeholder="Search and select variant"
-                  onClick={() => setPickerOpen(true)}
-                />
-              </div>
-              <div className="w-full space-y-2 sm:w-28">
-                <Label>Qty</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value) || 1)}
-                />
-              </div>
-              <Button type="button" variant="outline" onClick={addLine}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add
-              </Button>
-            </div>
-          )}
-
-          {lines.length > 0 && (
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Variant</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead className="text-right">Remove</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lines.map((line) => (
-                    <TableRow key={line.variantId}>
-                      <TableCell>{line.productName}</TableCell>
-                      <TableCell>{line.quantity}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeLine(line.variantId)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label>Notes (optional)</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Reason or reference for this transfer..."
-              rows={2}
-            />
-          </div>
-
-          <Button
-            onClick={handleTransfer}
-            disabled={submitting || lines.length === 0 || !toBranchId}
-          >
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Complete transfer
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Transfer history</CardTitle>
-          <CardDescription>Recent branch-to-branch movements</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {transfers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No transfers yet.</p>
-          ) : (
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>From</TableHead>
-                    <TableHead>To</TableHead>
-                    <TableHead>Items</TableHead>
-                    <TableHead>By</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pagedItems.map((transfer) => {
-                    const first = transfer.items[0];
-                    const itemCount = transfer.items.length;
-                    return (
-                      <TableRow key={transfer.id}>
-                        <TableCell className="whitespace-nowrap text-sm">
-                          {formatDate(transfer.createdAt)}
-                        </TableCell>
-                        <TableCell>{transfer.fromBranchName}</TableCell>
-                        <TableCell>{transfer.toBranchName}</TableCell>
-                        <TableCell className="max-w-xs text-sm">
-                          {first ? (
-                            <div className="space-y-1">
-                              <p className="truncate">
-                                {first.productName} ×{first.quantity}
-                              </p>
-                              {itemCount > 1 ? (
-                                <Button
-                                  type="button"
-                                  variant="link"
-                                  size="sm"
-                                  className="h-auto p-0"
-                                  onClick={() => setDetailsTransfer(transfer)}
-                                >
-                                  Show all ({itemCount}) items
-                                </Button>
-                              ) : null}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {transfer.createdByName ?? "Staff"}
-                        </TableCell>
+        <TabsContent value="history" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Transfer history</CardTitle>
+              <CardDescription>
+                Recent branch-to-branch movements
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {transfers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No transfers yet.
+                </p>
+              ) : (
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>From</TableHead>
+                        <TableHead>To</TableHead>
+                        <TableHead>Items</TableHead>
+                        <TableHead>By</TableHead>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-          {transfers.length > 0 && (
-            <TablePagination
-              page={safePage}
-              totalPages={totalPages}
-              total={total}
-              onPageChange={setPage}
-              className="mt-4"
+                    </TableHeader>
+                    <TableBody>
+                      {pagedHistory.map((transfer) => {
+                        const first = transfer.items[0];
+                        const itemCount = transfer.items.length;
+                        return (
+                          <TableRow key={transfer.id}>
+                            <TableCell className="whitespace-nowrap text-sm">
+                              {formatDate(transfer.createdAt)}
+                            </TableCell>
+                            <TableCell>{transfer.fromBranchName}</TableCell>
+                            <TableCell>{transfer.toBranchName}</TableCell>
+                            <TableCell className="max-w-xs text-sm">
+                              {first ? (
+                                <div className="space-y-1">
+                                  <p className="truncate">
+                                    {first.productName} ×{first.quantity}
+                                  </p>
+                                  {itemCount > 1 ? (
+                                    <Button
+                                      type="button"
+                                      variant="link"
+                                      size="sm"
+                                      className="h-auto p-0"
+                                      onClick={() =>
+                                        setDetailsTransfer(transfer)
+                                      }
+                                    >
+                                      Show all ({itemCount}) items
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {transfer.createdByName ?? "Staff"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              {transfers.length > 0 ? (
+                <TablePagination
+                  page={safeHistoryPage}
+                  totalPages={historyTotalPages}
+                  total={historyTotal}
+                  onPageChange={setHistoryPage}
+                  className="mt-4"
+                />
+              ) : null}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <InventoryActivityFeed
+            branchId={isElevatedAdmin ? null : assignedBranchId}
+            showViewAll={false}
+            max={20}
+          />
+        </TabsContent>
+
+        <TabsContent value="new" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Branches</CardTitle>
+              <CardDescription>
+                {isElevatedAdmin
+                  ? "Transfer selling variants from any branch to another"
+                  : `Transfer stock out of ${fromBranch?.name ?? "your branch"}`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>From branch</Label>
+                  <Select
+                    value={fromBranchId}
+                    onValueChange={(v) => handleFromBranchChange(v ?? "")}
+                    disabled={!isElevatedAdmin}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select source branch">
+                        {(value) => branchSelectLabel(value as string | null)}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>
+                          {branch.name} ({branch.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>To branch</Label>
+                  <Select
+                    value={toBranchId}
+                    onValueChange={(v) => setToBranchId(v ?? "")}
+                    disabled={!fromBranchId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select destination branch">
+                        {(value) => branchSelectLabel(value as string | null)}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {destinationOptions.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>
+                          {branch.name} ({branch.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div
+            className={cn(
+              "flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start",
+              selectedIds.length > 0 && "pb-24 lg:pb-0"
+            )}
+          >
+            <Card className="min-w-0 flex-1">
+              <CardHeader className="space-y-4 pb-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <CardTitle className="text-base">Catalog</CardTitle>
+                    <CardDescription>
+                      {fromBranch
+                        ? `In-stock selling variants at ${fromBranch.name} (${TABLE_PAGE_SIZE} per page).`
+                        : "Select a source branch to load stock."}
+                    </CardDescription>
+                  </div>
+                  {fromBranchId ? (
+                    <div className="text-center text-sm">
+                      <p className="text-xs text-muted-foreground">In stock</p>
+                      <p className="font-semibold tabular-nums">
+                        {inStockVariants.length}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+                {fromBranchId ? (
+                  <div className="relative max-w-md">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={catalogSearch}
+                      onChange={(e) => {
+                        setCatalogSearch(e.target.value);
+                        setCatalogPage(1);
+                      }}
+                      placeholder="Search product, SKU, or variant…"
+                      className="pl-9"
+                    />
+                  </div>
+                ) : null}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!fromBranchId ? (
+                  <p className="py-12 text-center text-sm text-muted-foreground">
+                    Select a source branch to see variants.
+                  </p>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">
+                              <Checkbox
+                                checked={allPageSelected}
+                                indeterminate={
+                                  somePageSelected && !allPageSelected
+                                }
+                                disabled={pagedCatalog.length === 0}
+                                onCheckedChange={() => {
+                                  if (allPageSelected) deselectPage();
+                                  else selectAllVisible();
+                                }}
+                                aria-label="Select all on page"
+                              />
+                            </TableHead>
+                            <TableHead>Product / variant</TableHead>
+                            <TableHead className="w-28">SKU</TableHead>
+                            <TableHead className="w-28">Available</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pagedCatalog.length === 0 ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={4}
+                                className="py-8 text-center text-muted-foreground"
+                              >
+                                {inStockVariants.length === 0
+                                  ? "No in-stock selling variants at this branch."
+                                  : "No variants match your search."}
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            pagedCatalog.map((row) => {
+                              const selected = selectedIds.includes(row.id);
+                              const product = products.find(
+                                (p) => p.id === row.productId
+                              );
+                              const variantLabel = formatVariantLabel(
+                                row,
+                                product?.options ?? []
+                              );
+                              return (
+                                <TableRow
+                                  key={row.id}
+                                  data-state={
+                                    selected ? "selected" : undefined
+                                  }
+                                  className={cn(
+                                    "cursor-pointer",
+                                    selected && "bg-primary/5"
+                                  )}
+                                  onClick={() => toggleSelected(row.id)}
+                                >
+                                  <TableCell
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Checkbox
+                                      checked={selected}
+                                      onCheckedChange={() =>
+                                        toggleSelected(row.id)
+                                      }
+                                      aria-label={`Select ${row.productName}`}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <p className="font-medium">
+                                      {row.productName}
+                                    </p>
+                                    {variantLabel !== "Default" ? (
+                                      <p className="text-sm text-muted-foreground">
+                                        {variantLabel}
+                                      </p>
+                                    ) : null}
+                                  </TableCell>
+                                  <TableCell className="text-sm text-muted-foreground">
+                                    {row.sku || "—"}
+                                  </TableCell>
+                                  <TableCell className="tabular-nums font-medium">
+                                    {row.stock}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <TablePagination
+                      page={safeCatalogPage}
+                      totalPages={catalogTotalPages}
+                      total={catalogTotal}
+                      pageSize={TABLE_PAGE_SIZE}
+                      onPageChange={setCatalogPage}
+                    />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {fromBranchId ? (
+              <aside className="hidden h-[calc(100dvh-8rem)] w-full shrink-0 overflow-hidden rounded-xl border bg-muted/20 lg:sticky lg:top-4 lg:block lg:w-[300px] xl:w-[320px]">
+                {selectionPanel}
+              </aside>
+            ) : null}
+          </div>
+
+          {fromBranchId && !selectionSheetOpen ? (
+            <MobileSelectionBar
+              count={selectedIds.length}
+              hint={
+                totalUnits > 0
+                  ? `Total ${totalUnits} unit${totalUnits === 1 ? "" : "s"}`
+                  : "Review and set qty"
+              }
+              onAction={() => setSelectionSheetOpen(true)}
             />
-          )}
-        </CardContent>
-      </Card>
+          ) : null}
+
+          <Sheet
+            open={selectionSheetOpen}
+            onOpenChange={setSelectionSheetOpen}
+          >
+            <SheetContent
+              side="bottom"
+              className="flex h-[min(85dvh,40rem)] flex-col gap-0 p-0"
+            >
+              <SheetHeader className="sr-only">
+                <SheetTitle>Selected transfer items</SheetTitle>
+              </SheetHeader>
+              {selectionPanel}
+            </SheetContent>
+          </Sheet>
+        </TabsContent>
+      </Tabs>
 
       <Dialog
         open={detailsTransfer != null}
@@ -569,23 +1018,6 @@ export default function AdminTransfersPage() {
           ) : null}
         </DialogContent>
       </Dialog>
-
-      <InventoryActivityFeed
-        branchId={isElevatedAdmin ? null : assignedBranchId}
-        showViewAll={false}
-        max={20}
-      />
-
-      <VariantSearchDialog
-        open={pickerOpen}
-        onOpenChange={setPickerOpen}
-        variants={availableVariants}
-        products={products}
-        title="Select variant to transfer"
-        stockLabel={(stock) => `${stock} available`}
-        emptyMessage="No selling variants with stock match your search."
-        onSelect={setSelectedVariant}
-      />
     </div>
   );
 }
