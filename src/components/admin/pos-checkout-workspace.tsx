@@ -27,7 +27,7 @@ import { formatDateInputLabel, saleCreatedAtForDate } from "@/lib/dates";
 import {
   isNonRevenueCustomerType,
   posCustomerTypeLabel,
-  requiresPosCustomerDetails,
+  requiresPosCustomerName,
 } from "@/lib/pos-customer-type";
 import {
   clearPosCheckoutDraft,
@@ -430,11 +430,12 @@ export function PosCheckoutWorkspace({
       return;
     }
 
-    if (
-      requiresPosCustomerDetails(customerType) &&
-      !customer.name.trim()
-    ) {
-      toast.error("Enter customer name");
+    if (requiresPosCustomerName(customerType) && !customer.name.trim()) {
+      toast.error(
+        customerType === "co_owner"
+          ? "Enter owner note (who the owner is)"
+          : "Enter customer name"
+      );
       setCheckoutStep("details");
       return;
     }
@@ -485,7 +486,7 @@ export function PosCheckoutWorkspace({
         payments,
         customerType,
         customer:
-          requiresPosCustomerDetails(customerType) || appliedVoucher
+          requiresPosCustomerName(customerType) || appliedVoucher
             ? normalizePosCustomer(customer)
             : null,
         resellerId: noCharge ? null : (appliedVoucher?.resellerId ?? null),
@@ -713,7 +714,7 @@ export function PosCheckoutWorkspace({
         }}
         onCustomerTypeChange={(type) => {
           setCustomerType(type);
-          if (!requiresPosCustomerDetails(type)) {
+          if (!requiresPosCustomerName(type)) {
             const empty = emptyPosCustomerDraft();
             setCustomer(empty);
             persistDraft({ customerType: type, customer: empty });

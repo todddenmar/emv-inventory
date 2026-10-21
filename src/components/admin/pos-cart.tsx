@@ -67,6 +67,7 @@ import {
   parsePosCustomerType,
   posCustomerTypeLabel,
   requiresPosCustomerDetails,
+  requiresPosCustomerName,
 } from "@/lib/pos-customer-type";
 import type {
   PaymentAccount,
@@ -835,7 +836,7 @@ export function PosCheckoutDialog({
       (line) => line.priceList === "retail" && line.retailPrice == null
     );
   const showCustomerForm =
-    requiresPosCustomerDetails(customerType) ||
+    requiresPosCustomerName(customerType) ||
     (!noCharge && appliedVoucher != null);
   const customerSummary = showCustomerForm
     ? normalizePosCustomer(customer)
@@ -1771,6 +1772,7 @@ export function PosCheckoutDialog({
                       <SelectItem value="delivery">Delivery</SelectItem>
                       <SelectItem value="warranty">Warranty</SelectItem>
                       <SelectItem value="replacement">Replacement</SelectItem>
+                      <SelectItem value="co_owner">C/O Owner</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1778,24 +1780,34 @@ export function PosCheckoutDialog({
                 {showCustomerForm ? (
                   <div className="space-y-3">
                     <div>
-                      <Label>Customer details</Label>
+                      <Label>
+                        {customerType === "co_owner"
+                          ? "Owner note"
+                          : "Customer details"}
+                      </Label>
                       <p className="text-xs text-muted-foreground">
-                        {appliedVoucher &&
-                        !requiresPosCustomerDetails(customerType)
-                          ? "Customer name is required when redeeming a voucher"
-                          : `Required for ${customerTypeLabel(customerType).toLowerCase()}`}
+                        {customerType === "co_owner"
+                          ? "Note who the owner is (free giveaway to a friend)"
+                          : appliedVoucher &&
+                              !requiresPosCustomerDetails(customerType)
+                            ? "Customer name is required when redeeming a voucher"
+                            : `Required for ${customerTypeLabel(customerType).toLowerCase()}`}
                       </p>
                     </div>
                     <div className="grid gap-2">
                       <div className="space-y-1">
                         <Label htmlFor="pos-customer-name" className="text-xs">
-                          Name
+                          {customerType === "co_owner" ? "Owner" : "Name"}
                         </Label>
                         <Input
                           id="pos-customer-name"
                           value={customer.name}
                           disabled={charging}
-                          placeholder="Customer name"
+                          placeholder={
+                            customerType === "co_owner"
+                              ? "Owner name (who gave the product)"
+                              : "Customer name"
+                          }
                           onChange={(e) =>
                             onCustomerChange({ name: e.target.value })
                           }
@@ -1866,7 +1878,9 @@ export function PosCheckoutDialog({
                     </div>
                     {missingCustomerName ? (
                       <p className="text-sm text-destructive">
-                        Enter customer name to continue.
+                        {customerType === "co_owner"
+                          ? "Enter owner note to continue."
+                          : "Enter customer name to continue."}
                       </p>
                     ) : null}
                   </div>
@@ -2065,7 +2079,9 @@ export function PosCheckoutDialog({
                 ) : null}
                 {customerSummary ? (
                   <div className="border-t pt-2">
-                    <p className="text-muted-foreground">Customer</p>
+                    <p className="text-muted-foreground">
+                      {customerType === "co_owner" ? "Owner note" : "Customer"}
+                    </p>
                     <p className="font-medium">
                       {customerSummary.name || "—"}
                     </p>

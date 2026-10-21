@@ -331,7 +331,9 @@ export type PosCustomerType =
   | "reservation"
   | "delivery"
   | "warranty"
-  | "replacement";
+  | "replacement"
+  /** Owner giveaway to a friend — no charge; note who the owner is. */
+  | "co_owner";
 
 export type PaymentAccountType = "ewallet" | "bank_transfer";
 

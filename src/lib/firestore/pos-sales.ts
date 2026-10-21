@@ -22,7 +22,7 @@ import { isVoucherRedeemable } from "@/lib/firestore/vouchers";
 import {
   isNonRevenueCustomerType,
   parsePosCustomerType,
-  requiresPosCustomerDetails,
+  requiresPosCustomerName,
 } from "@/lib/pos-customer-type";
 import type {
   PaymentAccount,
@@ -280,9 +280,13 @@ export async function completePosSale(
 
   const customerType = parsePosCustomerType(input.customerType);
   const noCharge = isNonRevenueCustomerType(customerType);
-  if (requiresPosCustomerDetails(customerType)) {
+  if (requiresPosCustomerName(customerType)) {
     if (!input.customer?.name?.trim()) {
-      throw new Error("Customer name is required");
+      throw new Error(
+        customerType === "co_owner"
+          ? "Owner note is required for C/O Owner"
+          : "Customer name is required"
+      );
     }
   }
 
@@ -545,7 +549,7 @@ export async function completePosSale(
       payments,
       customerType,
       customer:
-        requiresPosCustomerDetails(customerType) || voucherId
+        requiresPosCustomerName(customerType) || voucherId
           ? (input.customer ?? null)
           : null,
       resellerId: noCharge ? null : (input.resellerId ?? null),
