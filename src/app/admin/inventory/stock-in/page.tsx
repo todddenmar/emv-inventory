@@ -48,6 +48,10 @@ import {
 import { TablePagination } from "@/components/admin/table-pagination";
 import { MobileSelectionBar } from "@/components/admin/mobile-selection-bar";
 import { SortableTableHead } from "@/components/admin/sortable-table-head";
+import {
+  SyncVariantBranchesDialog,
+  type SyncVariantTarget,
+} from "@/components/admin/sync-variant-branches-dialog";
 import { sortRows, useTableSort } from "@/hooks/use-table-sort";
 
 type StockInSortKey = "name" | "supplier" | "stock" | "lowAt";
@@ -404,8 +408,20 @@ export default function AdminStockInPage() {
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [historyPage, setHistoryPage] = useState(1);
   const [productPage, setProductPage] = useState(1);
+  const [syncTarget, setSyncTarget] = useState<SyncVariantTarget | null>(null);
 
   const defaultBranch = isElevatedAdmin ? "" : assignedBranchId ?? "";
+
+  const syncBranches = useMemo(() => {
+    if (isElevatedAdmin) return branches;
+    if (!assignedBranchId) return [];
+    return branches.filter((b) => b.id === assignedBranchId);
+  }, [isElevatedAdmin, branches, assignedBranchId]);
+
+  const syncInitialBranchIds = useMemo(
+    () => (branchId ? [branchId] : []),
+    [branchId]
+  );
 
   useEffect(() => {
     Promise.all([
@@ -446,6 +462,19 @@ export default function AdminStockInPage() {
       })
       .catch(console.error);
   }, [branchId, products, categories, isElevatedAdmin, assignedBranchId]);
+
+  const refreshBranchInventory = async () => {
+    if (!branchId) return;
+    const [inv, stockIns] = await Promise.all([
+      getBranchInventory(branchId),
+      getSupplierStockIns({
+        branchId: isElevatedAdmin ? branchId : assignedBranchId,
+        max: 30,
+      }),
+    ]);
+    setVariantRows(mergeVariantsWithInventory(products, inv, categories));
+    setHistory(stockIns);
+  };
 
   const branch = branches.find((b) => b.id === branchId);
   const vendorsById = useMemo(
@@ -564,21 +593,29 @@ export default function AdminStockInPage() {
     if (historyPage !== safeHistoryPage) setHistoryPage(safeHistoryPage);
   }, [historyPage, safeHistoryPage]);
 
-  const pageIds = pagedItems.map((row) => row.id);
+  const selectablePageIds = pagedItems
+    .filter((row) => row.isSelling)
+    .map((row) => row.id);
   const allPageSelected =
-    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
-  const somePageSelected = pageIds.some((id) => selectedIds.includes(id));
+    selectablePageIds.length > 0 &&
+    selectablePageIds.every((id) => selectedIds.includes(id));
+  const somePageSelected = selectablePageIds.some((id) =>
+    selectedIds.includes(id)
+  );
 
   const selectedRows = useMemo(() => {
     const byId = new Map(allSupplierVariants.map((row) => [row.id, row]));
     return selectedIds
       .map((id) => byId.get(id))
-      .filter((row): row is VariantWithStock => row != null);
+      .filter(
+        (row): row is VariantWithStock => row != null && row.isSelling
+      );
   }, [selectedIds, allSupplierVariants]);
 
   const linesToSubmit = useMemo(() => {
     return allSupplierVariants
       .map((row) => {
+        if (!row.isSelling) return null;
         const quantity = qtyByVariant[row.id] ?? 0;
         if (quantity <= 0) return null;
         const product = products.find((p) => p.id === row.productId);
@@ -689,17 +726,23 @@ export default function AdminStockInPage() {
   };
 
   const toggleSelected = (id: string) => {
+    const row = allSupplierVariants.find((r) => r.id === id);
+    if (!row?.isSelling) return;
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   };
 
   const selectAllVisible = () => {
-    setSelectedIds((prev) => [...new Set([...prev, ...pageIds])]);
+    setSelectedIds((prev) => [
+      ...new Set([...prev, ...selectablePageIds]),
+    ]);
   };
 
   const deselectPage = () => {
-    setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+    setSelectedIds((prev) =>
+      prev.filter((id) => !selectablePageIds.includes(id))
+    );
   };
 
   const clearSelection = () => {
@@ -810,7 +853,7 @@ export default function AdminStockInPage() {
       onSelectAllVisible={selectAllVisible}
       onNotesChange={setNotes}
       onRequestConfirm={() => setConfirmDialogOpen(true)}
-      visibleCount={pageIds.length}
+      visibleCount={selectablePageIds.length}
     />
   );
 
@@ -820,7 +863,8 @@ export default function AdminStockInPage() {
         <div>
           <h1 className="text-2xl font-bold">Supplier stock in</h1>
           <p className="text-muted-foreground">
-            Select variants, set receive quantities, then complete stock in
+            Unsynced variants appear in the list but must be synced to a branch
+            before you can receive stock.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
@@ -891,7 +935,7 @@ export default function AdminStockInPage() {
                 </CardTitle>
                 <CardDescription>
                   {branch
-                    ? `Current stock at ${branch.name}. Mix suppliers in one stock in (10 per page).`
+                    ? `Variants at ${branch.name}. Sync unsynced rows before receiving (10 per page).`
                     : "Select a branch to load stock."}
                 </CardDescription>
               </div>
@@ -964,12 +1008,12 @@ export default function AdminStockInPage() {
                             indeterminate={
                               somePageSelected && !allPageSelected
                             }
-                            disabled={pagedItems.length === 0}
+                            disabled={selectablePageIds.length === 0}
                             onCheckedChange={() => {
                               if (allPageSelected) deselectPage();
                               else selectAllVisible();
                             }}
-                            aria-label="Select all on page"
+                            aria-label="Select all synced on page"
                           />
                         </TableHead>
                         <SortableTableHead
@@ -1022,7 +1066,9 @@ export default function AdminStockInPage() {
                           const isLow =
                             row.stock > 0 &&
                             row.stock <= row.lowStockThreshold;
-                          const selected = selectedIds.includes(row.id);
+                          const synced = row.isSelling;
+                          const selected =
+                            synced && selectedIds.includes(row.id);
                           const product = products.find(
                             (p) => p.id === row.productId
                           );
@@ -1039,23 +1085,34 @@ export default function AdminStockInPage() {
                               key={row.id}
                               data-state={selected ? "selected" : undefined}
                               className={cn(
-                                "cursor-pointer",
-                                isOut && "bg-destructive/5",
-                                isLow &&
+                                synced ? "cursor-pointer" : "opacity-80",
+                                synced && isOut && "bg-destructive/5",
+                                synced &&
+                                  isLow &&
                                   "bg-amber-50/60 dark:bg-amber-950/20",
+                                !synced && "bg-muted/40",
                                 selected && "bg-primary/5"
                               )}
-                              onClick={() => toggleSelected(row.id)}
+                              onClick={
+                                synced
+                                  ? () => toggleSelected(row.id)
+                                  : undefined
+                              }
                             >
                               <TableCell
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <Checkbox
                                   checked={selected}
+                                  disabled={!synced}
                                   onCheckedChange={() =>
                                     toggleSelected(row.id)
                                   }
-                                  aria-label={`Select ${row.productName}`}
+                                  aria-label={
+                                    synced
+                                      ? `Select ${row.productName}`
+                                      : `${row.productName} not synced`
+                                  }
                                 />
                               </TableCell>
                               <TableCell>
@@ -1064,7 +1121,17 @@ export default function AdminStockInPage() {
                                     <p className="font-medium">
                                       {row.productName}
                                     </p>
-                                    {variantLabel === "Default" && isOut ? (
+                                    {!synced ? (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs text-sky-800"
+                                      >
+                                        Not synced yet
+                                      </Badge>
+                                    ) : null}
+                                    {synced &&
+                                    variantLabel === "Default" &&
+                                    isOut ? (
                                       <Badge
                                         variant="outline"
                                         className="text-xs text-destructive"
@@ -1072,7 +1139,8 @@ export default function AdminStockInPage() {
                                         Out of stock
                                       </Badge>
                                     ) : null}
-                                    {variantLabel === "Default" &&
+                                    {synced &&
+                                    variantLabel === "Default" &&
                                     !isOut &&
                                     isLow ? (
                                       <Badge
@@ -1088,14 +1156,14 @@ export default function AdminStockInPage() {
                                       <p className="text-sm text-muted-foreground">
                                         {variantLabel}
                                       </p>
-                                      {isOut ? (
+                                      {synced && isOut ? (
                                         <Badge
                                           variant="outline"
                                           className="text-xs text-destructive"
                                         >
                                           Out of stock
                                         </Badge>
-                                      ) : isLow ? (
+                                      ) : synced && isLow ? (
                                         <Badge
                                           variant="outline"
                                           className="text-xs text-amber-700"
@@ -1103,6 +1171,32 @@ export default function AdminStockInPage() {
                                           Low stock
                                         </Badge>
                                       ) : null}
+                                    </div>
+                                  ) : null}
+                                  {!synced ? (
+                                    <div
+                                      className="mt-2 flex flex-wrap items-center gap-2"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <p className="text-xs text-muted-foreground">
+                                        Sync to a branch before receiving
+                                        stock.
+                                      </p>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          setSyncTarget({
+                                            productId: row.productId,
+                                            variantId: row.id,
+                                            productName: row.productName,
+                                            variantLabel,
+                                          })
+                                        }
+                                      >
+                                        Sync
+                                      </Button>
                                     </div>
                                   ) : null}
                                 </div>
@@ -1118,8 +1212,9 @@ export default function AdminStockInPage() {
                               <TableCell
                                 className={cn(
                                   "tabular-nums font-medium",
-                                  isOut && "text-destructive",
-                                  isLow && "text-amber-700"
+                                  synced && isOut && "text-destructive",
+                                  synced && isLow && "text-amber-700",
+                                  !synced && "text-muted-foreground"
                                 )}
                               >
                                 {row.stock}
@@ -1305,6 +1400,19 @@ export default function AdminStockInPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SyncVariantBranchesDialog
+        open={syncTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setSyncTarget(null);
+        }}
+        target={syncTarget}
+        branches={syncBranches}
+        initialSelectedBranchIds={syncInitialBranchIds}
+        onSaved={() => {
+          void refreshBranchInventory().catch(console.error);
+        }}
+      />
     </div>
   );
 }

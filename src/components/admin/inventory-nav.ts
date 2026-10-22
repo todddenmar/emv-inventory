@@ -48,7 +48,7 @@ export const inventoryNavItems: InventoryNavItem[] = [
     href: "/admin/inventory/stock-in",
     label: "Supplier stock in",
     icon: PackagePlus,
-    description: "Receive supplier deliveries into stock",
+    description: "Receive stock; sync unsynced variants first",
   },
   {
     href: "/admin/inventory/adjustment-history",

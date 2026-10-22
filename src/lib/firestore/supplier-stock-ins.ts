@@ -60,8 +60,6 @@ export async function completeSupplierStockIn(
       invRef: ReturnType<typeof doc>;
       previousStock: number;
       newStock: number;
-      exists: boolean;
-      threshold: number;
     }> = [];
 
     for (const item of input.items) {
@@ -71,46 +69,38 @@ export async function completeSupplierStockIn(
         inventoryDocId(input.branchId, item.variantId)
       );
       const snap = await tx.get(invRef);
-      const previousStock = snap.exists()
-        ? ((snap.data() as { stock?: number })?.stock ?? 0)
-        : 0;
-      const threshold = snap.exists()
-        ? ((snap.data() as { lowStockThreshold?: number })?.lowStockThreshold ??
-          5)
-        : 5;
+      if (!snap.exists()) {
+        throw new Error(
+          `${item.productName} is not assigned to this branch. Assign it in Branch assortment first.`
+        );
+      }
+      const data = snap.data() as {
+        stock?: number;
+        isSelling?: boolean;
+      };
+      if (data.isSelling === false) {
+        throw new Error(
+          `${item.productName} is not selling at this branch. Enable it in Branch assortment first.`
+        );
+      }
 
+      const previousStock = data.stock ?? 0;
       rows.push({
         item,
         invRef,
         previousStock,
         newStock: previousStock + item.quantity,
-        exists: snap.exists(),
-        threshold,
       });
     }
 
     for (const row of rows) {
-      if (row.exists) {
-        tx.update(row.invRef, {
-          stock: row.newStock,
-          isSelling: true,
-          productId: row.item.productId,
-          variantId: row.item.variantId,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        tx.set(row.invRef, {
-          branchId: input.branchId,
-          productId: row.item.productId,
-          variantId: row.item.variantId,
-          stock: row.newStock,
-          lowStockThreshold: row.threshold,
-          isSelling: true,
-          cashPrice: null,
-          retailPrice: null,
-          updatedAt: serverTimestamp(),
-        });
-      }
+      tx.update(row.invRef, {
+        stock: row.newStock,
+        isSelling: true,
+        productId: row.item.productId,
+        variantId: row.item.variantId,
+        updatedAt: serverTimestamp(),
+      });
 
       tx.set(doc(collection(db, COLLECTIONS.inventoryLogs)), {
         branchId: input.branchId,
