@@ -1,8 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { Expand, Search } from "lucide-react";
+import { CircleHelp, Expand, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { PosCartLine } from "@/components/admin/pos-cart";
 import type { VariantWithStock } from "@/lib/inventory";
 import { resolvePosCatalogThumb } from "@/lib/pos-catalog-list";
@@ -94,6 +102,47 @@ function StockBadge({
   );
 }
 
+function DisabledReasonHelp({
+  reason,
+  canCheckOtherBranches,
+}: {
+  reason: string;
+  canCheckOtherBranches: boolean;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border bg-background/95 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
+            aria-label="Why is this disabled?"
+            onClick={(e) => e.stopPropagation()}
+          />
+        }
+      >
+        <CircleHelp className="size-3.5" />
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        side="top"
+        className="w-56 gap-1.5 p-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <PopoverHeader>
+          <PopoverTitle>Unavailable</PopoverTitle>
+          <PopoverDescription>
+            {reason}
+            {canCheckOtherBranches
+              ? " Use the search icon to check other branches."
+              : ""}
+          </PopoverDescription>
+        </PopoverHeader>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** One POS catalog card per variant — image on all breakpoints. */
 export function PosCatalogVariantCard({
   row,
@@ -133,19 +182,30 @@ export function PosCatalogVariantCard({
     ? `${findStockBasePath}?variantId=${encodeURIComponent(row.id)}&productId=${encodeURIComponent(row.productId)}`
     : null;
 
+  const topRightActions =
+    (outOfStock ? 1 : 0) + (findStockHref ? 1 : 0);
+
   return (
     <div className="relative flex min-h-0 flex-row items-stretch gap-3 overflow-hidden rounded-xl border bg-card p-3 sm:min-h-0 sm:flex-col sm:gap-0 sm:p-0">
-      {findStockHref ? (
-        <Link
-          href={findStockHref}
-          title="Check other branches"
-          aria-label={`Check other branches for ${displayName}`}
-          className="absolute top-2 right-2 z-10 inline-flex size-8 items-center justify-center rounded-md border bg-background/95 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Search className="size-3.5" />
-        </Link>
-      ) : null}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+        {outOfStock ? (
+          <DisabledReasonHelp
+            reason="Out of stock at this branch, so it can't be added to the cart."
+            canCheckOtherBranches={findStockHref != null}
+          />
+        ) : null}
+        {findStockHref ? (
+          <Link
+            href={findStockHref}
+            title="Check other branches"
+            aria-label={`Check other branches for ${displayName}`}
+            className="inline-flex size-8 items-center justify-center rounded-md border bg-background/95 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Search className="size-3.5" />
+          </Link>
+        ) : null}
+      </div>
       {showImage && thumb ? (
         <button
           type="button"
@@ -186,7 +246,11 @@ export function PosCatalogVariantCard({
           <div className="flex flex-col items-stretch gap-1.5 sm:pr-0">
             <p
               className={`text-sm font-medium leading-snug break-words whitespace-normal ${
-                findStockHref ? "pr-8" : ""
+                topRightActions > 0
+                  ? topRightActions > 1
+                    ? "pr-20"
+                    : "pr-8"
+                  : ""
               }`}
             >
               {displayName}

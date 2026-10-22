@@ -459,6 +459,181 @@ export function sellingBranchIdsForProduct(
   return [...ids];
 }
 
+export type PosAssortmentGap = {
+  product: Product;
+  /** No branch sells any variant. */
+  kind: "unassigned" | "incomplete";
+  /** Branches that sell some but not all variants (incomplete only). */
+  partialBranchIds: string[];
+  /** Distinct variants missing from POS for this product. */
+  missingVariantCount: number;
+  /** How many variant×branch slots are missing for POS. */
+  missingVariantSlots: number;
+};
+
+export type PosMissingVariantLine = {
+  variantId: string;
+  sku: string;
+  /** Branch where this variant is not selling (incomplete). Empty for unassigned. */
+  branchId: string | null;
+};
+
+export type PosProductMissingDetail = {
+  product: Product;
+  kind: "unassigned" | "incomplete" | "complete";
+  partialBranchIds: string[];
+  missingVariantSlots: number;
+  /** Distinct variants that are missing on at least one branch (or all when unassigned). */
+  missingVariants: Array<{ variantId: string; sku: string }>;
+  /** Variant × branch gaps for incomplete products. */
+  lines: PosMissingVariantLine[];
+};
+
+/** Missing POS assortment detail for one product. */
+export function findMissingPosDetailForProduct(
+  product: Product,
+  inventory: BranchInventory[]
+): PosProductMissingDetail {
+  if (product.variants.length === 0) {
+    return {
+      product,
+      kind: "complete",
+      partialBranchIds: [],
+      missingVariantSlots: 0,
+      missingVariants: [],
+      lines: [],
+    };
+  }
+
+  const sellingBranchIds = sellingBranchIdsForProduct(product.id, inventory);
+  if (sellingBranchIds.length === 0) {
+    const missingVariants = product.variants.map((variant) => ({
+      variantId: variant.id,
+      sku: variant.sku,
+    }));
+    return {
+      product,
+      kind: "unassigned",
+      partialBranchIds: [],
+      missingVariantSlots: product.variants.length,
+      missingVariants,
+      lines: missingVariants.map((variant) => ({
+        variantId: variant.variantId,
+        sku: variant.sku,
+        branchId: null,
+      })),
+    };
+  }
+
+  const partialBranchIds: string[] = [];
+  const lines: PosMissingVariantLine[] = [];
+  const missingVariantIds = new Set<string>();
+
+  for (const branchId of sellingBranchIds) {
+    const sellingVariantIds = new Set(
+      inventory
+        .filter(
+          (row) =>
+            row.productId === product.id &&
+            row.branchId === branchId &&
+            row.isSelling !== false
+        )
+        .map((row) => row.variantId)
+    );
+    let branchMissing = 0;
+    for (const variant of product.variants) {
+      if (sellingVariantIds.has(variant.id)) continue;
+      branchMissing += 1;
+      missingVariantIds.add(variant.id);
+      lines.push({
+        variantId: variant.id,
+        sku: variant.sku,
+        branchId,
+      });
+    }
+    if (branchMissing > 0) partialBranchIds.push(branchId);
+  }
+
+  if (lines.length === 0) {
+    return {
+      product,
+      kind: "complete",
+      partialBranchIds: [],
+      missingVariantSlots: 0,
+      missingVariants: [],
+      lines: [],
+    };
+  }
+
+  return {
+    product,
+    kind: "incomplete",
+    partialBranchIds,
+    missingVariantSlots: lines.length,
+    missingVariants: product.variants
+      .filter((variant) => missingVariantIds.has(variant.id))
+      .map((variant) => ({ variantId: variant.id, sku: variant.sku })),
+    lines,
+  };
+}
+
+/**
+ * Published products that would be missing (fully or partly) from POS because
+ * they are unassigned, or some variants are not selling on a branch that
+ * already sells other variants of the same product.
+ */
+export function findProductsMissingFromPos(
+  products: Product[],
+  inventory: BranchInventory[],
+  isPublished: (product: Product) => boolean
+): PosAssortmentGap[] {
+  const gaps: PosAssortmentGap[] = [];
+
+  for (const product of products) {
+    if (!isPublished(product)) continue;
+    const detail = findMissingPosDetailForProduct(product, inventory);
+    if (detail.kind === "complete") continue;
+    gaps.push({
+      product,
+      kind: detail.kind,
+      partialBranchIds: detail.partialBranchIds,
+      missingVariantCount: detail.missingVariants.length,
+      missingVariantSlots: detail.missingVariantSlots,
+    });
+  }
+
+  return gaps;
+}
+
+/**
+ * Enable only the missing variant×branch slots for a product (incomplete
+ * assortment). Does not change already-selling variants or other products.
+ */
+export async function syncMissingPosVariantsForProduct(
+  detail: PosProductMissingDetail
+): Promise<number> {
+  if (detail.kind !== "incomplete" || detail.lines.length === 0) return 0;
+
+  const ops = detail.lines
+    .filter((line): line is PosMissingVariantLine & { branchId: string } =>
+      Boolean(line.branchId)
+    )
+    .map((line) =>
+      setVariantSelling(
+        line.branchId,
+        detail.product.id,
+        line.variantId,
+        true
+      )
+    );
+
+  const chunkSize = 40;
+  for (let i = 0; i < ops.length; i += chunkSize) {
+    await Promise.all(ops.slice(i, i + chunkSize));
+  }
+  return ops.length;
+}
+
 /**
  * Assign all variants of a product to the selected branches.
  * Unselected branches that already have inventory rows are marked not selling

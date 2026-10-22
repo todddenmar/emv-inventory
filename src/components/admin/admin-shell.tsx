@@ -6,6 +6,7 @@ import { CashierBottomNav } from "@/components/admin/cashier-bottom-nav";
 import { CashierSidebar } from "@/components/admin/cashier-sidebar";
 import { CashierRouteGuard } from "@/components/admin/cashier-route-guard";
 import { CashierTransferRequestBanner } from "@/components/admin/cashier-transfer-request-banner";
+import { MissingPosAssortmentBanner } from "@/components/admin/missing-pos-assortment-banner";
 import { OwnerRouteGuard } from "@/components/admin/owner-route-guard";
 import { AdminHeader } from "@/components/layout/admin-header";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -60,6 +61,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const shell = (
     <div className="flex min-h-screen w-full flex-col">
       <AdminHeader />
+      <MissingPosAssortmentBanner />
       <div className="flex w-full flex-1 flex-col lg:flex-row">
         <AdminSidebar />
         <div className="flex min-h-0 w-full flex-1 flex-col overflow-auto p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pt-6 lg:p-6">

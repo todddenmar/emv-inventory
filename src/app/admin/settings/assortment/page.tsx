@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, Store } from "lucide-react";
+import { Loader2, MoreHorizontal, RefreshCw, Search, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -35,11 +49,15 @@ import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { getBranches } from "@/lib/firestore/branches";
 import {
+  findMissingPosDetailForProduct,
+  findProductsMissingFromPos,
   getAllBranchInventory,
   getBranchInventory,
   sellingBranchIdsForProduct,
   setVariantSelling,
   setVariantsSellingBulk,
+  syncMissingPosVariantsForProduct,
+  type PosAssortmentGap,
 } from "@/lib/firestore/inventory";
 import { getProducts } from "@/lib/firestore/products";
 import { getCategories } from "@/lib/firestore/categories";
@@ -68,6 +86,12 @@ export default function AdminAssortmentPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sellingFilter, setSellingFilter] = useState<SellingFilter>("all");
   const [assignProduct, setAssignProduct] = useState<Product | null>(null);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncSearch, setSyncSearch] = useState("");
+  const [syncProduct, setSyncProduct] = useState<Product | null>(null);
+  const [productSyncSearch, setProductSyncSearch] = useState("");
+  const [syncingProductId, setSyncingProductId] = useState<string | null>(null);
+  const [syncingAll, setSyncingAll] = useState(false);
   const [page, setPage] = useState(1);
 
   const managerBranchId = assignedBranchId ?? "";
@@ -202,10 +226,6 @@ export default function AdminAssortmentPage() {
     [variants, products, search, categoryFilter, sellingFilter]
   );
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, categoryFilter, sellingFilter, isElevatedAdmin]);
-
   const adminPagination = useMemo(
     () => paginateItems(filteredProducts, page),
     [filteredProducts, page]
@@ -226,12 +246,144 @@ export default function AdminAssortmentPage() {
   const pagedProducts = adminPagination.pagedItems;
   const pagedVariants = managerPagination.pagedItems;
 
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage);
-  }, [page, safePage]);
-
   const activeBranch = branches.find((b) => b.id === managerBranchId);
   const sellingCount = variants.filter((v) => v.isSelling).length;
+
+  const missingFromPos = useMemo(
+    () =>
+      isElevatedAdmin
+        ? findProductsMissingFromPos(
+            products,
+            allInventory,
+            isProductPublished
+          )
+        : [],
+    [isElevatedAdmin, products, allInventory]
+  );
+
+  const filteredMissingFromPos = useMemo(() => {
+    const q = syncSearch.trim().toLowerCase();
+    if (!q) return missingFromPos;
+    return missingFromPos.filter((gap) => {
+      const product = gap.product;
+      return (
+        product.name.toLowerCase().includes(q) ||
+        product.slug.toLowerCase().includes(q) ||
+        product.variants.some((v) => v.sku.toLowerCase().includes(q))
+      );
+    });
+  }, [missingFromPos, syncSearch]);
+
+  const missingIncompleteCount = useMemo(
+    () => missingFromPos.filter((gap) => gap.kind === "incomplete").length,
+    [missingFromPos]
+  );
+
+  const missingByProductId = useMemo(() => {
+    const map = new Map<string, PosAssortmentGap>();
+    for (const gap of missingFromPos) map.set(gap.product.id, gap);
+    return map;
+  }, [missingFromPos]);
+
+  const syncProductDetail = useMemo(() => {
+    if (!syncProduct) return null;
+    return findMissingPosDetailForProduct(syncProduct, allInventory);
+  }, [syncProduct, allInventory]);
+
+  const filteredProductMissingVariants = useMemo(() => {
+    if (!syncProductDetail) return [];
+    const q = productSyncSearch.trim().toLowerCase();
+    const variants = syncProductDetail.missingVariants.map((row) => {
+      const variant = syncProductDetail.product.variants.find(
+        (v) => v.id === row.variantId
+      );
+      const label = variant
+        ? formatVariantLabel(variant, syncProductDetail.product.options)
+        : "Variant";
+      const branches =
+        syncProductDetail.kind === "unassigned"
+          ? []
+          : [
+              ...new Set(
+                syncProductDetail.lines
+                  .filter((line) => line.variantId === row.variantId)
+                  .map((line) => line.branchId)
+                  .filter((id): id is string => id != null)
+              ),
+            ];
+      return { ...row, label, branchIds: branches };
+    });
+    if (!q) return variants;
+    return variants.filter(
+      (row) =>
+        row.label.toLowerCase().includes(q) ||
+        row.sku.toLowerCase().includes(q)
+    );
+  }, [syncProductDetail, productSyncSearch]);
+
+  const openSyncDialog = () => {
+    setSyncSearch("");
+    setSyncOpen(true);
+  };
+
+  const openProductSyncDialog = (product: Product) => {
+    setProductSyncSearch("");
+    setSyncProduct(product);
+  };
+
+  const syncIncompleteProduct = async (product: Product) => {
+    const detail = findMissingPosDetailForProduct(product, allInventory);
+    if (detail.kind !== "incomplete") return;
+    setSyncingProductId(product.id);
+    try {
+      const synced = await syncMissingPosVariantsForProduct(detail);
+      toast.success(
+        synced === 1
+          ? `Synced 1 missing variant of “${product.name || "Untitled"}”`
+          : `Synced ${synced} missing variants of “${product.name || "Untitled"}”`
+      );
+      await loadAdminData();
+      setSyncProduct(null);
+    } catch (err) {
+      console.error(err);
+      toast.error(
+        err instanceof Error ? err.message : "Failed to sync variants"
+      );
+    } finally {
+      setSyncingProductId(null);
+    }
+  };
+
+  const syncAllIncomplete = async () => {
+    const incomplete = missingFromPos.filter((gap) => gap.kind === "incomplete");
+    if (incomplete.length === 0) return;
+    setSyncingAll(true);
+    try {
+      let synced = 0;
+      // Reload inventory between products so each sync uses fresh state.
+      let inventorySnapshot = allInventory;
+      for (const gap of incomplete) {
+        const detail = findMissingPosDetailForProduct(
+          gap.product,
+          inventorySnapshot
+        );
+        synced += await syncMissingPosVariantsForProduct(detail);
+        inventorySnapshot = await getAllBranchInventory();
+        setAllInventory(inventorySnapshot);
+      }
+      toast.success(
+        `Synced ${synced} missing variant slot${synced === 1 ? "" : "s"} across ${incomplete.length} product${incomplete.length === 1 ? "" : "s"}`
+      );
+      await loadAdminData();
+    } catch (err) {
+      console.error(err);
+      toast.error(
+        err instanceof Error ? err.message : "Failed to sync missing variants"
+      );
+    } finally {
+      setSyncingAll(false);
+    }
+  };
 
   const toggleSelling = async (
     variantId: string,
@@ -308,6 +460,9 @@ export default function AdminAssortmentPage() {
             <CardTitle>Products</CardTitle>
             <CardDescription>
               {filteredProducts.length} of {products.length} products
+              {missingFromPos.length > 0
+                ? ` · ${missingFromPos.length} missing from POS`
+                : ""}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -315,12 +470,18 @@ export default function AdminAssortmentPage() {
               <Input
                 placeholder="Search products or SKU..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
                 className="max-w-md"
               />
               <Select
                 value={categoryFilter}
-                onValueChange={(v) => setCategoryFilter(v ?? "all")}
+                onValueChange={(v) => {
+                  setCategoryFilter(v ?? "all");
+                  setPage(1);
+                }}
               >
                 <SelectTrigger className="w-full lg:w-48">
                   <SelectValue placeholder="All categories">
@@ -338,9 +499,10 @@ export default function AdminAssortmentPage() {
               </Select>
               <Select
                 value={sellingFilter}
-                onValueChange={(v) =>
-                  setSellingFilter((v as SellingFilter) ?? "all")
-                }
+                onValueChange={(v) => {
+                  setSellingFilter((v as SellingFilter) ?? "all");
+                  setPage(1);
+                }}
               >
                 <SelectTrigger className="w-full lg:w-48">
                   <SelectValue placeholder="All">
@@ -353,6 +515,23 @@ export default function AdminAssortmentPage() {
                   <SelectItem value="not_selling">Unassigned</SelectItem>
                 </SelectContent>
               </Select>
+              <Button
+                type="button"
+                variant="destructive"
+                size="lg"
+                onClick={openSyncDialog}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sync missing
+                {missingFromPos.length > 0 ? (
+                  <Badge
+                    variant="secondary"
+                    className="ml-2 border-0 bg-destructive/20 tabular-nums text-destructive"
+                  >
+                    {missingFromPos.length}
+                  </Badge>
+                ) : null}
+              </Button>
             </div>
 
             <div className="overflow-x-auto rounded-md border">
@@ -362,7 +541,7 @@ export default function AdminAssortmentPage() {
                     <TableHead>Product</TableHead>
                     <TableHead className="w-28">Variants</TableHead>
                     <TableHead>Selling at</TableHead>
-                    <TableHead className="w-40 text-right">Actions</TableHead>
+                    <TableHead className="w-12 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -463,15 +642,49 @@ export default function AdminAssortmentPage() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setAssignProduct(product)}
-                            >
-                              <Store className="mr-2 h-4 w-4" />
-                              Assign branches
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                render={
+                                  <Button variant="ghost" size="icon">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                    <span className="sr-only">Open actions</span>
+                                  </Button>
+                                }
+                              />
+                              <DropdownMenuContent
+                                align="end"
+                                className="min-w-[11rem]"
+                              >
+                                <DropdownMenuItem
+                                  className="whitespace-nowrap"
+                                  onClick={() => setAssignProduct(product)}
+                                >
+                                  <Store className="h-4 w-4 shrink-0" />
+                                  <span className="whitespace-nowrap">
+                                    Assign&nbsp;branches
+                                  </span>
+                                </DropdownMenuItem>
+                                {missingByProductId.get(product.id) ? (
+                                  <DropdownMenuItem
+                                    className="whitespace-nowrap"
+                                    onClick={() =>
+                                      openProductSyncDialog(product)
+                                    }
+                                  >
+                                    <RefreshCw className="h-4 w-4 shrink-0" />
+                                    <span className="whitespace-nowrap">
+                                      Sync&nbsp;missing
+                                      <span className="tabular-nums text-muted-foreground">
+                                        &nbsp;(
+                                        {missingByProductId.get(product.id)
+                                          ?.missingVariantCount ?? 0}
+                                        )
+                                      </span>
+                                    </span>
+                                  </DropdownMenuItem>
+                                ) : null}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       );
@@ -507,6 +720,272 @@ export default function AdminAssortmentPage() {
             loadAdminData().catch(console.error);
           }}
         />
+
+        <Dialog
+          open={syncOpen}
+          onOpenChange={(open) => {
+            setSyncOpen(open);
+            if (!open) setSyncSearch("");
+          }}
+        >
+          <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+            <DialogHeader className="shrink-0 border-b p-4 pr-12">
+              <DialogTitle>Products missing from POS</DialogTitle>
+              <DialogDescription>
+                {missingFromPos.length === 0
+                  ? "Published products with no branch assignment, or with some variants not selling on a branch that already sells others."
+                  : `${missingFromPos.length} product${missingFromPos.length === 1 ? "" : "s"} missing${
+                      missingIncompleteCount > 0
+                        ? ` · ${missingIncompleteCount} incomplete`
+                        : ""
+                    }. Search below to filter the list.`}
+              </DialogDescription>
+            </DialogHeader>
+            {missingFromPos.length > 0 ? (
+              <div className="shrink-0 border-b px-4 py-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={syncSearch}
+                    onChange={(e) => setSyncSearch(e.target.value)}
+                    placeholder="Search missing products or SKU…"
+                    className="pl-9"
+                  />
+                </div>
+                <p className="mt-2 text-xs tabular-nums text-muted-foreground">
+                  Showing {filteredMissingFromPos.length} of{" "}
+                  {missingFromPos.length}
+                </p>
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {missingFromPos.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  All published products look complete for POS.
+                </p>
+              ) : filteredMissingFromPos.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No missing products match your search.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {filteredMissingFromPos.map((gap) => {
+                    const branchLabels = gap.partialBranchIds
+                      .map((id) => branchMap[id]?.code ?? id)
+                      .join(", ");
+                    return (
+                      <li
+                        key={gap.product.id}
+                        className="rounded-lg border p-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-medium">
+                              {gap.product.name || "Untitled"}
+                            </p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {gap.product.variants.length} variant
+                              {gap.product.variants.length === 1 ? "" : "s"}
+                              {gap.kind === "unassigned"
+                                ? " · not assigned to any branch"
+                                : ` · incomplete on ${branchLabels}`}
+                            </p>
+                            <Badge
+                              variant={
+                                gap.kind === "unassigned"
+                                  ? "outline"
+                                  : "secondary"
+                              }
+                              className="mt-2 text-xs"
+                            >
+                              {gap.kind === "unassigned"
+                                ? "Unassigned"
+                                : `${gap.missingVariantSlots} variant slot${gap.missingVariantSlots === 1 ? "" : "s"} missing`}
+                            </Badge>
+                          </div>
+                          <div className="flex shrink-0 flex-col gap-1.5">
+                            {gap.kind === "incomplete" ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={
+                                  syncingAll ||
+                                  syncingProductId === gap.product.id
+                                }
+                                onClick={() =>
+                                  void syncIncompleteProduct(gap.product)
+                                }
+                              >
+                                {syncingProductId === gap.product.id ? (
+                                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                                )}
+                                Sync variants
+                              </Button>
+                            ) : null}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                gap.kind === "unassigned"
+                                  ? "default"
+                                  : "ghost"
+                              }
+                              disabled={syncingAll || syncingProductId != null}
+                              onClick={() => {
+                                setAssignProduct(gap.product);
+                                setSyncOpen(false);
+                              }}
+                            >
+                              <Store className="mr-1.5 h-3.5 w-3.5" />
+                              Assign branches
+                            </Button>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            {missingIncompleteCount > 0 ? (
+              <DialogFooter className="mx-0 mb-0 shrink-0 border-t p-4">
+                <Button
+                  type="button"
+                  disabled={syncingAll || syncingProductId != null}
+                  onClick={() => void syncAllIncomplete()}
+                >
+                  {syncingAll ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Sync all incomplete ({missingIncompleteCount})
+                </Button>
+              </DialogFooter>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={syncProduct != null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSyncProduct(null);
+              setProductSyncSearch("");
+            }
+          }}
+        >
+          <DialogContent className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+            <DialogHeader className="shrink-0 border-b p-4 pr-12">
+              <DialogTitle>
+                Missing variants
+                {syncProduct
+                  ? ` · ${syncProduct.name || "Untitled"}`
+                  : ""}
+              </DialogTitle>
+              <DialogDescription>
+                {syncProductDetail == null ||
+                syncProductDetail.kind === "complete"
+                  ? "This product looks complete for POS."
+                  : syncProductDetail.kind === "unassigned"
+                    ? `${syncProductDetail.missingVariantSlots} variant${syncProductDetail.missingVariantSlots === 1 ? "" : "s"} not assigned to any branch.`
+                    : `${syncProductDetail.missingVariantSlots} missing slot${syncProductDetail.missingVariantSlots === 1 ? "" : "s"} · ${syncProductDetail.missingVariants.length} variant${syncProductDetail.missingVariants.length === 1 ? "" : "s"} incomplete on POS.`}
+              </DialogDescription>
+            </DialogHeader>
+            {syncProductDetail &&
+            syncProductDetail.kind !== "complete" &&
+            syncProductDetail.missingVariants.length > 0 ? (
+              <div className="shrink-0 border-b px-4 py-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={productSyncSearch}
+                    onChange={(e) => setProductSyncSearch(e.target.value)}
+                    placeholder="Search variants or SKU…"
+                    className="pl-9"
+                  />
+                </div>
+                <p className="mt-2 text-xs tabular-nums text-muted-foreground">
+                  Showing {filteredProductMissingVariants.length} of{" "}
+                  {syncProductDetail.missingVariants.length} missing variant
+                  {syncProductDetail.missingVariants.length === 1 ? "" : "s"}
+                  {` · ${syncProductDetail.missingVariantSlots} total missing`}
+                </p>
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              {!syncProductDetail ||
+              syncProductDetail.kind === "complete" ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Nothing missing for this product.
+                </p>
+              ) : filteredProductMissingVariants.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No variants match your search.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {filteredProductMissingVariants.map((row) => (
+                    <li
+                      key={row.variantId}
+                      className="rounded-lg border px-3 py-2"
+                    >
+                      <p className="text-sm font-medium">{row.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {row.sku ? `SKU ${row.sku}` : "No SKU"}
+                        {syncProductDetail.kind === "unassigned"
+                          ? " · not on any branch"
+                          : row.branchIds.length > 0
+                            ? ` · missing on ${row.branchIds
+                                .map((id) => branchMap[id]?.code ?? id)
+                                .join(", ")}`
+                            : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {syncProductDetail && syncProductDetail.kind !== "complete" ? (
+              <DialogFooter className="mx-0 mb-0 shrink-0 gap-2 border-t p-4 sm:justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={syncingProductId != null}
+                  onClick={() => {
+                    if (!syncProduct) return;
+                    setAssignProduct(syncProduct);
+                    setSyncProduct(null);
+                  }}
+                >
+                  <Store className="mr-2 h-4 w-4" />
+                  Assign branches
+                </Button>
+                {syncProductDetail.kind === "incomplete" ? (
+                  <Button
+                    type="button"
+                    disabled={
+                      syncingProductId === syncProductDetail.product.id
+                    }
+                    onClick={() =>
+                      void syncIncompleteProduct(syncProductDetail.product)
+                    }
+                  >
+                    {syncingProductId === syncProductDetail.product.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Sync variants ({syncProductDetail.missingVariants.length})
+                  </Button>
+                ) : null}
+              </DialogFooter>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -535,12 +1014,18 @@ export default function AdminAssortmentPage() {
             <Input
               placeholder="Search products, SKU, or variant..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               className="max-w-md"
             />
             <Select
               value={categoryFilter}
-              onValueChange={(v) => setCategoryFilter(v ?? "all")}
+              onValueChange={(v) => {
+                setCategoryFilter(v ?? "all");
+                setPage(1);
+              }}
             >
               <SelectTrigger className="w-full lg:w-48">
                 <SelectValue placeholder="All categories">
@@ -558,9 +1043,10 @@ export default function AdminAssortmentPage() {
             </Select>
             <Select
               value={sellingFilter}
-              onValueChange={(v) =>
-                setSellingFilter((v as SellingFilter) ?? "all")
-              }
+              onValueChange={(v) => {
+                setSellingFilter((v as SellingFilter) ?? "all");
+                setPage(1);
+              }}
             >
               <SelectTrigger className="w-full lg:w-48">
                 <SelectValue placeholder="All variants">
