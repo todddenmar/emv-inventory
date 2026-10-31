@@ -62,9 +62,59 @@ import {
 } from "@/lib/inventory";
 import { formatVariantLabel } from "@/lib/product-variants";
 import { formatDate } from "@/lib/format";
+import {
+  endOfMonthDateInput,
+  formatDateInputLabel,
+  formatMonthLabel,
+  shiftDateInput,
+  startOfMonthDateInput,
+  toDateInputValue,
+  toMonthKey,
+} from "@/lib/dates";
 import { cn } from "@/lib/utils";
 import { paginateItems, TABLE_PAGE_SIZE } from "@/lib/pagination";
 import type { Branch, BranchTransfer, Product } from "@/types";
+
+type RangeMode = "day" | "month" | "range";
+type Preset = "today" | "yesterday" | "last7" | "thisMonth" | "custom";
+
+function applyPreset(preset: Preset): {
+  mode: RangeMode;
+  fromDate: string;
+  toDate: string;
+  month: string;
+} {
+  const today = toDateInputValue();
+  const month = toMonthKey();
+  if (preset === "today") {
+    return { mode: "day", fromDate: today, toDate: today, month };
+  }
+  if (preset === "yesterday") {
+    const yesterday = shiftDateInput(today, -1);
+    return {
+      mode: "day",
+      fromDate: yesterday,
+      toDate: yesterday,
+      month: yesterday.slice(0, 7),
+    };
+  }
+  if (preset === "last7") {
+    return {
+      mode: "range",
+      fromDate: shiftDateInput(today, -6),
+      toDate: today,
+      month,
+    };
+  }
+  return {
+    mode: "month",
+    fromDate: startOfMonthDateInput(month),
+    toDate: endOfMonthDateInput(month),
+    month,
+  };
+}
+
+const INITIAL_PERIOD = applyPreset("thisMonth");
 
 function firstDestinationId(branches: Branch[], fromId: string) {
   return branches.find((b) => b.id !== fromId)?.id ?? "";
@@ -286,7 +336,13 @@ export default function AdminTransfersPage() {
   );
   const [transfers, setTransfers] = useState<BranchTransfer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [mode, setMode] = useState<RangeMode>(INITIAL_PERIOD.mode);
+  const [preset, setPreset] = useState<Preset>("thisMonth");
+  const [fromDate, setFromDate] = useState(INITIAL_PERIOD.fromDate);
+  const [toDate, setToDate] = useState(INITIAL_PERIOD.toDate);
+  const [month, setMonth] = useState(INITIAL_PERIOD.month);
   const [historyPage, setHistoryPage] = useState(1);
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -297,12 +353,27 @@ export default function AdminTransfersPage() {
 
   const defaultFromBranch = isElevatedAdmin ? "" : assignedBranchId ?? "";
 
+  const effectiveFrom =
+    mode === "month" ? startOfMonthDateInput(month) : fromDate;
+  const effectiveTo =
+    mode === "day"
+      ? fromDate
+      : mode === "month"
+        ? endOfMonthDateInput(month)
+        : toDate;
+
+  const periodLabel =
+    mode === "month"
+      ? formatMonthLabel(month)
+      : effectiveFrom === effectiveTo
+        ? formatDateInputLabel(effectiveFrom)
+        : `${formatDateInputLabel(effectiveFrom)} – ${formatDateInputLabel(effectiveTo)}`;
+
   useEffect(() => {
-    Promise.all([getBranches(true), getProducts(), getBranchTransfers()])
-      .then(([b, p, t]) => {
+    Promise.all([getBranches(true), getProducts()])
+      .then(([b, p]) => {
         setBranches(b);
         setProducts(p.filter((x) => !x.isArchived));
-        setTransfers(t);
         const fromId = defaultFromBranch || b[0]?.id || "";
         if (fromId) {
           setFromBranchId(fromId);
@@ -312,6 +383,36 @@ export default function AdminTransfersPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [defaultFromBranch]);
+
+  useEffect(() => {
+    if (mode === "range" && effectiveFrom > effectiveTo) {
+      toast.error("Start date must be on or before end date");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const rows = await getBranchTransfers({
+          fromDate: effectiveFrom,
+          toDate: effectiveTo,
+        });
+        if (cancelled) return;
+        setTransfers(rows);
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) toast.error("Failed to load transfers");
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveFrom, effectiveTo, mode]);
 
   useEffect(() => {
     if (!fromBranchId) return;
@@ -379,6 +480,16 @@ export default function AdminTransfersPage() {
     () => paginateItems(transfers, historyPage),
     [transfers, historyPage]
   );
+
+  const selectPreset = (next: Preset) => {
+    const applied = applyPreset(next);
+    setPreset(next);
+    setMode(applied.mode);
+    setFromDate(applied.fromDate);
+    setToDate(applied.toDate);
+    setMonth(applied.month);
+    setHistoryPage(1);
+  };
 
   const pageIds = useMemo(
     () => pagedCatalog.map((row) => row.id),
@@ -516,9 +627,12 @@ export default function AdminTransfersPage() {
       setNotes("");
       setSelectionSheetOpen(false);
       setToBranchId(firstDestinationId(branches, fromBranch.id));
-      const [inv, t] = await Promise.all([
+      const [inv, rows] = await Promise.all([
         getBranchInventory(fromBranch.id),
-        getBranchTransfers(),
+        getBranchTransfers({
+          fromDate: effectiveFrom,
+          toDate: effectiveTo,
+        }),
       ]);
       setSellingVariants(
         mergeSellingVariantsWithInventory(
@@ -526,7 +640,7 @@ export default function AdminTransfersPage() {
           inv
         )
       );
-      setTransfers(t);
+      setTransfers(rows);
       setTab("history");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Transfer failed");
@@ -599,13 +713,142 @@ export default function AdminTransfersPage() {
             <CardHeader>
               <CardTitle>Transfer history</CardTitle>
               <CardDescription>
-                Recent branch-to-branch movements
+                Branch-to-branch movements for {periodLabel}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              {transfers.length === 0 ? (
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["today", "Today"],
+                    ["yesterday", "Yesterday"],
+                    ["last7", "Last 7 days"],
+                    ["thisMonth", "This month"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <Button
+                    key={key}
+                    type="button"
+                    size="sm"
+                    variant={preset === key ? "default" : "outline"}
+                    onClick={() => selectPreset(key)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
+                <div className="space-y-2">
+                  <Label>Mode</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={mode === "day" ? "default" : "outline"}
+                      onClick={() => {
+                        setMode("day");
+                        setPreset("custom");
+                        setToDate(fromDate);
+                        setHistoryPage(1);
+                      }}
+                    >
+                      Date
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={mode === "month" ? "default" : "outline"}
+                      onClick={() => {
+                        setMode("month");
+                        setPreset("custom");
+                        setMonth(fromDate.slice(0, 7) || toMonthKey());
+                        setHistoryPage(1);
+                      }}
+                    >
+                      Month
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={mode === "range" ? "default" : "outline"}
+                      onClick={() => {
+                        setMode("range");
+                        setPreset("custom");
+                        setHistoryPage(1);
+                      }}
+                    >
+                      Range
+                    </Button>
+                  </div>
+                </div>
+
+                {mode === "month" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="transfer-month">Month</Label>
+                    <Input
+                      id="transfer-month"
+                      type="month"
+                      value={month}
+                      onChange={(e) => {
+                        const next = e.target.value || toMonthKey();
+                        setMonth(next);
+                        setFromDate(startOfMonthDateInput(next));
+                        setToDate(endOfMonthDateInput(next));
+                        setPreset("custom");
+                        setHistoryPage(1);
+                      }}
+                      className="w-full lg:w-44"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="transfer-from">
+                      {mode === "day" ? "Date" : "From"}
+                    </Label>
+                    <Input
+                      id="transfer-from"
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => {
+                        const next = e.target.value || toDateInputValue();
+                        setFromDate(next);
+                        setMonth(next.slice(0, 7));
+                        setPreset("custom");
+                        if (mode === "day") setToDate(next);
+                        setHistoryPage(1);
+                      }}
+                      className="w-full lg:w-44"
+                    />
+                  </div>
+                )}
+
+                {mode === "range" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="transfer-to">To</Label>
+                    <Input
+                      id="transfer-to"
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => {
+                        const next = e.target.value || toDateInputValue();
+                        setToDate(next);
+                        setPreset("custom");
+                        setHistoryPage(1);
+                      }}
+                      className="w-full lg:w-44"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {historyLoading ? (
                 <p className="text-sm text-muted-foreground">
-                  No transfers yet.
+                  Loading transfers...
+                </p>
+              ) : transfers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No transfers in this period.
                 </p>
               ) : (
                 <div className="overflow-x-auto rounded-md border">
@@ -664,7 +907,7 @@ export default function AdminTransfersPage() {
                   </Table>
                 </div>
               )}
-              {transfers.length > 0 ? (
+              {!historyLoading && transfers.length > 0 ? (
                 <TablePagination
                   page={safeHistoryPage}
                   totalPages={historyTotalPages}

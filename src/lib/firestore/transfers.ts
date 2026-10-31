@@ -7,6 +7,8 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  where,
+  type QueryConstraint,
   type Transaction,
   type DocumentReference,
 } from "firebase/firestore";
@@ -14,6 +16,7 @@ import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { branchTransferConverter } from "@/lib/firestore/converters";
 import { inventoryDocId } from "@/lib/firestore/inventory";
+import { endOfLocalDay, startOfLocalDay } from "@/lib/dates";
 import type { BranchTransfer, BranchTransferItem } from "@/types";
 
 export interface CreateTransferInput {
@@ -191,12 +194,39 @@ export async function createBranchTransfer(
   return transferRef.id;
 }
 
-export async function getBranchTransfers(max = 50): Promise<BranchTransfer[]> {
-  const ref = collection(getClientDb(), COLLECTIONS.branchTransfers).withConverter(
-    branchTransferConverter
-  );
-  const snapshot = await getDocs(
-    query(ref, orderBy("createdAt", "desc"), limit(max))
-  );
-  return snapshot.docs.map((d) => d.data());
+export async function getBranchTransfers(options?: {
+  fromDate?: string | null;
+  toDate?: string | null;
+  max?: number;
+}): Promise<BranchTransfer[]> {
+  const ref = collection(
+    getClientDb(),
+    COLLECTIONS.branchTransfers
+  ).withConverter(branchTransferConverter);
+  const max = options?.max ?? 500;
+  const from = options?.fromDate ? startOfLocalDay(options.fromDate) : null;
+  const to = options?.toDate ? endOfLocalDay(options.toDate) : null;
+  const constraints: QueryConstraint[] = [];
+  if (from) constraints.push(where("createdAt", ">=", from));
+  if (to) constraints.push(where("createdAt", "<=", to));
+  constraints.push(orderBy("createdAt", "desc"), limit(max));
+
+  try {
+    const snapshot = await getDocs(query(ref, ...constraints));
+    return snapshot.docs.map((d) => d.data());
+  } catch (error) {
+    console.warn("getBranchTransfers date query failed, using fallback", error);
+    const snapshot = await getDocs(
+      query(ref, orderBy("createdAt", "desc"), limit(Math.max(max * 5, 1000)))
+    );
+    let rows = snapshot.docs.map((d) => d.data());
+    if (from || to) {
+      rows = rows.filter((transfer) => {
+        if (from && transfer.createdAt < from) return false;
+        if (to && transfer.createdAt > to) return false;
+        return true;
+      });
+    }
+    return rows.slice(0, max);
+  }
 }
