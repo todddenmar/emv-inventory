@@ -3,6 +3,7 @@ import {
   CalendarCheck,
   Truck,
   Ticket,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,5 +38,11 @@ export const salesNavItems: SalesNavItem[] = [
     label: "Voucher sales",
     icon: Ticket,
     description: "Sales with a voucher applied",
+  },
+  {
+    href: "/admin/sale-edits",
+    label: "Sale edits",
+    icon: ClipboardList,
+    description: "Audit trail of sale corrections and archives",
   },
 ];

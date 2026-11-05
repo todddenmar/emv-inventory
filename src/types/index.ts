@@ -452,6 +452,34 @@ export interface PosSale {
   resellerCommissionSentByName: string | null;
 }
 
+/** Audit trail for POS sale edits/archives. */
+export type PosSaleActivityAction =
+  | "payments_updated"
+  | "sale_date_updated"
+  | "items_updated"
+  | "details_updated"
+  | "sale_archived"
+  | "sale_edited";
+
+export interface PosSaleActivityLog {
+  id: string;
+  saleId: string;
+  branchId: string;
+  branchName: string | null;
+  action: PosSaleActivityAction;
+  summary: string;
+  previousPaymentsSummary: string | null;
+  nextPaymentsSummary: string | null;
+  previousItemsSummary: string | null;
+  nextItemsSummary: string | null;
+  previousSaleDate: string | null;
+  nextSaleDate: string | null;
+  performedBy: string;
+  performedByName: string | null;
+  performedByRole: string | null;
+  createdAt: Date;
+}
+
 /** Day/branch expense row for the daily sales report. */
 export interface DailyExpense {
   id: string;

@@ -221,8 +221,7 @@ function BarMeter({
 }
 
 export default function AdminReportsPage() {
-  const { canViewAllBranches, assignedBranchId, isElevatedAdmin } =
-    useBranchAccess();
+  const { canViewAllBranches, assignedBranchId } = useBranchAccess();
   const initial = applyPreset("today");
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -1110,31 +1109,27 @@ export default function AdminReportsPage() {
                           <TableCell className="text-right">
                             <div className="flex justify-end">
                               <SaleInvoiceButton sale={sale} />
-                              {isElevatedAdmin ? (
-                                <>
-                                  <EditSalePaymentButton
-                                    sale={sale}
-                                    onUpdated={(updated) => {
-                                      setSales((prev) =>
-                                        prev.map((row) =>
-                                          row.id === updated.id ? updated : row
-                                        )
-                                      );
-                                    }}
-                                  />
-                                  <ArchiveSaleButton
-                                    sale={sale}
-                                    onArchived={(id) => {
-                                      setSales((prev) =>
-                                        prev.filter((row) => row.id !== id)
-                                      );
-                                      setPrevSales((prev) =>
-                                        prev.filter((row) => row.id !== id)
-                                      );
-                                    }}
-                                  />
-                                </>
-                              ) : null}
+                              <EditSalePaymentButton
+                                sale={sale}
+                                onUpdated={(updated) => {
+                                  setSales((prev) =>
+                                    prev.map((row) =>
+                                      row.id === updated.id ? updated : row
+                                    )
+                                  );
+                                }}
+                              />
+                              <ArchiveSaleButton
+                                sale={sale}
+                                onArchived={(id) => {
+                                  setSales((prev) =>
+                                    prev.filter((row) => row.id !== id)
+                                  );
+                                  setPrevSales((prev) =>
+                                    prev.filter((row) => row.id !== id)
+                                  );
+                                }}
+                              />
                             </div>
                           </TableCell>
                         </TableRow>

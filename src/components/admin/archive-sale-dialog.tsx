@@ -14,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAuthStore } from "@/stores/auth-store";
 import {
   archivePosSale,
   getPosSale,
@@ -22,6 +21,7 @@ import {
 } from "@/lib/firestore/pos-sales";
 import { formatCurrency } from "@/lib/format";
 import { isNonRevenueCustomerType } from "@/lib/pos-customer-type";
+import { canEditPosSale } from "@/lib/pos-sale-edit";
 import type { PosSale } from "@/types";
 
 export function ArchiveSaleDialog({
@@ -37,7 +37,7 @@ export function ArchiveSaleDialog({
   onOpenChange: (open: boolean) => void;
   onArchived?: (saleId: string) => void;
 }) {
-  const user = useAuthStore((s) => s.user);
+  const { user, assignedBranchId } = useBranchAccess();
   const [loaded, setLoaded] = useState<PosSale | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -46,31 +46,26 @@ export function ArchiveSaleDialog({
   const invoice = sale ?? loaded;
 
   useEffect(() => {
-    if (open) setRestock(true);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      setLoaded(null);
-      setLoading(false);
-      setSaving(false);
-      return;
-    }
-
-    if (sale) {
-      setLoaded(sale);
-      return;
-    }
-
-    if (!saleId) {
-      setLoaded(null);
-      return;
-    }
+    if (!open) return;
 
     let cancelled = false;
-    setLoading(true);
-    getPosSale(saleId)
-      .then((row) => {
+
+    const load = async () => {
+      setRestock(true);
+      setSaving(false);
+      if (sale) {
+        setLoaded(sale);
+        setLoading(false);
+        return;
+      }
+      if (!saleId) {
+        setLoaded(null);
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const row = await getPosSale(saleId);
         if (cancelled) return;
         if (!row) {
           toast.error("Sale not found");
@@ -78,16 +73,17 @@ export function ArchiveSaleDialog({
           return;
         }
         setLoaded(row);
-      })
-      .catch((error) => {
+      } catch (error) {
         if (cancelled) return;
         console.error(error);
         toast.error("Failed to load sale");
         onOpenChange(false);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    };
+
+    void load();
 
     return () => {
       cancelled = true;
@@ -115,6 +111,8 @@ export function ArchiveSaleDialog({
         restock,
         performedBy: user.uid,
         performedByName: user.displayName ?? user.email ?? null,
+        performedByRole: user.role,
+        assignedBranchId,
       });
       toast.success(
         restock ? "Sale archived and items restocked" : "Sale archived"
@@ -249,11 +247,19 @@ export function ArchiveSaleButton({
   saleId?: string | null;
   onArchived?: (saleId: string) => void;
 }) {
-  const { isElevatedAdmin } = useBranchAccess();
+  const { user, assignedBranchId, isElevatedAdmin } = useBranchAccess();
   const [open, setOpen] = useState(false);
   const canOpen = Boolean(sale || saleId);
+  const allowed = sale
+    ? canEditPosSale({
+        sale,
+        role: user?.role,
+        userId: user?.uid,
+        assignedBranchId,
+      })
+    : isElevatedAdmin;
 
-  if (!isElevatedAdmin) return null;
+  if (!allowed) return null;
 
   return (
     <>

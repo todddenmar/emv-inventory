@@ -24,16 +24,28 @@ import {
 } from "@/components/ui/select";
 import { getPaymentAccounts } from "@/lib/firestore/payment-accounts";
 import { getPaymentMethods } from "@/lib/firestore/payment-methods";
+import { getBranchInventory } from "@/lib/firestore/inventory";
+import { getProducts } from "@/lib/firestore/products";
 import { paymentMethodName } from "@/lib/payment-methods";
 import {
   getPosSale,
   resolveSalePaymentDrafts,
-  updatePosSaleDate,
-  updatePosSalePayments,
+  updatePosSale,
 } from "@/lib/firestore/pos-sales";
 import { formatCurrency } from "@/lib/format";
 import { toDateInputValue } from "@/lib/dates";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import {
+  canChangePosSaleDate,
+  canEditPosSale,
+} from "@/lib/pos-sale-edit";
+import { formatVariantLabel } from "@/lib/product-variants";
+import {
+  isNonRevenueCustomerType,
+  parsePosCustomerType,
+  posCustomerTypeLabel,
+  requiresPosCustomerName,
+} from "@/lib/pos-customer-type";
 import {
   POS_PAYMENT_KINDS,
   POS_TENDER_METHODS,
@@ -41,41 +53,61 @@ import {
   createItemPaymentLine,
   formatPaymentLineNote,
   itemPaymentsCoverLineTotal,
-  itemStoredPaymentTotal,
   moneyInputText,
   parseMoneyInput,
   paymentKindLabel,
   paymentRemaining,
   paymentsCoverAmountDue,
   roundMoney,
-  saleAmountDue,
   salePaymentLineToCheckout,
-  shouldEditSalePaymentsByItem,
   sumCheckoutPaymentAmounts,
   tenderNeedsPaymentAccount,
   type PosCheckoutPaymentLine,
 } from "@/lib/pos-payments";
 import type {
+  BranchInventory,
   PaymentAccount,
   PaymentMethod,
+  PosCustomerType,
   PosPaymentKind,
+  PosPaymentMethod,
   PosSale,
+  PosSaleItem,
   PosTenderMethod,
+  Product,
 } from "@/types";
 
-interface ItemPaymentDraft {
-  index: number;
+type ItemLineDraft = {
+  key: string;
+  productId: string;
+  variantId: string;
   productName: string;
   quantity: number;
-  targetAmount: number;
-  payments: PosCheckoutPaymentLine[];
-}
+  unitPrice: number;
+  priceList: PosPaymentMethod | null;
+};
+
+type CatalogOption = {
+  variantId: string;
+  productId: string;
+  productName: string;
+  stock: number;
+  unitPrice: number;
+};
 
 type LineEditor = {
-  scope: "sale" | number;
   payId: string | null;
   draft: PosCheckoutPaymentLine;
 };
+
+const CUSTOMER_TYPES: PosCustomerType[] = [
+  "walk_in",
+  "reservation",
+  "delivery",
+  "warranty",
+  "replacement",
+  "co_owner",
+];
 
 function accountsForTender(
   accounts: PaymentAccount[],
@@ -90,29 +122,46 @@ function accountsForTender(
   );
 }
 
-function buildItemDrafts(sale: PosSale): ItemPaymentDraft[] {
-  return sale.items
-    .map((item, index) => ({
-      index,
-      productName: item.productName,
-      quantity: item.quantity,
-      targetAmount: itemStoredPaymentTotal(item),
-      payments:
-        item.payments.length > 0
-          ? item.payments.map(salePaymentLineToCheckout)
-          : item.tenderMethod
-            ? [
-                salePaymentLineToCheckout({
-                  tenderMethod: item.tenderMethod,
-                  amount: item.lineTotal,
-                  paymentAccount: item.paymentAccount,
-                  kind: item.kind ?? "full",
-                  note: item.note,
-                }),
-              ]
-            : [],
-    }))
-    .filter((row) => row.targetAmount > 0);
+function buildItemLines(sale: PosSale): ItemLineDraft[] {
+  return sale.items.map((item, index) => ({
+    key: `${item.variantId}-${index}`,
+    productId: item.productId,
+    variantId: item.variantId,
+    productName: item.productName,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    priceList: item.priceList,
+  }));
+}
+
+function unitPriceFromCatalog(
+  inv: BranchInventory,
+  product: Product,
+  sale: PosSale
+): number {
+  const variant = product.variants.find((row) => row.id === inv.variantId);
+  if (!variant) return 0;
+  if (sale.saleChannel === "wholesale") {
+    return roundMoney(Math.max(0, Number(variant.wholesalePrice) || 0));
+  }
+  if (sale.paymentMethod === "retail") {
+    return roundMoney(
+      Math.max(
+        0,
+        Number(inv.retailPrice ?? variant.retailPrice ?? variant.price) || 0
+      )
+    );
+  }
+  return roundMoney(
+    Math.max(0, Number(inv.cashPrice ?? variant.price) || 0)
+  );
+}
+
+function catalogLabel(product: Product, variantId: string): string {
+  const variant = product.variants.find((row) => row.id === variantId);
+  if (!variant) return product.name;
+  const label = formatVariantLabel(variant, product.options);
+  return label === "Default" ? product.name : `${product.name} — ${label}`;
 }
 
 export function EditSalePaymentDialog({
@@ -128,37 +177,40 @@ export function EditSalePaymentDialog({
   onOpenChange: (open: boolean) => void;
   onUpdated?: (sale: PosSale) => void;
 }) {
+  const { user, assignedBranchId } = useBranchAccess();
   const [loaded, setLoaded] = useState<PosSale | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
   const [tenderMethods, setTenderMethods] = useState<PaymentMethod[]>([]);
-  const [itemDrafts, setItemDrafts] = useState<ItemPaymentDraft[]>([]);
+  const [itemLines, setItemLines] = useState<ItemLineDraft[]>([]);
   const [saleDrafts, setSaleDrafts] = useState<PosCheckoutPaymentLine[]>([]);
-  const [editByItem, setEditByItem] = useState(false);
   const [lineEditor, setLineEditor] = useState<LineEditor | null>(null);
   const [saleDate, setSaleDate] = useState("");
   const [allowUnequalPayments, setAllowUnequalPayments] = useState(false);
+  const [customerType, setCustomerType] = useState<PosCustomerType>("walk_in");
+  const [customerName, setCustomerName] = useState("");
+  const [customerMobile, setCustomerMobile] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [catalog, setCatalog] = useState<CatalogOption[]>([]);
+  const [addQuery, setAddQuery] = useState("");
 
   const invoice = sale ?? loaded;
+  const canEditDate = canChangePosSaleDate(user?.role);
+  const noCharge = isNonRevenueCustomerType(customerType);
 
   useEffect(() => {
-    if (!open) {
-      setLoaded(null);
-      setLoading(false);
-      setSaving(false);
-      setItemDrafts([]);
-      setSaleDrafts([]);
-      setLineEditor(null);
-      setSaleDate("");
-      setAllowUnequalPayments(false);
-      return;
-    }
+    if (!open) return;
 
     let cancelled = false;
-    setLoading(true);
 
     const load = async () => {
+      setLoading(true);
+      setSaving(false);
+      setLineEditor(null);
+      setAddQuery("");
+      setCatalog([]);
       const [accountRows, methodRows, row] = await Promise.all([
         getPaymentAccounts(false),
         getPaymentMethods({ activeOnly: true }),
@@ -174,41 +226,70 @@ export function EditSalePaymentDialog({
       setTenderMethods(methodRows);
       setLoaded(row);
       setSaleDate(toDateInputValue(row.createdAt));
-      setEditByItem(shouldEditSalePaymentsByItem(row));
-      setItemDrafts(buildItemDrafts(row));
+      setItemLines(buildItemLines(row));
+      setCustomerType(parsePosCustomerType(row.customerType));
+      setCustomerName(row.customer?.name ?? "");
+      setCustomerMobile(row.customer?.mobile ?? "");
+      setCustomerEmail(row.customer?.email ?? "");
+      setCustomerAddress(row.customer?.address ?? "");
+      const due = isNonRevenueCustomerType(row.customerType)
+        ? 0
+        : Math.max(0, roundMoney(row.amountDue ?? row.total));
       setSaleDrafts(
         (row.payments.length > 0
           ? row.payments
-          : [
-              {
-                tenderMethod: row.tenderMethod,
-                amount: saleAmountDue(row),
-                paymentAccount: row.paymentAccount,
-                kind: "full" as const,
-                note: null,
-              },
-            ]
+          : due > 0.01
+            ? [
+                {
+                  tenderMethod: row.tenderMethod,
+                  amount: due,
+                  paymentAccount: row.paymentAccount,
+                  kind: "full" as const,
+                  note: null,
+                },
+              ]
+            : []
         ).map(salePaymentLineToCheckout)
       );
-      const due = saleAmountDue(row);
       const existingPayments =
-        row.payments.length > 0
-          ? row.payments
-          : [
-              {
-                amount: due,
-              },
-            ];
+        row.payments.length > 0 ? row.payments : [{ amount: due }];
       setAllowUnequalPayments(
         due > 0.01 && !paymentsCoverAmountDue(due, existingPayments)
       );
+
+      try {
+        const [inventory, products] = await Promise.all([
+          getBranchInventory(row.branchId),
+          getProducts(true),
+        ]);
+        if (cancelled) return;
+        const productMap = new Map(products.map((product) => [product.id, product]));
+        const options: CatalogOption[] = [];
+        for (const inv of inventory) {
+          if (inv.isSelling === false) continue;
+          const product = productMap.get(inv.productId);
+          if (!product) continue;
+          options.push({
+            variantId: inv.variantId,
+            productId: inv.productId,
+            productName: catalogLabel(product, inv.variantId),
+            stock: inv.stock,
+            unitPrice: unitPriceFromCatalog(inv, product, row),
+          });
+        }
+        options.sort((a, b) => a.productName.localeCompare(b.productName));
+        setCatalog(options);
+      } catch (error) {
+        console.error(error);
+        setCatalog([]);
+      }
     };
 
     load()
       .catch((error) => {
         console.error(error);
         if (!cancelled) {
-          toast.error("Failed to load payment");
+          toast.error("Failed to load sale");
           onOpenChange(false);
         }
       })
@@ -221,24 +302,26 @@ export function EditSalePaymentDialog({
     };
   }, [open, sale, saleId, onOpenChange]);
 
-  const amountDue = invoice ? saleAmountDue(invoice) : 0;
-
-  const currentDrafts = useMemo(() => {
-    if (editByItem) {
-      return itemDrafts.flatMap((row) => row.payments);
-    }
-    return saleDrafts;
-  }, [editByItem, itemDrafts, saleDrafts]);
-
-  const paidSum = sumCheckoutPaymentAmounts(currentDrafts);
-  const remaining = paymentRemaining(amountDue, currentDrafts);
-  const balanced =
-    Math.abs(paidSum - amountDue) <= 0.01 &&
-    (editByItem
-      ? itemDrafts.every((row) =>
-          itemPaymentsCoverLineTotal(row.payments, row.targetAmount)
+  const merchandiseTotal = useMemo(
+    () =>
+      roundMoney(
+        itemLines.reduce(
+          (sum, line) => sum + roundMoney(line.unitPrice * line.quantity),
+          0
         )
-      : true);
+      ),
+    [itemLines]
+  );
+  const voucherApplied = invoice
+    ? Math.min(invoice.voucherAmountApplied ?? 0, merchandiseTotal)
+    : 0;
+  const amountDue = noCharge
+    ? 0
+    : Math.max(0, roundMoney(merchandiseTotal - voucherApplied));
+
+  const paidSum = sumCheckoutPaymentAmounts(saleDrafts);
+  const remaining = paymentRemaining(amountDue, saleDrafts);
+  const balanced = Math.abs(paidSum - amountDue) <= 0.01;
   const canSaveUnequal = allowUnequalPayments;
   const paymentsAcceptable = balanced || canSaveUnequal;
 
@@ -247,7 +330,7 @@ export function EditSalePaymentDialog({
     const keys = tenderMethods.map((method) => method.key);
     const current = editorDraft?.tenderMethod;
     if (current && !keys.includes(current)) keys.push(current);
-    return keys.length > 0 ? keys : POS_TENDER_METHODS;
+    return keys.length > 0 ? keys : [...POS_TENDER_METHODS];
   })();
   const methodLabel = (key: string) => paymentMethodName(key, tenderMethods);
   const editorExpectedType = editorDraft
@@ -273,40 +356,24 @@ export function EditSalePaymentDialog({
       (account) => account.id === editorDraft?.paymentAccountId
     );
   const editorCanSave = editorAmountValid && editorAccountValid && !saving;
+  const editorHalfAmount = roundMoney(amountDue / 2);
 
-  const editorHalfBase =
-    lineEditor == null
-      ? 0
-      : lineEditor.scope === "sale"
-        ? amountDue
-        : (itemDrafts.find((row) => row.index === lineEditor.scope)
-            ?.targetAmount ?? 0);
-  const editorHalfAmount = roundMoney(editorHalfBase / 2);
+  const addMatches = useMemo(() => {
+    const q = addQuery.trim().toLowerCase();
+    if (!q) return [];
+    return catalog
+      .filter(
+        (row) =>
+          row.productName.toLowerCase().includes(q) ||
+          row.variantId.toLowerCase().includes(q)
+      )
+      .slice(0, 8);
+  }, [addQuery, catalog]);
 
   const patchEditorDraft = (patch: Partial<PosCheckoutPaymentLine>) => {
     setLineEditor((prev) =>
       prev ? { ...prev, draft: { ...prev.draft, ...patch } } : prev
     );
-  };
-
-  const replaceScopePayments = (
-    scope: LineEditor["scope"],
-    next: PosCheckoutPaymentLine[]
-  ) => {
-    if (scope === "sale") {
-      setSaleDrafts(next);
-      return;
-    }
-    setItemDrafts((prev) =>
-      prev.map((row) =>
-        row.index === scope ? { ...row, payments: next } : row
-      )
-    );
-  };
-
-  const paymentsForScope = (scope: LineEditor["scope"]) => {
-    if (scope === "sale") return saleDrafts;
-    return itemDrafts.find((row) => row.index === scope)?.payments ?? [];
   };
 
   const saveLineEditor = () => {
@@ -320,86 +387,143 @@ export function EditSalePaymentDialog({
       amountText: moneyInputText(amount),
       note: lineEditor.draft.note.trim(),
     };
-    const current = paymentsForScope(lineEditor.scope);
-    const next = lineEditor.payId
-      ? current.map((pay) => (pay.id === lineEditor.payId ? nextPay : pay))
-      : [...current, nextPay];
-    replaceScopePayments(lineEditor.scope, next);
+    setSaleDrafts((prev) =>
+      lineEditor.payId
+        ? prev.map((pay) => (pay.id === lineEditor.payId ? nextPay : pay))
+        : [...prev, nextPay]
+    );
     setLineEditor(null);
   };
 
+  const updateItemLine = (
+    key: string,
+    patch: Partial<Pick<ItemLineDraft, "quantity" | "unitPrice">>
+  ) => {
+    setItemLines((prev) =>
+      prev.map((line) => {
+        if (line.key !== key) return line;
+        const quantity =
+          patch.quantity != null
+            ? Math.max(1, Math.floor(patch.quantity) || 1)
+            : line.quantity;
+        const unitPrice =
+          patch.unitPrice != null
+            ? Math.max(0, roundMoney(patch.unitPrice))
+            : line.unitPrice;
+        return { ...line, quantity, unitPrice };
+      })
+    );
+  };
+
+  const removeItemLine = (key: string) => {
+    setItemLines((prev) => prev.filter((line) => line.key !== key));
+  };
+
+  const addCatalogItem = (row: CatalogOption) => {
+    setItemLines((prev) => {
+      const existing = prev.find((line) => line.variantId === row.variantId);
+      if (existing) {
+        return prev.map((line) =>
+          line.variantId === row.variantId
+            ? { ...line, quantity: line.quantity + 1 }
+            : line
+        );
+      }
+      return [
+        ...prev,
+        {
+          key: `${row.variantId}-${Date.now()}`,
+          productId: row.productId,
+          variantId: row.variantId,
+          productName: row.productName,
+          quantity: 1,
+          unitPrice: noCharge ? 0 : row.unitPrice,
+          priceList:
+            invoice?.saleChannel === "wholesale"
+              ? null
+              : (invoice?.paymentMethod ?? "cash"),
+        },
+      ];
+    });
+    setAddQuery("");
+  };
+
   const handleSave = async () => {
-    if (!invoice) return;
+    if (!invoice || !user?.uid) return;
+    if (itemLines.length === 0) {
+      toast.error("Add at least one item");
+      return;
+    }
+    if (requiresPosCustomerName(customerType) && !customerName.trim()) {
+      toast.error(
+        customerType === "co_owner"
+          ? "Owner note is required for C/O Owner"
+          : "Customer name is required"
+      );
+      return;
+    }
+
     const originalDate = toDateInputValue(invoice.createdAt);
-    const dateChanged = Boolean(saleDate) && saleDate !== originalDate;
+    const dateChanged =
+      canEditDate && Boolean(saleDate) && saleDate !== originalDate;
     const noPaymentDue = amountDue <= 0.01;
 
     if (!noPaymentDue && !paymentsAcceptable) return;
 
     setSaving(true);
     try {
-      const original = invoice;
-
-      if (noPaymentDue) {
-        if (!dateChanged) {
-          toast.message("No changes to save");
-          return;
-        }
-        const updated = await updatePosSaleDate(original.id, saleDate);
-        toast.success("Sale date updated");
-        onUpdated?.(updated);
-        onOpenChange(false);
-        return;
-      }
-
-      let payments;
-      let items = original.items;
-
-      if (editByItem) {
-        items = original.items.map((item, index) => {
-          const draft = itemDrafts.find((row) => row.index === index);
-          if (!draft) return item;
-          const resolved = resolveSalePaymentDrafts({
-            drafts: draft.payments,
+      const payments = noPaymentDue
+        ? []
+        : resolveSalePaymentDrafts({
+            drafts: saleDrafts,
             accounts,
-            fallbackAccounts: draft.payments.map(
+            fallbackAccounts: saleDrafts.map(
               (pay) =>
-                item.payments.find(
+                invoice.payments.find(
                   (line) => line.paymentAccount?.id === pay.paymentAccountId
-                )?.paymentAccount ?? null
+                )?.paymentAccount ?? invoice.paymentAccount
             ),
           });
-          const primary = resolved[0] ?? null;
-          return {
-            ...item,
-            payments: resolved,
-            tenderMethod: primary?.tenderMethod ?? null,
-            paymentAccount: primary?.paymentAccount ?? null,
-            kind: primary?.kind ?? null,
-            note: primary?.note ?? null,
-          };
-        });
-        payments = items.flatMap((item) => item.payments);
-      } else {
-        payments = resolveSalePaymentDrafts({
-          drafts: saleDrafts,
-          accounts,
-          fallbackAccounts: saleDrafts.map(
-            (pay) =>
-              original.payments.find(
-                (line) => line.paymentAccount?.id === pay.paymentAccountId
-              )?.paymentAccount ?? original.paymentAccount
-          ),
-        });
-      }
 
-      const updated = await updatePosSalePayments(original.id, {
+      const items: PosSaleItem[] = itemLines.map((line) => {
+        const unitPrice = noCharge ? 0 : roundMoney(line.unitPrice);
+        const quantity = Math.max(1, Math.floor(line.quantity) || 1);
+        return {
+          productId: line.productId,
+          variantId: line.variantId,
+          productName: line.productName,
+          quantity,
+          unitPrice,
+          lineTotal: noCharge ? 0 : roundMoney(unitPrice * quantity),
+          priceList: line.priceList,
+          payments: [],
+          tenderMethod: null,
+          paymentAccount: null,
+          kind: null,
+          note: null,
+        };
+      });
+
+      const updated = await updatePosSale(invoice.id, {
+        items,
         payments,
-        items: editByItem ? items : undefined,
+        customerType,
+        customer: {
+          name: customerName.trim() || null,
+          mobile: customerMobile.trim() || null,
+          email: customerEmail.trim() || null,
+          address: customerAddress.trim() || null,
+        },
         saleDate: dateChanged ? saleDate : undefined,
         allowUnequalPayments: canSaveUnequal,
+        actor: {
+          userId: user.uid,
+          role: user.role,
+          assignedBranchId,
+          name: user.displayName ?? user.email ?? null,
+        },
       });
-      toast.success(dateChanged ? "Sale updated" : "Payment updated");
+      toast.success("Sale updated");
       onUpdated?.(updated);
       onOpenChange(false);
     } catch (error) {
@@ -412,12 +536,7 @@ export function EditSalePaymentDialog({
     }
   };
 
-  const renderPaymentList = (
-    scope: LineEditor["scope"],
-    payments: PosCheckoutPaymentLine[],
-    targetAmount: number,
-    remainingForScope: number
-  ) => (
+  const renderPaymentList = () => (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-medium text-muted-foreground">Payments</p>
@@ -425,13 +544,12 @@ export function EditSalePaymentDialog({
           type="button"
           size="sm"
           variant="outline"
-          disabled={saving}
+          disabled={saving || noCharge}
           onClick={() =>
             setLineEditor({
-              scope,
               payId: null,
               draft: createItemPaymentLine(
-                remainingForScope > 0 ? remainingForScope : 0
+                remaining > 0 ? remaining : 0
               ),
             })
           }
@@ -440,13 +558,13 @@ export function EditSalePaymentDialog({
           Add
         </Button>
       </div>
-      {payments.length === 0 ? (
+      {saleDrafts.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           No payments yet — click Add.
         </p>
       ) : (
         <ul className="space-y-1.5">
-          {payments.map((pay) => {
+          {saleDrafts.map((pay) => {
             const account =
               tenderNeedsPaymentAccount(pay.tenderMethod) && pay.paymentAccountId
                 ? accounts.find((row) => row.id === pay.paymentAccountId)
@@ -458,7 +576,6 @@ export function EditSalePaymentDialog({
                   disabled={saving}
                   onClick={() =>
                     setLineEditor({
-                      scope,
                       payId: pay.id,
                       draft: { ...pay },
                     })
@@ -480,7 +597,7 @@ export function EditSalePaymentDialog({
                     </p>
                   </div>
                 </button>
-                {payments.length > 1 ? (
+                {saleDrafts.length > 1 ? (
                   <Button
                     type="button"
                     size="icon-sm"
@@ -489,9 +606,8 @@ export function EditSalePaymentDialog({
                     className="shrink-0 self-center"
                     aria-label="Remove payment"
                     onClick={() =>
-                      replaceScopePayments(
-                        scope,
-                        payments.filter((row) => row.id !== pay.id)
+                      setSaleDrafts((prev) =>
+                        prev.filter((row) => row.id !== pay.id)
                       )
                     }
                   >
@@ -503,15 +619,15 @@ export function EditSalePaymentDialog({
           })}
         </ul>
       )}
-      {!itemPaymentsCoverLineTotal(payments, targetAmount) ? (
+      {!itemPaymentsCoverLineTotal(saleDrafts, amountDue) ? (
         <p
           className={`text-xs ${
             canSaveUnequal ? "text-amber-700" : "text-destructive"
           }`}
         >
           {canSaveUnequal
-            ? `Payments do not equal ${formatCurrency(targetAmount)} (override on).`
-            : `Payments must equal ${formatCurrency(targetAmount)}.`}
+            ? `Payments do not equal ${formatCurrency(amountDue)} (override on).`
+            : `Payments must equal ${formatCurrency(amountDue)}.`}
         </p>
       ) : null}
     </div>
@@ -526,7 +642,7 @@ export function EditSalePaymentDialog({
       }}
     >
       <DialogContent
-        className="flex max-h-[92dvh] w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+        className="flex max-h-[92dvh] w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
         showCloseButton={!saving}
       >
         <DialogHeader className="shrink-0 border-b px-4 py-4 sm:px-6">
@@ -539,13 +655,9 @@ export function EditSalePaymentDialog({
               : "Edit sale"}
           </DialogTitle>
           <DialogDescription>
-            {lineEditor && invoice
-              ? lineEditor.scope === "sale"
-                ? "Correct this tender for the receipt"
-                : `${invoice.items[lineEditor.scope]?.quantity ?? ""}× ${
-                    invoice.items[lineEditor.scope]?.productName ?? "Item"
-                  }`
-              : "Change the sale date or correct tender methods. Totals stay the same."}
+            {lineEditor
+              ? "Correct this tender for the receipt"
+              : "Update items, payments, and customer details. Inventory adjusts with item changes."}
           </DialogDescription>
         </DialogHeader>
 
@@ -561,11 +673,11 @@ export function EditSalePaymentDialog({
             </p>
           ) : lineEditor && editorDraft ? (
             <div className="space-y-3">
-              {editorDraft.kind === "half_payment" && editorHalfBase > 0.01 ? (
+              {editorDraft.kind === "half_payment" && amountDue > 0.01 ? (
                 <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                   Half of total{" "}
                   <span className="font-medium tabular-nums">
-                    {formatCurrency(editorHalfBase)}
+                    {formatCurrency(amountDue)}
                   </span>{" "}
                   is{" "}
                   <span className="font-semibold tabular-nums">
@@ -597,9 +709,7 @@ export function EditSalePaymentDialog({
                   >
                     <SelectTrigger id="edit-pay-method">
                       <SelectValue>
-                        {(value) =>
-                          value ? methodLabel(value) : null
-                        }
+                        {(value) => (value ? methodLabel(value) : null)}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -747,116 +857,260 @@ export function EditSalePaymentDialog({
               ) : null}
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-sale-date">Sale date</Label>
-                <Input
-                  id="edit-sale-date"
-                  type="date"
-                  value={saleDate}
-                  max={toDateInputValue()}
-                  disabled={saving}
-                  onChange={(e) => setSaleDate(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Controls which daily sales report this receipt appears on.
-                </p>
-              </div>
-
-              {amountDue <= 0.01 ? (
-                <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                  This receipt was fully covered by a voucher. You can still
-                  change the sale date above.
-                </p>
-              ) : (
-                <>
-              <div className="grid grid-cols-3 gap-2 rounded-md border bg-muted/20 p-2 text-[11px]">
-                <div>
-                  <p className="text-muted-foreground">Amount due</p>
-                  <p className="font-semibold tabular-nums">
-                    {formatCurrency(amountDue)}
+            <div className="space-y-5">
+              <section className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-medium">Items</h3>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {formatCurrency(merchandiseTotal)}
                   </p>
                 </div>
-                <div>
-                  <p className="text-muted-foreground">Paid</p>
-                  <p className="font-semibold tabular-nums">
-                    {formatCurrency(paidSum)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Left</p>
-                  <p
-                    className={`font-semibold tabular-nums ${
-                      remaining > 0.01
-                        ? "text-amber-700"
-                        : remaining < -0.01
-                          ? "text-destructive"
-                          : "text-emerald-700"
-                    }`}
-                  >
-                    {formatCurrency(remaining)}
-                  </p>
-                </div>
-              </div>
-
-              {editByItem ? (
-                <div className="space-y-3">
-                  {itemDrafts.map((row) => {
-                    const left = paymentRemaining(
-                      row.targetAmount,
-                      row.payments
-                    );
-                    return (
-                      <div
-                        key={row.index}
-                        className="space-y-3 rounded-lg border p-3"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">
-                              {row.quantity}× {row.productName}
-                            </p>
-                          </div>
-                          <p className="shrink-0 text-sm font-semibold tabular-nums">
-                            {formatCurrency(row.targetAmount)}
-                          </p>
-                        </div>
-                        {renderPaymentList(
-                          row.index,
-                          row.payments,
-                          row.targetAmount,
-                          left
-                        )}
+                <ul className="space-y-2">
+                  {itemLines.map((line) => (
+                    <li
+                      key={line.key}
+                      className="space-y-2 rounded-md border p-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {line.productName}
+                        </p>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          disabled={saving || itemLines.length <= 1}
+                          aria-label="Remove item"
+                          onClick={() => removeItemLine(line.key)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                renderPaymentList("sale", saleDrafts, amountDue, remaining)
-              )}
-
-              {amountDue > 0.01 ? (
-                <label className="flex items-start gap-3 rounded-md border p-3">
-                  <Checkbox
-                    checked={allowUnequalPayments}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Qty</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={line.quantity}
+                            disabled={saving}
+                            onChange={(e) =>
+                              updateItemLine(line.key, {
+                                quantity: Number(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Unit price</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={line.unitPrice}
+                            disabled={saving || noCharge}
+                            onChange={(e) =>
+                              updateItemLine(line.key, {
+                                unitPrice: Number(e.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <p className="text-right text-xs font-medium tabular-nums text-muted-foreground">
+                        Line{" "}
+                        {formatCurrency(
+                          noCharge
+                            ? 0
+                            : roundMoney(line.unitPrice * line.quantity)
+                        )}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-sale-add-item">Add item</Label>
+                  <Input
+                    id="edit-sale-add-item"
+                    placeholder="Search selling catalog…"
+                    value={addQuery}
                     disabled={saving}
-                    onCheckedChange={(checked) =>
-                      setAllowUnequalPayments(checked === true)
-                    }
+                    onChange={(e) => setAddQuery(e.target.value)}
                   />
-                  <span className="space-y-1">
-                    <span className="block text-sm font-medium leading-none">
-                      Allow payments that don’t equal amount due
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      Use for half-paid or partial receipts from past dates.
-                      Leave off for normal full payments.
-                    </span>
-                  </span>
-                </label>
-              ) : null}
-                </>
-              )}
+                  {addMatches.length > 0 ? (
+                    <ul className="max-h-40 overflow-y-auto rounded-md border">
+                      {addMatches.map((row) => (
+                        <li key={row.variantId}>
+                          <button
+                            type="button"
+                            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted/50"
+                            onClick={() => addCatalogItem(row)}
+                          >
+                            <span className="min-w-0 truncate">
+                              {row.productName}
+                            </span>
+                            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                              {formatCurrency(row.unitPrice)} · stock {row.stock}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="text-sm font-medium">Details</h3>
+                {canEditDate ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-sale-date">Sale date</Label>
+                    <Input
+                      id="edit-sale-date"
+                      type="date"
+                      value={saleDate}
+                      max={toDateInputValue()}
+                      disabled={saving}
+                      onChange={(e) => setSaleDate(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Controls which daily sales report this receipt appears on.
+                    </p>
+                  </div>
+                ) : null}
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-customer-type">Customer type</Label>
+                  <Select
+                    value={customerType}
+                    onValueChange={(value) =>
+                      setCustomerType(
+                        parsePosCustomerType(value ?? "walk_in")
+                      )
+                    }
+                  >
+                    <SelectTrigger id="edit-customer-type">
+                      <SelectValue>
+                        {(value) =>
+                          value
+                            ? posCustomerTypeLabel(
+                                value as PosCustomerType
+                              )
+                            : null
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CUSTOMER_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {posCustomerTypeLabel(type)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="edit-customer-name">
+                      {customerType === "co_owner" ? "Owner note" : "Name"}
+                    </Label>
+                    <Input
+                      id="edit-customer-name"
+                      value={customerName}
+                      disabled={saving}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-customer-mobile">Mobile</Label>
+                    <Input
+                      id="edit-customer-mobile"
+                      value={customerMobile}
+                      disabled={saving}
+                      onChange={(e) => setCustomerMobile(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-customer-email">Email</Label>
+                    <Input
+                      id="edit-customer-email"
+                      value={customerEmail}
+                      disabled={saving}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="edit-customer-address">Address</Label>
+                    <Input
+                      id="edit-customer-address"
+                      value={customerAddress}
+                      disabled={saving}
+                      onChange={(e) => setCustomerAddress(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h3 className="text-sm font-medium">Payments</h3>
+                {amountDue <= 0.01 ? (
+                  <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                    {noCharge
+                      ? "This customer type has no amount due."
+                      : "This receipt has no amount due (voucher or zero total)."}
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 rounded-md border bg-muted/20 p-2 text-[11px]">
+                      <div>
+                        <p className="text-muted-foreground">Amount due</p>
+                        <p className="font-semibold tabular-nums">
+                          {formatCurrency(amountDue)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Paid</p>
+                        <p className="font-semibold tabular-nums">
+                          {formatCurrency(paidSum)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Left</p>
+                        <p
+                          className={`font-semibold tabular-nums ${
+                            remaining > 0.01
+                              ? "text-amber-700"
+                              : remaining < -0.01
+                                ? "text-destructive"
+                                : "text-emerald-700"
+                          }`}
+                        >
+                          {formatCurrency(remaining)}
+                        </p>
+                      </div>
+                    </div>
+                    {renderPaymentList()}
+                    <label className="flex items-start gap-3 rounded-md border p-3">
+                      <Checkbox
+                        checked={allowUnequalPayments}
+                        disabled={saving}
+                        onCheckedChange={(checked) =>
+                          setAllowUnequalPayments(checked === true)
+                        }
+                      />
+                      <span className="space-y-1">
+                        <span className="block text-sm font-medium leading-none">
+                          Allow payments that don’t equal amount due
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          Use for half-paid or partial receipts. Leave off for
+                          normal full payments.
+                        </span>
+                      </span>
+                    </label>
+                  </>
+                )}
+              </section>
             </div>
           )}
         </div>
@@ -896,7 +1150,9 @@ export function EditSalePaymentDialog({
                   saving ||
                   loading ||
                   !invoice ||
-                  !saleDate ||
+                  !user?.uid ||
+                  itemLines.length === 0 ||
+                  (canEditDate && !saleDate) ||
                   (amountDue > 0.01 && !paymentsAcceptable)
                 }
                 onClick={() => void handleSave()}
@@ -925,11 +1181,19 @@ export function EditSalePaymentButton({
   disabled?: boolean;
   onUpdated?: (sale: PosSale) => void;
 }) {
-  const { isElevatedAdmin } = useBranchAccess();
+  const { user, assignedBranchId, isElevatedAdmin } = useBranchAccess();
   const [open, setOpen] = useState(false);
   const canOpen = Boolean(sale || saleId);
+  const allowed = sale
+    ? canEditPosSale({
+        sale,
+        role: user?.role,
+        userId: user?.uid,
+        assignedBranchId,
+      })
+    : isElevatedAdmin;
 
-  if (!isElevatedAdmin) return null;
+  if (!allowed) return null;
 
   return (
     <>

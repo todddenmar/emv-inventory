@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -29,10 +29,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ArchiveSaleButton } from "@/components/admin/archive-sale-dialog";
 import { CashSummaryCard } from "@/components/admin/cash-summary-card";
+import { EditSalePaymentButton } from "@/components/admin/edit-sale-payment-dialog";
 import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { canEditPosSale } from "@/lib/pos-sale-edit";
 import { usePaymentMethods } from "@/hooks/use-payment-methods";
 import {
   formatDateInputLabel,
@@ -64,7 +67,7 @@ import type {
 type SaleChannelFilter = "all" | PosSaleChannel;
 
 export default function CashierSalesPage() {
-  const { assignedBranchId } = useBranchAccess();
+  const { assignedBranchId, user } = useBranchAccess();
   const { methods: paymentMethods } = usePaymentMethods();
   const [date, setDate] = useState(() => toDateInputValue());
   const [saleChannel, setSaleChannel] =
@@ -77,79 +80,81 @@ export default function CashierSalesPage() {
   const [page, setPage] = useState(1);
 
   const supportsWholesale = branch?.supportsWholesale === true;
-  const channelFilter =
-    saleChannel === "all" ? null : saleChannel;
-  const isWholesaleOnly = saleChannel === "wholesale";
+  const effectiveSaleChannel: SaleChannelFilter =
+    !supportsWholesale && saleChannel === "wholesale" ? "shop" : saleChannel;
+  const effectiveChannelFilter =
+    effectiveSaleChannel === "all" ? null : effectiveSaleChannel;
+  const isWholesaleOnly = effectiveSaleChannel === "wholesale";
 
   useEffect(() => {
-    if (!assignedBranchId) {
-      setBranch(null);
-      return;
-    }
+    if (!assignedBranchId) return;
+    let cancelled = false;
     getBranch(assignedBranchId)
-      .then(setBranch)
+      .then((row) => {
+        if (!cancelled) setBranch(row);
+      })
       .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
   }, [assignedBranchId]);
 
   useEffect(() => {
-    if (!supportsWholesale && saleChannel === "wholesale") {
-      setSaleChannel("shop");
-    }
-  }, [supportsWholesale, saleChannel]);
+    let cancelled = false;
 
-  const load = useCallback(async () => {
-    if (!assignedBranchId) {
-      setSales([]);
-      setExpenses([]);
-      setCashRecord(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      if (isWholesaleOnly) {
-        const saleRows = await getPosSales({
-          branchId: assignedBranchId,
-          fromDate: date,
-          toDate: date,
-          saleChannel: "wholesale",
-          max: 2000,
-        });
-        setSales(saleRows);
+    const load = async () => {
+      if (!assignedBranchId) {
+        setSales([]);
         setExpenses([]);
         setCashRecord(null);
-      } else {
-        const [saleRows, expenseRows, cashRow] = await Promise.all([
-          getPosSales({
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        if (isWholesaleOnly) {
+          const saleRows = await getPosSales({
             branchId: assignedBranchId,
             fromDate: date,
             toDate: date,
-            saleChannel: channelFilter,
+            saleChannel: "wholesale",
             max: 2000,
-          }),
-          getDailyExpenses({ branchId: assignedBranchId, date }),
-          getDailyCashRecord(assignedBranchId, date),
-        ]);
-        setSales(saleRows);
-        setExpenses(expenseRows);
-        setCashRecord(cashRow);
+          });
+          if (cancelled) return;
+          setSales(saleRows);
+          setExpenses([]);
+          setCashRecord(null);
+        } else {
+          const [saleRows, expenseRows, cashRow] = await Promise.all([
+            getPosSales({
+              branchId: assignedBranchId,
+              fromDate: date,
+              toDate: date,
+              saleChannel: effectiveChannelFilter,
+              max: 2000,
+            }),
+            getDailyExpenses({ branchId: assignedBranchId, date }),
+            getDailyCashRecord(assignedBranchId, date),
+          ]);
+          if (cancelled) return;
+          setSales(saleRows);
+          setExpenses(expenseRows);
+          setCashRecord(cashRow);
+        }
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) toast.error("Failed to load sales");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load sales");
-    } finally {
-      setLoading(false);
-    }
-  }, [assignedBranchId, date, channelFilter, isWholesaleOnly]);
+    };
 
-  useEffect(() => {
     void load();
-  }, [load]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [date, saleChannel]);
+    return () => {
+      cancelled = true;
+    };
+  }, [assignedBranchId, date, effectiveChannelFilter, isWholesaleOnly]);
 
   const cashAddsTotal = isWholesaleOnly
     ? 0
@@ -171,10 +176,6 @@ export default function CashierSalesPage() {
     pagedItems,
     total,
   } = useMemo(() => paginateItems(sales, page), [sales, page]);
-
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage);
-  }, [page, safePage]);
 
   if (!assignedBranchId) {
     return (
@@ -202,7 +203,10 @@ export default function CashierSalesPage() {
               variant="outline"
               size="icon"
               aria-label="Previous date"
-              onClick={() => setDate(shiftDateInput(date, -1))}
+              onClick={() => {
+                setDate(shiftDateInput(date, -1));
+                setPage(1);
+              }}
             >
               <ChevronLeft />
             </Button>
@@ -211,7 +215,10 @@ export default function CashierSalesPage() {
               type="date"
               value={date}
               max={toDateInputValue()}
-              onChange={(e) => setDate(e.target.value || date)}
+              onChange={(e) => {
+                setDate(e.target.value || date);
+                setPage(1);
+              }}
               className="h-8 flex-1"
             />
             <Button
@@ -220,7 +227,10 @@ export default function CashierSalesPage() {
               size="icon"
               aria-label="Next date"
               disabled={date >= toDateInputValue()}
-              onClick={() => setDate(shiftDateInput(date, 1))}
+              onClick={() => {
+                setDate(shiftDateInput(date, 1));
+                setPage(1);
+              }}
             >
               <ChevronRight />
             </Button>
@@ -229,10 +239,11 @@ export default function CashierSalesPage() {
         <div className="w-full space-y-2 sm:w-44">
           <Label>Sale channel</Label>
           <Select
-            value={saleChannel}
-            onValueChange={(value) =>
-              setSaleChannel((value as SaleChannelFilter) ?? "shop")
-            }
+            value={effectiveSaleChannel}
+            onValueChange={(value) => {
+              setSaleChannel((value as SaleChannelFilter) ?? "shop");
+              setPage(1);
+            }}
           >
             <SelectTrigger size="sm" className="w-full">
               <SelectValue>
@@ -275,9 +286,9 @@ export default function CashierSalesPage() {
           <CardTitle className="text-base">Receipts</CardTitle>
           <CardDescription>
             {total} receipt{total === 1 ? "" : "s"} · {formatDateInputLabel(date)}
-            {saleChannel === "wholesale"
+            {effectiveSaleChannel === "wholesale"
               ? " · wholesale"
-              : saleChannel === "shop"
+              : effectiveSaleChannel === "shop"
                 ? " · shop"
                 : ""}
           </CardDescription>
@@ -335,7 +346,36 @@ export default function CashierSalesPage() {
                             {posCustomerTypeLabel(sale.customerType)}
                           </Badge>
                         ) : null}
-                        <SaleInvoiceButton sale={sale} />
+                        <div className="flex items-center justify-end">
+                          <SaleInvoiceButton sale={sale} />
+                          {canEditPosSale({
+                            sale,
+                            role: user?.role,
+                            userId: user?.uid,
+                            assignedBranchId,
+                          }) ? (
+                            <>
+                              <EditSalePaymentButton
+                                sale={sale}
+                                onUpdated={(updated) => {
+                                  setSales((prev) =>
+                                    prev.map((row) =>
+                                      row.id === updated.id ? updated : row
+                                    )
+                                  );
+                                }}
+                              />
+                              <ArchiveSaleButton
+                                sale={sale}
+                                onArchived={(id) => {
+                                  setSales((prev) =>
+                                    prev.filter((row) => row.id !== id)
+                                  );
+                                }}
+                              />
+                            </>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </li>
@@ -405,7 +445,36 @@ export default function CashierSalesPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <SaleInvoiceButton sale={sale} />
+                          <div className="flex justify-end">
+                            <SaleInvoiceButton sale={sale} />
+                            {canEditPosSale({
+                              sale,
+                              role: user?.role,
+                              userId: user?.uid,
+                              assignedBranchId,
+                            }) ? (
+                              <>
+                                <EditSalePaymentButton
+                                  sale={sale}
+                                  onUpdated={(updated) => {
+                                    setSales((prev) =>
+                                      prev.map((row) =>
+                                        row.id === updated.id ? updated : row
+                                      )
+                                    );
+                                  }}
+                                />
+                                <ArchiveSaleButton
+                                  sale={sale}
+                                  onArchived={(id) => {
+                                    setSales((prev) =>
+                                      prev.filter((row) => row.id !== id)
+                                    );
+                                  }}
+                                />
+                              </>
+                            ) : null}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

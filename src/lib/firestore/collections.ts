@@ -11,6 +11,7 @@ export const COLLECTIONS = {
   branchTransfers: "physicalBranchTransfers",
   transferRequests: "physicalTransferRequests",
   posSales: "physicalPosSales",
+  posSaleActivityLogs: "physicalPosSaleActivityLogs",
   dailyExpenses: "physicalDailyExpenses",
   dailyCashRecords: "physicalDailyCashRecords",
   supplierStockIns: "physicalSupplierStockIns",

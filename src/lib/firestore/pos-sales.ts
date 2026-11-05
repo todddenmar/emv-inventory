@@ -20,10 +20,15 @@ import { inventoryDocId } from "@/lib/firestore/inventory";
 import { endOfLocalDay, saleCreatedAtForDateEdit, startOfLocalDay, toDateInputValue } from "@/lib/dates";
 import { isVoucherRedeemable } from "@/lib/firestore/vouchers";
 import {
+  logPosSaleArchive,
+  logPosSaleEdit,
+} from "@/lib/firestore/sale-activity-logs";
+import {
   isNonRevenueCustomerType,
   parsePosCustomerType,
   requiresPosCustomerName,
 } from "@/lib/pos-customer-type";
+import { canChangePosSaleDate, canEditPosSale } from "@/lib/pos-sale-edit";
 import type {
   PaymentAccount,
   PosCustomerType,
@@ -35,6 +40,7 @@ import type {
   PosSaleItem,
   PosSalePaymentAccount,
   PosTenderMethod,
+  UserRole,
   Voucher,
 } from "@/types";
 import {
@@ -649,6 +655,13 @@ function itemsUnchangedForPaymentEdit(
   });
 }
 
+export interface UpdatePosSaleActor {
+  userId: string;
+  role: UserRole | null | undefined;
+  assignedBranchId?: string | null;
+  name?: string | null;
+}
+
 export interface UpdatePosSalePaymentsInput {
   payments: PosPaymentLine[];
   items?: PosSaleItem[];
@@ -658,45 +671,60 @@ export interface UpdatePosSalePaymentsInput {
    * Keep partial / half payments that do not equal amount due.
    */
   allowUnequalPayments?: boolean;
+  actor?: UpdatePosSaleActor;
 }
 
-/** Admin-only correction of tender methods / accounts. Totals stay the same. */
-export async function updatePosSalePayments(
-  saleId: string,
-  input: UpdatePosSalePaymentsInput
-): Promise<PosSale> {
-  const existing = await getPosSale(saleId);
-  if (!existing) {
-    throw new Error("Sale not found");
-  }
-  if (isPosSaleArchived(existing)) {
-    throw new Error("Archived sales cannot be edited");
-  }
+export interface UpdatePosSaleInput {
+  items: PosSaleItem[];
+  payments: PosPaymentLine[];
+  customerType?: PosCustomerType;
+  customer?: PosSaleCustomer | null;
+  /** Local `YYYY-MM-DD` — admin only. */
+  saleDate?: string | null;
+  allowUnequalPayments?: boolean;
+  actor: UpdatePosSaleActor;
+}
 
-  const amountDue = roundMoney(existing.amountDue ?? existing.total);
-  const payments = input.payments.map(serializePaymentLine);
-  const items =
-    input.items?.map((item, index) => {
-      const current = existing.items[index];
-      if (!current) {
-        throw new Error("Sale items cannot be added or removed");
-      }
-      const itemPayments = (item.payments ?? []).map(serializePaymentLine);
-      const primary = itemPayments[0] ?? null;
-      return {
-        ...current,
-        payments: itemPayments,
-        tenderMethod: primary?.tenderMethod ?? null,
-        paymentAccount: primary?.paymentAccount ?? null,
-        kind: primary?.kind ?? null,
-        note: primary?.note ?? null,
-      };
-    }) ?? null;
-
-  if (items && !itemsUnchangedForPaymentEdit(existing.items, items)) {
-    throw new Error("Line items and totals cannot be changed");
+function assertCanEditSale(sale: PosSale, actor?: UpdatePosSaleActor) {
+  if (!actor) return;
+  if (
+    !canEditPosSale({
+      sale,
+      role: actor.role,
+      userId: actor.userId,
+      assignedBranchId: actor.assignedBranchId,
+    })
+  ) {
+    throw new Error("You cannot edit this sale");
   }
+}
 
+function qtyByVariant(items: PosSaleItem[]) {
+  const map = new Map<
+    string,
+    { productId: string; productName: string; quantity: number }
+  >();
+  for (const item of items) {
+    if (!item.variantId || item.quantity <= 0) continue;
+    const current = map.get(item.variantId);
+    if (current) {
+      current.quantity += item.quantity;
+    } else {
+      map.set(item.variantId, {
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+      });
+    }
+  }
+  return map;
+}
+
+function validatePaymentLines(
+  payments: PosPaymentLine[],
+  amountDue: number,
+  allowUnequalPayments?: boolean
+) {
   for (const line of payments) {
     if (!Number.isFinite(line.amount) || line.amount <= 0) {
       throw new Error("Each payment amount must be greater than 0");
@@ -726,14 +754,324 @@ export async function updatePosSalePayments(
       throw new Error("Add at least one payment");
     }
     if (
-      !input.allowUnequalPayments &&
+      !allowUnequalPayments &&
       !paymentsCoverAmountDue(amountDue, payments)
     ) {
       throw new Error("Payment amounts must equal the amount due");
     }
   } else if (payments.length > 0) {
-    throw new Error("This receipt has no amount due to edit");
+    throw new Error("This receipt has no amount due");
   }
+}
+
+/** Full sale correction: items, payments, and details, with inventory diffs. */
+export async function updatePosSale(
+  saleId: string,
+  input: UpdatePosSaleInput
+): Promise<PosSale> {
+  const existing = await getPosSale(saleId);
+  if (!existing) {
+    throw new Error("Sale not found");
+  }
+  if (isPosSaleArchived(existing)) {
+    throw new Error("Archived sales cannot be edited");
+  }
+  assertCanEditSale(existing, input.actor);
+
+  if (
+    input.saleDate != null &&
+    input.saleDate !== "" &&
+    input.saleDate !== toDateInputValue(existing.createdAt) &&
+    !canChangePosSaleDate(input.actor.role)
+  ) {
+    throw new Error("Only admins can change the sale date");
+  }
+
+  const customerType = parsePosCustomerType(
+    input.customerType ?? existing.customerType
+  );
+  const noCharge = isNonRevenueCustomerType(customerType);
+  if (requiresPosCustomerName(customerType)) {
+    if (!input.customer?.name?.trim() && !existing.customer?.name?.trim()) {
+      throw new Error(
+        customerType === "co_owner"
+          ? "Owner note is required for C/O Owner"
+          : "Customer name is required"
+      );
+    }
+  }
+
+  const customer =
+    input.customer === undefined
+      ? existing.customer
+      : input.customer
+        ? {
+            name: input.customer.name?.trim() || null,
+            mobile: input.customer.mobile?.trim() || null,
+            email: input.customer.email?.trim() || null,
+            address: input.customer.address?.trim() || null,
+          }
+        : null;
+
+  const rawItems = input.items.map((item) => {
+    const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0));
+    const unitPrice = noCharge
+      ? 0
+      : roundMoney(Math.max(0, Number(item.unitPrice) || 0));
+    const lineTotal = noCharge ? 0 : roundMoney(unitPrice * quantity);
+    const itemPayments = noCharge
+      ? []
+      : (item.payments ?? []).map(serializePaymentLine);
+    const primary = itemPayments[0] ?? null;
+    return {
+      productId: item.productId,
+      variantId: item.variantId,
+      productName: item.productName,
+      quantity,
+      unitPrice,
+      lineTotal,
+      priceList: item.priceList ?? null,
+      payments: itemPayments,
+      tenderMethod: primary?.tenderMethod ?? null,
+      paymentAccount: primary?.paymentAccount ?? null,
+      kind: primary?.kind ?? null,
+      note: primary?.note ?? null,
+    } satisfies PosSaleItem;
+  });
+
+  if (rawItems.length === 0) {
+    throw new Error("Add at least one item");
+  }
+  for (const item of rawItems) {
+    if (item.quantity <= 0) {
+      throw new Error(`Invalid quantity for ${item.productName}`);
+    }
+    if (!item.variantId) {
+      throw new Error(`Missing variant for ${item.productName}`);
+    }
+  }
+
+  const total = roundMoney(
+    rawItems.reduce((sum, item) => sum + item.lineTotal, 0)
+  );
+  const voucherAmountApplied = Math.min(
+    existing.voucherAmountApplied ?? 0,
+    total
+  );
+  const amountDue = noCharge
+    ? 0
+    : Math.max(0, roundMoney(total - voucherAmountApplied));
+  const payments = noCharge
+    ? []
+    : input.payments.map(serializePaymentLine);
+
+  validatePaymentLines(payments, amountDue, input.allowUnequalPayments);
+
+  const prevQty = qtyByVariant(existing.items);
+  const nextQty = qtyByVariant(rawItems);
+  const variantIds = new Set([...prevQty.keys(), ...nextQty.keys()]);
+  const stockDeltas: Array<{
+    variantId: string;
+    productId: string;
+    productName: string;
+    delta: number;
+  }> = [];
+  for (const variantId of variantIds) {
+    const before = prevQty.get(variantId)?.quantity ?? 0;
+    const after = nextQty.get(variantId)?.quantity ?? 0;
+    const delta = after - before;
+    if (delta === 0) continue;
+    const meta = nextQty.get(variantId) ?? prevQty.get(variantId);
+    if (!meta) continue;
+    stockDeltas.push({
+      variantId,
+      productId: meta.productId,
+      productName: meta.productName,
+      delta,
+    });
+  }
+
+  const db = getClientDb();
+  const saleDoc = doc(db, COLLECTIONS.posSales, saleId);
+  const saleLabel = `Sale ${saleId.slice(-6).toUpperCase()}`;
+
+  await runTransaction(db, async (tx) => {
+    const invRows: Array<{
+      invRef: ReturnType<typeof doc>;
+      variantId: string;
+      productId: string;
+      productName: string;
+      stockDelta: number;
+      previousStock: number;
+      newStock: number;
+      exists: boolean;
+    }> = [];
+
+    for (const row of stockDeltas) {
+      const invRef = doc(
+        db,
+        COLLECTIONS.branchInventory,
+        inventoryDocId(existing.branchId, row.variantId)
+      );
+      const snap = await tx.get(invRef);
+      const previousStock = snap.exists()
+        ? Number((snap.data() as { stock?: number }).stock ?? 0)
+        : 0;
+      const newStock = previousStock - row.delta;
+      if (row.delta > 0) {
+        if (!snap.exists()) {
+          throw new Error(`No inventory for ${row.productName}`);
+        }
+        const data = snap.data() as { isSelling?: boolean };
+        if (data.isSelling === false) {
+          throw new Error(`${row.productName} is not selling at this branch`);
+        }
+        if (newStock < 0) {
+          throw new Error(`Insufficient stock for ${row.productName}`);
+        }
+      }
+      invRows.push({
+        invRef,
+        variantId: row.variantId,
+        productId: row.productId,
+        productName: row.productName,
+        stockDelta: -row.delta,
+        previousStock,
+        newStock: Math.max(0, newStock),
+        exists: snap.exists(),
+      });
+    }
+
+    for (const row of invRows) {
+      if (row.exists) {
+        tx.update(row.invRef, {
+          stock: row.newStock,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        tx.set(row.invRef, {
+          branchId: existing.branchId,
+          productId: row.productId,
+          variantId: row.variantId,
+          stock: row.newStock,
+          lowStockThreshold: 5,
+          isSelling: true,
+          cashPrice: null,
+          retailPrice: null,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      tx.set(doc(collection(db, COLLECTIONS.inventoryLogs)), {
+        branchId: existing.branchId,
+        branchName: existing.branchName,
+        productId: row.productId,
+        variantId: row.variantId,
+        productName: row.productName,
+        delta: row.stockDelta,
+        previousStock: row.previousStock,
+        newStock: row.newStock,
+        reason: row.stockDelta >= 0 ? "pos_sale_restock" : "pos_sale",
+        referenceId: saleId,
+        referenceLabel: `${saleLabel} edit`,
+        performedBy: input.actor.userId,
+        performedByName: input.actor.name ?? null,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    const primary = payments[0] ?? null;
+    const patch: Record<string, unknown> = {
+      items: rawItems,
+      itemCount: rawItems.reduce((sum, item) => sum + item.quantity, 0),
+      total,
+      amountDue,
+      voucherAmountApplied,
+      payments,
+      tenderMethod: primary?.tenderMethod ?? existing.tenderMethod,
+      paymentAccount: primary?.paymentAccount ?? null,
+      customerType,
+      customer,
+    };
+
+    if (input.saleDate != null && input.saleDate !== "") {
+      const nextCreatedAt = saleCreatedAtForDateEdit(
+        input.saleDate,
+        existing.createdAt
+      );
+      if (toDateInputValue(existing.createdAt) !== input.saleDate) {
+        patch.createdAt = Timestamp.fromDate(nextCreatedAt);
+      }
+    }
+
+    tx.update(saleDoc, patch);
+  });
+
+  const updated = await getPosSale(saleId);
+  if (!updated) {
+    throw new Error("Sale not found after update");
+  }
+
+  await logPosSaleEdit({
+    previous: existing,
+    next: updated,
+    performedBy: input.actor.userId,
+    performedByName: input.actor.name,
+    performedByRole: input.actor.role ?? null,
+  });
+
+  return updated;
+}
+
+/** Correction of tender methods / accounts. Totals stay the same unless items are unchanged payment-only. */
+export async function updatePosSalePayments(
+  saleId: string,
+  input: UpdatePosSalePaymentsInput
+): Promise<PosSale> {
+  const existing = await getPosSale(saleId);
+  if (!existing) {
+    throw new Error("Sale not found");
+  }
+  if (isPosSaleArchived(existing)) {
+    throw new Error("Archived sales cannot be edited");
+  }
+  assertCanEditSale(existing, input.actor);
+
+  if (
+    input.saleDate != null &&
+    input.saleDate !== "" &&
+    input.saleDate !== toDateInputValue(existing.createdAt) &&
+    input.actor &&
+    !canChangePosSaleDate(input.actor.role)
+  ) {
+    throw new Error("Only admins can change the sale date");
+  }
+
+  const amountDue = roundMoney(existing.amountDue ?? existing.total);
+  const payments = input.payments.map(serializePaymentLine);
+  const items =
+    input.items?.map((item, index) => {
+      const current = existing.items[index];
+      if (!current) {
+        throw new Error("Sale items cannot be added or removed");
+      }
+      const itemPayments = (item.payments ?? []).map(serializePaymentLine);
+      const primary = itemPayments[0] ?? null;
+      return {
+        ...current,
+        payments: itemPayments,
+        tenderMethod: primary?.tenderMethod ?? null,
+        paymentAccount: primary?.paymentAccount ?? null,
+        kind: primary?.kind ?? null,
+        note: primary?.note ?? null,
+      };
+    }) ?? null;
+
+  if (items && !itemsUnchangedForPaymentEdit(existing.items, items)) {
+    throw new Error("Line items and totals cannot be changed");
+  }
+
+  validatePaymentLines(payments, amountDue, input.allowUnequalPayments);
 
   if (items) {
     for (let i = 0; i < items.length; i++) {
@@ -792,13 +1130,25 @@ export async function updatePosSalePayments(
   if (!updated) {
     throw new Error("Sale not found after update");
   }
+
+  if (input.actor) {
+    await logPosSaleEdit({
+      previous: existing,
+      next: updated,
+      performedBy: input.actor.userId,
+      performedByName: input.actor.name,
+      performedByRole: input.actor.role ?? null,
+    });
+  }
+
   return updated;
 }
 
 /** Move a sale onto another calendar day for daily sales reports. */
 export async function updatePosSaleDate(
   saleId: string,
-  saleDate: string
+  saleDate: string,
+  actor?: UpdatePosSaleActor
 ): Promise<PosSale> {
   const existing = await getPosSale(saleId);
   if (!existing) {
@@ -806,6 +1156,9 @@ export async function updatePosSaleDate(
   }
   if (isPosSaleArchived(existing)) {
     throw new Error("Archived sales cannot be edited");
+  }
+  if (actor && !canChangePosSaleDate(actor.role)) {
+    throw new Error("Only admins can change the sale date");
   }
 
   if (toDateInputValue(existing.createdAt) === saleDate) {
@@ -825,6 +1178,17 @@ export async function updatePosSaleDate(
   if (!updated) {
     throw new Error("Sale not found after update");
   }
+
+  if (actor) {
+    await logPosSaleEdit({
+      previous: existing,
+      next: updated,
+      performedBy: actor.userId,
+      performedByName: actor.name,
+      performedByRole: actor.role ?? null,
+    });
+  }
+
   return updated;
 }
 
@@ -846,6 +1210,8 @@ export interface ArchivePosSaleInput {
   restock: boolean;
   performedBy: string;
   performedByName?: string | null;
+  performedByRole?: UserRole | null;
+  assignedBranchId?: string | null;
 }
 
 /** Soft-void a completed sale. Optionally return sold units to branch stock. */
@@ -860,6 +1226,7 @@ export async function archivePosSale(
   const db = getClientDb();
   const saleDoc = doc(db, COLLECTIONS.posSales, saleId);
   const saleRef = saleDoc.withConverter(posSaleConverter);
+  let archivedSale: PosSale | null = null;
 
   await runTransaction(db, async (tx) => {
     const saleSnap = await tx.get(saleRef);
@@ -870,6 +1237,13 @@ export async function archivePosSale(
     if (isPosSaleArchived(sale)) {
       throw new Error("Sale is already archived");
     }
+    assertCanEditSale(sale, {
+      userId: input.performedBy,
+      role: input.performedByRole,
+      assignedBranchId: input.assignedBranchId,
+      name: input.performedByName,
+    });
+    archivedSale = sale;
 
     const restockRows: Array<{
       invRef: ReturnType<typeof doc>;
@@ -971,4 +1345,14 @@ export async function archivePosSale(
       restockedOnArchive: input.restock,
     });
   });
+
+  if (archivedSale) {
+    await logPosSaleArchive({
+      sale: archivedSale,
+      restocked: input.restock,
+      performedBy: input.performedBy,
+      performedByName: input.performedByName,
+      performedByRole: input.performedByRole ?? null,
+    });
+  }
 }

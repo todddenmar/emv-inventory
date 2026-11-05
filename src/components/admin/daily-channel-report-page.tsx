@@ -52,6 +52,7 @@ import { EditSalePaymentDialog } from "@/components/admin/edit-sale-payment-dial
 import { SaleInvoiceDialog } from "@/components/admin/sale-invoice-dialog";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { usePaymentMethods } from "@/hooks/use-payment-methods";
+import { canEditPosSale } from "@/lib/pos-sale-edit";
 import {
   formatDateInputLabel,
   isDateInputValue,
@@ -86,8 +87,12 @@ function DailyChannelReportInner({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { canViewAllBranches, assignedBranchId, isElevatedAdmin } =
-    useBranchAccess();
+  const {
+    canViewAllBranches,
+    assignedBranchId,
+    isElevatedAdmin,
+    user,
+  } = useBranchAccess();
   const { methods: paymentMethods } = usePaymentMethods();
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -427,7 +432,12 @@ function DailyChannelReportInner({
                           const sale = sales.find(
                             (item) => item.id === row.saleId
                           );
-                          const canEditSale = isElevatedAdmin && sale != null;
+                          const canEditSale = canEditPosSale({
+                            sale,
+                            role: user?.role,
+                            userId: user?.uid,
+                            assignedBranchId,
+                          });
                           return (
                             <TableRow key={row.key}>
                               <TableCell className="tabular-nums font-medium">
@@ -463,9 +473,8 @@ function DailyChannelReportInner({
                                     }
                                   />
                                   <DropdownMenuContent align="end">
-                                    {isElevatedAdmin ? (
+                                    {canEditSale ? (
                                       <DropdownMenuItem
-                                        disabled={!canEditSale}
                                         onClick={() =>
                                           setEditSaleId(row.saleId)
                                         }
@@ -480,7 +489,7 @@ function DailyChannelReportInner({
                                     >
                                       View invoice
                                     </DropdownMenuItem>
-                                    {isElevatedAdmin ? (
+                                    {canEditSale ? (
                                       <>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem

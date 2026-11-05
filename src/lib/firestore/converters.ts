@@ -23,6 +23,8 @@ import type {
   PaymentAccount,
   PaymentMethod,
   PosSale,
+  PosSaleActivityAction,
+  PosSaleActivityLog,
   Product,
   ProductImage,
   ProductOption,
@@ -910,6 +912,90 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
     };
   },
 };
+
+function parsePosSaleActivityAction(value: unknown): PosSaleActivityAction {
+  switch (value) {
+    case "payments_updated":
+    case "sale_date_updated":
+    case "items_updated":
+    case "details_updated":
+    case "sale_archived":
+    case "sale_edited":
+      return value;
+    default:
+      return "sale_edited";
+  }
+}
+
+export const posSaleActivityLogConverter: FirestoreDataConverter<PosSaleActivityLog> =
+  {
+    toFirestore(log: PosSaleActivityLog): DocumentData {
+      return {
+        saleId: log.saleId,
+        branchId: log.branchId,
+        branchName: log.branchName,
+        action: log.action,
+        summary: log.summary,
+        previousPaymentsSummary: log.previousPaymentsSummary,
+        nextPaymentsSummary: log.nextPaymentsSummary,
+        previousItemsSummary: log.previousItemsSummary,
+        nextItemsSummary: log.nextItemsSummary,
+        previousSaleDate: log.previousSaleDate,
+        nextSaleDate: log.nextSaleDate,
+        performedBy: log.performedBy,
+        performedByName: log.performedByName,
+        performedByRole: log.performedByRole,
+        createdAt: log.createdAt,
+      };
+    },
+    fromFirestore(
+      snapshot: QueryDocumentSnapshot,
+      options: SnapshotOptions
+    ): PosSaleActivityLog {
+      const data = snapshot.data(options);
+      return {
+        id: snapshot.id,
+        saleId: String(data.saleId ?? ""),
+        branchId: String(data.branchId ?? ""),
+        branchName:
+          typeof data.branchName === "string" ? data.branchName : null,
+        action: parsePosSaleActivityAction(data.action),
+        summary: String(data.summary ?? "Sale edited"),
+        previousPaymentsSummary:
+          typeof data.previousPaymentsSummary === "string"
+            ? data.previousPaymentsSummary
+            : null,
+        nextPaymentsSummary:
+          typeof data.nextPaymentsSummary === "string"
+            ? data.nextPaymentsSummary
+            : null,
+        previousItemsSummary:
+          typeof data.previousItemsSummary === "string"
+            ? data.previousItemsSummary
+            : null,
+        nextItemsSummary:
+          typeof data.nextItemsSummary === "string"
+            ? data.nextItemsSummary
+            : null,
+        previousSaleDate:
+          typeof data.previousSaleDate === "string"
+            ? data.previousSaleDate
+            : null,
+        nextSaleDate:
+          typeof data.nextSaleDate === "string" ? data.nextSaleDate : null,
+        performedBy: String(data.performedBy ?? ""),
+        performedByName:
+          typeof data.performedByName === "string"
+            ? data.performedByName
+            : null,
+        performedByRole:
+          typeof data.performedByRole === "string"
+            ? data.performedByRole
+            : null,
+        createdAt: toDate(data.createdAt),
+      };
+    },
+  };
 
 export const paymentAccountConverter: FirestoreDataConverter<PaymentAccount> = {
   toFirestore(account: PaymentAccount): DocumentData {

@@ -53,7 +53,7 @@ export default function AdminSalesLayout({
         <div className="mb-3 md:mb-4">
           <h2 className="text-sm font-semibold">Sales</h2>
           <p className="hidden text-xs text-muted-foreground md:block">
-            Walk-ins, reservations, deliveries, and vouchers
+            Walk-ins, reservations, deliveries, vouchers, and sale edits
           </p>
         </div>
         <SalesNav className="flex-row overflow-x-auto md:flex-col md:overflow-visible" />
