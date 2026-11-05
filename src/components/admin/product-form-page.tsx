@@ -644,20 +644,21 @@ export function ProductFormPage({ productId }: ProductFormPageProps) {
           priceScope={priceScope}
           onPriceScopeChange={setPriceScope}
           branchPrices={branchPrices}
-          onBranchPriceChange={(variantId, patch) => {
-            if (priceScope === DEFAULT_PRICE_SCOPE) return;
+          onBranchPriceChange={(variantId, patch, branchIds) => {
+            if (branchIds.length === 0) return;
             setBranchPrices((prev) => {
-              const current = prev[priceScope]?.[variantId] ?? {
-                cashPrice: null,
-                retailPrice: null,
-              };
-              return {
-                ...prev,
-                [priceScope]: {
-                  ...(prev[priceScope] ?? {}),
+              const next: BranchPriceOverrides = { ...prev };
+              for (const branchId of branchIds) {
+                const current = next[branchId]?.[variantId] ?? {
+                  cashPrice: null,
+                  retailPrice: null,
+                };
+                next[branchId] = {
+                  ...(next[branchId] ?? {}),
                   [variantId]: { ...current, ...patch },
-                },
-              };
+                };
+              }
+              return next;
             });
           }}
         />

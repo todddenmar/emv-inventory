@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Layers } from "lucide-react";
+import { ChevronsUpDown, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -60,7 +65,8 @@ interface ProductVariantsEditorProps {
   branchPrices?: BranchPriceOverrides;
   onBranchPriceChange?: (
     variantId: string,
-    patch: { cashPrice?: number | null; retailPrice?: number | null }
+    patch: { cashPrice?: number | null; retailPrice?: number | null },
+    branchIds: string[]
   ) => void;
 }
 
@@ -76,9 +82,15 @@ export function ProductVariantsEditor({
   branchPrices = {},
   onBranchPriceChange,
 }: ProductVariantsEditorProps) {
-  const isDefaultScope = priceScope === DEFAULT_PRICE_SCOPE;
-  const catalogOnly = !isDefaultScope;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>(() =>
+    priceScope !== DEFAULT_PRICE_SCOPE ? [priceScope] : []
+  );
+
+  const isDefaultScope = selectedBranchIds.length === 0;
+  const catalogOnly = !isDefaultScope;
+  const viewBranchId = selectedBranchIds[0] ?? null;
+  const multiBranch = selectedBranchIds.length > 1;
 
   const variantIds = useMemo(
     () => variants.map((variant) => variant.id),
@@ -90,10 +102,24 @@ export function ProductVariantsEditor({
     return selectedIds.filter((id) => allowed.has(id));
   }, [selectedIds, variantIds]);
 
+  const selectedBranches = useMemo(
+    () =>
+      selectedBranchIds
+        .map((id) => branches.find((branch) => branch.id === id))
+        .filter((branch): branch is Branch => branch != null),
+    [selectedBranchIds, branches]
+  );
+
   const selectedCount = activeSelectedIds.length;
   const allSelected =
     variants.length > 0 && selectedCount === variants.length;
   const someSelected = selectedCount > 0 && !allSelected;
+
+  const setBranchSelection = (next: string[]) => {
+    setSelectedBranchIds(next);
+    setSelectedIds([]);
+    onPriceScopeChange?.(next[0] ?? DEFAULT_PRICE_SCOPE);
+  };
 
   const updateVariant = (id: string, patch: Partial<ProductVariant>) => {
     onChange(
@@ -104,7 +130,15 @@ export function ProductVariantsEditor({
   };
 
   const overrideFor = (variantId: string) =>
-    isDefaultScope ? undefined : branchPrices[priceScope]?.[variantId];
+    viewBranchId ? branchPrices[viewBranchId]?.[variantId] : undefined;
+
+  const applyBranchPatch = (
+    variantId: string,
+    patch: { cashPrice?: number | null; retailPrice?: number | null }
+  ) => {
+    if (selectedBranchIds.length === 0) return;
+    onBranchPriceChange?.(variantId, patch, selectedBranchIds);
+  };
 
   const applyPricesToIds = (
     ids: string[],
@@ -143,7 +177,7 @@ export function ProductVariantsEditor({
       patch.retailPrice = normalizeRetailPrice(prices.retail);
     }
     for (const id of ids) {
-      onBranchPriceChange?.(id, patch);
+      applyBranchPatch(id, patch);
     }
   };
 
@@ -159,8 +193,11 @@ export function ProductVariantsEditor({
 
   const scopeLabel = isDefaultScope
     ? null
-    : (branches.find((branch) => branch.id === priceScope)?.name ??
-      "this branch");
+    : selectedBranches.length === 1
+      ? selectedBranches[0].name
+      : `${selectedBranches.length} branches`;
+
+  const showBulkPrices = variants.length > 1 || selectedBranchIds.length > 0;
 
   return (
     <div className="space-y-3">
@@ -169,12 +206,14 @@ export function ProductVariantsEditor({
           <Label>Variants</Label>
           <p className="text-xs text-muted-foreground">
             {isDefaultScope
-              ? "Default cash and retail apply to every branch unless you pick a branch and override them."
-              : "Empty cash or retail uses the default price. Wholesale stays on the catalog."}
+              ? "Default cash and retail apply to every branch unless you pick branches and override them."
+              : multiBranch
+                ? `Showing ${selectedBranches[0]?.name ?? "branch"} values. Edits and bulk set apply to all ${selectedBranchIds.length} selected branches.`
+                : "Empty cash or retail uses the default price. Wholesale stays on the catalog."}
           </p>
         </div>
         <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
-        {variants.length > 1 ? (
+        {showBulkPrices ? (
           <BulkSetPrices
             variantCount={
               selectedCount > 0 ? selectedCount : variants.length
@@ -182,6 +221,7 @@ export function ProductVariantsEditor({
             mode={selectedCount > 0 ? "selected" : "all"}
             showWholesale={isDefaultScope}
             scopeLabel={scopeLabel}
+            branchNames={selectedBranches.map((branch) => branch.name)}
             disabled={disabled}
             onApply={(prices) =>
               applyPricesToIds(
@@ -194,43 +234,12 @@ export function ProductVariantsEditor({
           />
         ) : null}
         {onPriceScopeChange ? (
-          <div className="w-full min-w-0 sm:w-64">
-            <Label htmlFor="variant-price-scope" className="text-xs">
-              Prices for
-            </Label>
-            <Select
-              value={priceScope}
-              onValueChange={(value) => {
-                setSelectedIds([]);
-                onPriceScopeChange(value || DEFAULT_PRICE_SCOPE);
-              }}
-              disabled={disabled}
-            >
-              <SelectTrigger id="variant-price-scope" className="mt-1.5 h-9">
-                <SelectValue>
-                  {(value) => {
-                    if (!value || value === DEFAULT_PRICE_SCOPE) {
-                      return "Default (all branches)";
-                    }
-                    return (
-                      branches.find((branch) => branch.id === value)?.name ??
-                      "Branch"
-                    );
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={DEFAULT_PRICE_SCOPE}>
-                  Default (all branches)
-                </SelectItem>
-                {branches.map((branch) => (
-                  <SelectItem key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <BranchScopePicker
+            branches={branches}
+            selectedBranchIds={selectedBranchIds}
+            disabled={disabled}
+            onChange={setBranchSelection}
+          />
         ) : null}
         </div>
       </div>
@@ -311,13 +320,13 @@ export function ProductVariantsEditor({
                   />
                 ) : (
                   <VariantMoneyField
-                    variantId={`${priceScope}-${variant.id}-cash`}
+                    variantId={`${viewBranchId}-${variant.id}-cash`}
                     amount={override?.cashPrice ?? null}
                     optional
-                    disabled={disabled}
+                    disabled={disabled || multiBranch}
                     placeholder={`Default ${formatCurrency(variant.price)}`}
                     onCommit={(value) =>
-                      onBranchPriceChange?.(variant.id, { cashPrice: value })
+                      applyBranchPatch(variant.id, { cashPrice: value })
                     }
                   />
                 )}
@@ -334,17 +343,17 @@ export function ProductVariantsEditor({
                   />
                 ) : (
                   <VariantMoneyField
-                    variantId={`${priceScope}-${variant.id}-retail`}
+                    variantId={`${viewBranchId}-${variant.id}-retail`}
                     amount={override?.retailPrice ?? null}
                     optional
-                    disabled={disabled}
+                    disabled={disabled || multiBranch}
                     placeholder={
                       variant.retailPrice != null
                         ? `Default ${formatCurrency(variant.retailPrice)}`
                         : "Default (none)"
                     }
                     onCommit={(value) =>
-                      onBranchPriceChange?.(variant.id, {
+                      applyBranchPatch(variant.id, {
                         retailPrice: normalizeRetailPrice(value),
                       })
                     }
@@ -442,13 +451,13 @@ export function ProductVariantsEditor({
                     />
                   ) : (
                     <VariantMoneyField
-                      variantId={`${priceScope}-${variant.id}-cash`}
+                      variantId={`${viewBranchId}-${variant.id}-cash`}
                       amount={override?.cashPrice ?? null}
                       optional
-                      disabled={disabled}
+                      disabled={disabled || multiBranch}
                       placeholder={`Default ${formatCurrency(variant.price)}`}
                       onCommit={(value) =>
-                        onBranchPriceChange?.(variant.id, { cashPrice: value })
+                        applyBranchPatch(variant.id, { cashPrice: value })
                       }
                     />
                   )}
@@ -464,17 +473,17 @@ export function ProductVariantsEditor({
                     />
                   ) : (
                     <VariantMoneyField
-                      variantId={`${priceScope}-${variant.id}-retail`}
+                      variantId={`${viewBranchId}-${variant.id}-retail`}
                       amount={override?.retailPrice ?? null}
                       optional
-                      disabled={disabled}
+                      disabled={disabled || multiBranch}
                       placeholder={
                         variant.retailPrice != null
                           ? `Default ${formatCurrency(variant.retailPrice)}`
                           : "Default (none)"
                       }
                       onCommit={(value) =>
-                        onBranchPriceChange?.(variant.id, {
+                        applyBranchPatch(variant.id, {
                           retailPrice: normalizeRetailPrice(value),
                         })
                       }
@@ -510,11 +519,150 @@ export function ProductVariantsEditor({
   );
 }
 
+function BranchScopePicker({
+  branches,
+  selectedBranchIds,
+  disabled,
+  onChange,
+}: {
+  branches: Branch[];
+  selectedBranchIds: string[];
+  disabled?: boolean;
+  onChange: (branchIds: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const allSelected =
+    branches.length > 0 && selectedBranchIds.length === branches.length;
+  const someSelected =
+    selectedBranchIds.length > 0 && !allSelected;
+
+  const label =
+    selectedBranchIds.length === 0
+      ? "Default (all branches)"
+      : selectedBranchIds.length === 1
+        ? (branches.find((branch) => branch.id === selectedBranchIds[0])
+            ?.name ?? "1 branch")
+        : `${selectedBranchIds.length} branches`;
+
+  const toggleBranch = (branchId: string) => {
+    onChange(
+      selectedBranchIds.includes(branchId)
+        ? selectedBranchIds.filter((id) => id !== branchId)
+        : [...selectedBranchIds, branchId]
+    );
+  };
+
+  return (
+    <div className="w-full min-w-0 sm:w-64">
+      <Label className="text-xs">Prices for</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              id="variant-price-scope"
+              className="mt-1.5 h-9 w-full justify-between font-normal"
+              disabled={disabled}
+            />
+          }
+        >
+          <span className="truncate">{label}</span>
+          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 gap-2 p-2">
+          <button
+            type="button"
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted",
+              selectedBranchIds.length === 0 && "bg-muted"
+            )}
+            onClick={() => onChange([])}
+          >
+            <Checkbox
+              checked={selectedBranchIds.length === 0}
+              tabIndex={-1}
+              className="pointer-events-none"
+            />
+            <span>Default (all branches)</span>
+          </button>
+          <div className="border-t pt-2">
+            <div className="mb-1 flex items-center justify-between px-2">
+              <p className="text-xs font-medium text-muted-foreground">
+                Branches
+              </p>
+              {branches.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() =>
+                    onChange(
+                      allSelected ? [] : branches.map((branch) => branch.id)
+                    )
+                  }
+                >
+                  {allSelected ? "Clear" : "Select all"}
+                </Button>
+              ) : null}
+            </div>
+            {branches.length === 0 ? (
+              <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                No branches available.
+              </p>
+            ) : (
+              <div className="max-h-56 space-y-0.5 overflow-y-auto">
+                {branches.map((branch) => {
+                  const checked = selectedBranchIds.includes(branch.id);
+                  return (
+                    <button
+                      key={branch.id}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted",
+                        checked && "bg-muted/70"
+                      )}
+                      onClick={() => toggleBranch(branch.id)}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        tabIndex={-1}
+                        className="pointer-events-none"
+                        aria-hidden
+                      />
+                      <span className="min-w-0 truncate">
+                        <span className="font-medium">{branch.name}</span>
+                        <span className="text-muted-foreground">
+                          {" "}
+                          ({branch.code})
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {someSelected || allSelected ? (
+              <p className="mt-2 px-2 text-xs text-muted-foreground">
+                {selectedBranchIds.length} branch
+                {selectedBranchIds.length === 1 ? "" : "es"} selected for
+                overrides.
+              </p>
+            ) : null}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 function BulkSetPrices({
   variantCount,
   mode,
   showWholesale,
   scopeLabel,
+  branchNames,
   disabled,
   onApply,
 }: {
@@ -522,6 +670,7 @@ function BulkSetPrices({
   mode: "all" | "selected";
   showWholesale: boolean;
   scopeLabel: string | null;
+  branchNames: string[];
   disabled?: boolean;
   onApply: (prices: {
     cash: number | null;
@@ -530,6 +679,7 @@ function BulkSetPrices({
   }) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<"edit" | "confirm">("edit");
   const [cash, setCash] = useState("");
   const [retail, setRetail] = useState("");
   const [wholesale, setWholesale] = useState("");
@@ -542,11 +692,13 @@ function BulkSetPrices({
   const wholesaleValue = showWholesale ? parse(wholesale) : null;
   const hasValue =
     cashValue != null || retailValue != null || wholesaleValue != null;
+  const needsBranchConfirm = branchNames.length > 0;
 
   const reset = () => {
     setCash("");
     setRetail("");
     setWholesale("");
+    setStep("edit");
   };
 
   const apply = () => {
@@ -587,7 +739,9 @@ function BulkSetPrices({
   const buttonLabel =
     mode === "selected"
       ? `Set selected prices (${variantCount})`
-      : "Set all prices";
+      : branchNames.length > 1
+        ? `Set prices (${branchNames.length} branches)`
+        : "Set all prices";
   const title =
     mode === "selected"
       ? `Set prices for ${variantCount} selected variant${variantCount === 1 ? "" : "s"}`
@@ -599,6 +753,14 @@ function BulkSetPrices({
     : mode === "selected"
       ? `Applies to the ${variantCount} selected variant${variantCount === 1 ? "" : "s"}. Blank fields are left unchanged.`
       : `Applies to all ${variantCount} variants. Blank fields are left unchanged.`;
+
+  const priceSummary = [
+    cashValue != null ? `Cash ${formatCurrency(cashValue)}` : null,
+    retailValue != null ? `Retail ${formatCurrency(retailValue)}` : null,
+    wholesaleValue != null
+      ? `Wholesale ${formatCurrency(wholesaleValue)}`
+      : null,
+  ].filter(Boolean);
 
   return (
     <>
@@ -626,36 +788,92 @@ function BulkSetPrices({
             onSubmit={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              if (!hasValue) return;
+              if (needsBranchConfirm && step === "edit") {
+                setStep("confirm");
+                return;
+              }
               apply();
             }}
           >
             <DialogHeader>
-              <DialogTitle>{title}</DialogTitle>
-              <DialogDescription>{description}</DialogDescription>
+              <DialogTitle>
+                {step === "confirm" ? "Confirm branch prices" : title}
+              </DialogTitle>
+              <DialogDescription>
+                {step === "confirm"
+                  ? `Apply these prices to ${variantCount} variant${variantCount === 1 ? "" : "s"} across ${branchNames.length} branch${branchNames.length === 1 ? "" : "es"}.`
+                  : description}
+              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3">
-              {moneyInput("bulk-set-cash", "Cash", cash, setCash)}
-              {moneyInput("bulk-set-retail", "Retail", retail, setRetail)}
-              {showWholesale
-                ? moneyInput(
-                    "bulk-set-wholesale",
-                    "Wholesale",
-                    wholesale,
-                    setWholesale
-                  )
-                : null}
-            </div>
+            {step === "edit" ? (
+              <div className="space-y-3">
+                {moneyInput("bulk-set-cash", "Cash", cash, setCash)}
+                {moneyInput("bulk-set-retail", "Retail", retail, setRetail)}
+                {showWholesale
+                  ? moneyInput(
+                      "bulk-set-wholesale",
+                      "Wholesale",
+                      wholesale,
+                      setWholesale
+                    )
+                  : null}
+              </div>
+            ) : (
+              <div className="space-y-3 rounded-md border bg-muted/30 p-3 text-sm">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Prices
+                  </p>
+                  <p className="mt-1 font-medium">
+                    {priceSummary.join(" · ") || "No changes"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Variants
+                  </p>
+                  <p className="mt-1">
+                    {variantCount} variant{variantCount === 1 ? "" : "s"} (
+                    {mode === "selected" ? "selected" : "all"})
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Branches
+                  </p>
+                  <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto">
+                    {branchNames.map((name) => (
+                      <li key={name}>{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </Button>
+              {step === "confirm" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep("edit")}
+                >
+                  Back
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                >
+                  Cancel
+                </Button>
+              )}
               <Button type="submit" disabled={!hasValue}>
-                Apply to {variantCount} variant
-                {variantCount === 1 ? "" : "s"}
+                {step === "confirm"
+                  ? `Confirm · ${branchNames.length} branch${branchNames.length === 1 ? "" : "es"}`
+                  : needsBranchConfirm
+                    ? "Review branches"
+                    : `Apply to ${variantCount} variant${variantCount === 1 ? "" : "s"}`}
               </Button>
             </DialogFooter>
           </form>
