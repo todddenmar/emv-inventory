@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Loader2 } from "lucide-react";
+import { Archive, ArchiveRestore, Loader2, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,18 +39,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
+  archiveBranch,
   assignBranchManager,
   createBranch,
   getBranches,
+  restoreBranch,
   updateBranch,
 } from "@/lib/firestore/branches";
 import { assignUserBranch, getManagers } from "@/lib/firestore/users";
 import { parseCoordinate } from "@/lib/location";
 import { paginateItems } from "@/lib/pagination";
 import type { AppUser, Branch } from "@/types";
+
+type BranchTab = "active" | "archived";
 
 export default function AdminBranchesPage() {
   const { isElevatedAdmin } = useBranchAccess();
@@ -60,7 +65,11 @@ export default function AdminBranchesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Branch | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [tab, setTab] = useState<BranchTab>("active");
   const [page, setPage] = useState(1);
+  const [archiveTarget, setArchiveTarget] = useState<Branch | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<Branch | null>(null);
+  const [statusBusy, setStatusBusy] = useState(false);
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -86,16 +95,26 @@ export default function AdminBranchesPage() {
     loadData();
   }, []);
 
+  const activeBranches = useMemo(
+    () => branches.filter((branch) => branch.isActive),
+    [branches]
+  );
+  const archivedBranches = useMemo(
+    () => branches.filter((branch) => !branch.isActive),
+    [branches]
+  );
+  const visibleBranches =
+    tab === "active" ? activeBranches : archivedBranches;
+
   const {
     page: safePage,
     totalPages,
     pagedItems,
     total,
-  } = useMemo(() => paginateItems(branches, page), [branches, page]);
-
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage);
-  }, [page, safePage]);
+  } = useMemo(
+    () => paginateItems(visibleBranches, page),
+    [visibleBranches, page]
+  );
 
   if (!isElevatedAdmin) {
     return (
@@ -179,7 +198,7 @@ export default function AdminBranchesPage() {
         phone: form.phone.trim() || null,
         managerId: form.managerId || null,
         managerName: manager?.displayName || manager?.email || null,
-        isActive: true,
+        isActive: editing?.isActive ?? true,
         supportsWholesale: form.supportsWholesale,
       };
 
@@ -210,13 +229,144 @@ export default function AdminBranchesPage() {
     }
   };
 
+  const handleArchive = async () => {
+    if (!archiveTarget) return;
+    setStatusBusy(true);
+    try {
+      await archiveBranch(archiveTarget.id);
+      toast.success(`Archived ${archiveTarget.name}`);
+      setArchiveTarget(null);
+      loadData();
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to archive branch"
+      );
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!restoreTarget) return;
+    setStatusBusy(true);
+    try {
+      await restoreBranch(restoreTarget.id);
+      toast.success(`Restored ${restoreTarget.name}`);
+      setRestoreTarget(null);
+      loadData();
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to restore branch"
+      );
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const renderBranchCards = (rows: Branch[]) => {
+    if (rows.length === 0) {
+      return (
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground">
+              {tab === "active"
+                ? "No active branches yet. Create your first branch to start tracking inventory."
+                : "No archived branches."}
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((branch) => (
+            <Card key={branch.id}>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">{branch.name}</CardTitle>
+                    <CardDescription>{branch.code}</CardDescription>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <Badge
+                      variant={branch.isActive ? "default" : "secondary"}
+                      className="text-xs"
+                    >
+                      {branch.isActive ? "Active" : "Archived"}
+                    </Badge>
+                    {branch.supportsWholesale ? (
+                      <Badge variant="outline" className="text-xs">
+                        Wholesale
+                      </Badge>
+                    ) : null}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <p className="text-muted-foreground">{branch.address}</p>
+                {branch.phone ? <p>{branch.phone}</p> : null}
+                <p>
+                  <span className="text-muted-foreground">Manager: </span>
+                  {branch.managerName || "Unassigned"}
+                </p>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => openEdit(branch)}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit branch
+                  </Button>
+                  {branch.isActive ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setArchiveTarget(branch)}
+                    >
+                      <Archive className="mr-2 h-4 w-4" />
+                      Archive
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setRestoreTarget(branch)}
+                    >
+                      <ArchiveRestore className="mr-2 h-4 w-4" />
+                      Restore
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <TablePagination
+          page={safePage}
+          totalPages={totalPages}
+          total={total}
+          onPageChange={setPage}
+        />
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Branches</h1>
           <p className="text-muted-foreground">
-            Manage store locations and assign managers
+            Manage store locations and assign managers. Archived branches stay
+            out of selection fields until restored.
           </p>
         </div>
         <Button onClick={openCreate} className="w-full sm:w-auto">
@@ -353,70 +503,97 @@ export default function AdminBranchesPage() {
         </DialogContent>
       </Dialog>
 
+      <AlertDialog
+        open={archiveTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !statusBusy) setArchiveTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this branch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {archiveTarget
+                ? `${archiveTarget.name} will be hidden from branch selection fields. You can restore it later from the Archived tab.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={statusBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={statusBusy}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleArchive();
+              }}
+            >
+              {statusBusy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={restoreTarget != null}
+        onOpenChange={(open) => {
+          if (!open && !statusBusy) setRestoreTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore this branch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {restoreTarget
+                ? `${restoreTarget.name} will show again in branch selection fields.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={statusBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={statusBusy}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleRestore();
+              }}
+            >
+              {statusBusy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Restore
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {loading ? (
         <p className="text-muted-foreground">Loading branches...</p>
-      ) : branches.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground">
-              No branches yet. Create your first branch to start tracking
-              inventory.
-            </p>
-          </CardContent>
-        </Card>
       ) : (
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {pagedItems.map((branch) => (
-              <Card key={branch.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <CardTitle className="text-base">{branch.name}</CardTitle>
-                      <CardDescription>{branch.code}</CardDescription>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      <Badge
-                        variant={branch.isActive ? "default" : "secondary"}
-                        className="text-xs"
-                      >
-                        {branch.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                      {branch.supportsWholesale && (
-                        <Badge variant="outline" className="text-xs">
-                          Wholesale
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <p className="text-muted-foreground">{branch.address}</p>
-                  {branch.phone && <p>{branch.phone}</p>}
-                  <p>
-                    <span className="text-muted-foreground">Manager: </span>
-                    {branch.managerName || "Unassigned"}
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => openEdit(branch)}
-                  >
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit branch
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <TablePagination
-            page={safePage}
-            totalPages={totalPages}
-            total={total}
-            onPageChange={setPage}
-          />
-        </div>
+        <Tabs
+          value={tab}
+          onValueChange={(value) => {
+            setTab(value === "archived" ? "archived" : "active");
+            setPage(1);
+          }}
+        >
+          <TabsList>
+            <TabsTrigger value="active" className="px-3">
+              Active ({activeBranches.length})
+            </TabsTrigger>
+            <TabsTrigger value="archived" className="px-3">
+              Archived ({archivedBranches.length})
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="active" className="mt-4">
+            {renderBranchCards(pagedItems)}
+          </TabsContent>
+          <TabsContent value="archived" className="mt-4">
+            {renderBranchCards(pagedItems)}
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

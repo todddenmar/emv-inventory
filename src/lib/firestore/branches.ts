@@ -71,3 +71,27 @@ export async function assignBranchManager(
 ): Promise<void> {
   await updateBranch(branchId, { managerId, managerName });
 }
+
+/** Soft-hide a branch from pickers and operational lists (`isActive: false`). */
+export async function archiveBranch(id: string): Promise<void> {
+  const existing = await getBranch(id);
+  if (!existing) {
+    throw new Error("Branch not found");
+  }
+  if (!existing.isActive) {
+    return;
+  }
+  await updateBranch(id, { isActive: false });
+}
+
+/** Restore an archived branch so it appears in branch selection fields again. */
+export async function restoreBranch(id: string): Promise<void> {
+  const existing = await getBranch(id);
+  if (!existing) {
+    throw new Error("Branch not found");
+  }
+  if (existing.isActive) {
+    return;
+  }
+  await updateBranch(id, { isActive: true });
+}
