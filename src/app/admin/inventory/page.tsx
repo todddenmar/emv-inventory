@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { History, AlertTriangle, MoreHorizontal, X } from "lucide-react";
+import {
+  History,
+  AlertTriangle,
+  Loader2,
+  MoreHorizontal,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -231,7 +238,8 @@ export default function AdminInventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<BranchInventory[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
@@ -247,42 +255,87 @@ export default function AdminInventoryPage() {
     ? selectedBranchId
     : assignedBranchId ?? "";
 
-  const loadBranches = async () => {
-    const all = await getBranches(true);
-    setBranches(all);
-    if (!selectedBranchId && all.length > 0) {
-      setSelectedBranchId(
-        canViewAllBranches
-          ? all[0].id
-          : assignedBranchId ?? all[0].id
-      );
+  const loadInventory = async (branchId: string) => {
+    if (!branchId) return;
+    setInventoryLoading(true);
+    try {
+      const [p, inv, cats, groups] = await Promise.all([
+        getProducts(),
+        canViewAllBranches && branchId === "all"
+          ? getAllBranchInventory()
+          : getBranchInventory(branchId),
+        getCategories(),
+        getCategoryGroups(),
+      ]);
+      setProducts(p);
+      setInventory(inv);
+      setCategories(cats.filter((c) => !c.isArchived));
+      setCategoryGroups(groups);
+    } finally {
+      setInventoryLoading(false);
     }
   };
 
-  const loadInventory = async (branchId: string) => {
-    if (!branchId) return;
-    const [p, inv, cats, groups] = await Promise.all([
-      getProducts(),
-      canViewAllBranches && branchId === "all"
-        ? getAllBranchInventory()
-        : getBranchInventory(branchId),
-      getCategories(),
-      getCategoryGroups(),
-    ]);
-    setProducts(p);
-    setInventory(inv);
-    setCategories(cats.filter((c) => !c.isArchived));
-    setCategoryGroups(groups);
-  };
-
   useEffect(() => {
-    loadBranches().catch(console.error).finally(() => setLoading(false));
-  }, []);
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const all = await getBranches(true);
+        if (cancelled) return;
+        setBranches(all);
+        setSelectedBranchId((prev) => {
+          if (prev) return prev;
+          if (all.length === 0) return "";
+          return canViewAllBranches
+            ? all[0].id
+            : assignedBranchId ?? all[0].id;
+        });
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (!cancelled) setBranchesLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [canViewAllBranches, assignedBranchId]);
 
   useEffect(() => {
     if (!activeBranchId) return;
-    loadInventory(activeBranchId).catch(console.error);
-  }, [activeBranchId]);
+    let cancelled = false;
+
+    const load = async () => {
+      setInventoryLoading(true);
+      try {
+        const [p, inv, cats, groups] = await Promise.all([
+          getProducts(),
+          canViewAllBranches && activeBranchId === "all"
+            ? getAllBranchInventory()
+            : getBranchInventory(activeBranchId),
+          getCategories(),
+          getCategoryGroups(),
+        ]);
+        if (cancelled) return;
+        setProducts(p);
+        setInventory(inv);
+        setCategories(cats.filter((c) => !c.isArchived));
+        setCategoryGroups(groups);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (!cancelled) setInventoryLoading(false);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranchId, canViewAllBranches]);
 
   const branchInventory = useMemo(() => {
     if (activeBranchId === "all") return inventory;
@@ -298,7 +351,7 @@ export default function AdminInventoryPage() {
     );
   }, [products, branchInventory, activeBranchId, categories]);
 
-  const isLowStockRow = (row: (typeof variantsWithStock)[0]) =>
+  const isLowStockRow = (row: VariantWithStock) =>
     row.stock > 0 && row.stock <= row.lowStockThreshold;
 
   const filteredVariants = useMemo(() => {
@@ -306,20 +359,23 @@ export default function AdminInventoryPage() {
       products,
       selectedCategoryIds
     );
+    const q = search.toLowerCase();
 
     return variantsWithStock.filter((row) => {
       const product = products.find((p) => p.id === row.productId);
       const matchesSearch =
-        row.productName.toLowerCase().includes(search.toLowerCase()) ||
-        row.sku.toLowerCase().includes(search.toLowerCase()) ||
+        row.productName.toLowerCase().includes(q) ||
+        row.sku.toLowerCase().includes(q) ||
         formatVariantLabel(row, product?.options ?? [])
           .toLowerCase()
-          .includes(search.toLowerCase());
+          .includes(q);
       const matchesCategory =
         !allowedProductIds || allowedProductIds.has(row.productId);
+      const isLow =
+        row.stock > 0 && row.stock <= row.lowStockThreshold;
       const matchesStock =
         stockFilter === "all" ||
-        (stockFilter === "low" && isLowStockRow(row)) ||
+        (stockFilter === "low" && isLow) ||
         (stockFilter === "in_stock" && row.stock > 0) ||
         (stockFilter === "out_of_stock" && row.stock <= 0);
 
@@ -348,15 +404,6 @@ export default function AdminInventoryPage() {
     });
   }, [filteredVariants, products, sort]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, selectedCategoryIds, stockFilter, sort]);
-
-  useEffect(() => {
-    setPage(1);
-    setSelectedIds([]);
-  }, [activeBranchId]);
-
   const {
     page: safePage,
     totalPages,
@@ -366,10 +413,6 @@ export default function AdminInventoryPage() {
     () => paginateItems(sortedVariants, page, INVENTORY_PAGE_SIZE),
     [sortedVariants, page]
   );
-
-  useEffect(() => {
-    if (page !== safePage) setPage(safePage);
-  }, [page, safePage]);
 
   const pageIds = pagedItems.map((row) => row.id);
   const allPageSelected =
@@ -528,8 +571,34 @@ export default function AdminInventoryPage() {
     }
   };
 
-  if (loading) {
-    return <p className="text-muted-foreground">Loading inventory...</p>;
+  if (branchesLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading branches…
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-4 w-16" />
+              </CardHeader>
+              <CardContent className="flex gap-4">
+                <Skeleton className="h-10 w-16" />
+                <Skeleton className="h-10 w-16" />
+                <Skeleton className="h-10 w-16" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (branches.length === 0) {
@@ -557,62 +626,98 @@ export default function AdminInventoryPage() {
               : `Stock for ${activeBranch?.name ?? "your branch"}`}
           </p>
         </div>
-        {canViewAllBranches && (
-          <Select
-            value={selectedBranchId}
-            onValueChange={(v) => setSelectedBranchId(v ?? "")}
-          >
-            <SelectTrigger className="w-full lg:w-64">
-              <SelectValue placeholder="Select branch">
-                {(value) => branchSelectLabel(value as string | null)}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All branches (overview)</SelectItem>
-              {branches.map((branch) => (
-                <SelectItem key={branch.id} value={branch.id}>
-                  {branch.name} ({branch.code})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
+          {inventoryLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading stock…
+            </div>
+          ) : null}
+          {canViewAllBranches ? (
+            <Select
+              value={selectedBranchId}
+              onValueChange={(v) => {
+                setSelectedBranchId(v ?? "");
+                setPage(1);
+                setSelectedIds([]);
+              }}
+              disabled={inventoryLoading}
+            >
+              <SelectTrigger className="w-full lg:w-64">
+                <SelectValue placeholder="Select branch">
+                  {(value) => branchSelectLabel(value as string | null)}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All branches (overview)</SelectItem>
+                {branches.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name} ({branch.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+        </div>
       </div>
 
       {canViewAllBranches && selectedBranchId === "all" && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {branchSummaries.map(({ branch, stocked, low, totalSkus }) => (
-            <Card
-              key={branch.id}
-              className="cursor-pointer transition-colors hover:bg-muted/30"
-              onClick={() => setSelectedBranchId(branch.id)}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">{branch.name}</CardTitle>
-                <CardDescription>{branch.code}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex gap-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground">SKUs tracked</p>
-                  <p className="text-xl font-semibold">{totalSkus}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">In stock</p>
-                  <p className="text-xl font-semibold">{stocked}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Low stock</p>
-                  <p className="text-xl font-semibold text-amber-600">{low}</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {inventoryLoading
+            ? Array.from({ length: Math.max(branches.length, 3) }, (_, i) => (
+                <Card key={i}>
+                  <CardHeader className="pb-2">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-4 w-16" />
+                  </CardHeader>
+                  <CardContent className="flex gap-4">
+                    <Skeleton className="h-10 w-16" />
+                    <Skeleton className="h-10 w-16" />
+                    <Skeleton className="h-10 w-16" />
+                  </CardContent>
+                </Card>
+              ))
+            : branchSummaries.map(({ branch, stocked, low, totalSkus }) => (
+                <Card
+                  key={branch.id}
+                  className="cursor-pointer transition-colors hover:bg-muted/30"
+                  onClick={() => setSelectedBranchId(branch.id)}
+                >
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{branch.name}</CardTitle>
+                    <CardDescription>{branch.code}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">SKUs tracked</p>
+                      <p className="text-xl font-semibold">{totalSkus}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">In stock</p>
+                      <p className="text-xl font-semibold">{stocked}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Low stock</p>
+                      <p className="text-xl font-semibold text-amber-600">
+                        {low}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
         </div>
       )}
 
       {activeBranchId !== "all" && (
         <>
-          {lowStock.length > 0 && (
+          {inventoryLoading ? (
+            <Card className="border-dashed">
+              <CardContent className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Checking low stock…
+              </CardContent>
+            </Card>
+          ) : lowStock.length > 0 ? (
             <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
               <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-2 sm:items-center">
@@ -641,11 +746,16 @@ export default function AdminInventoryPage() {
                 ) : null}
               </CardContent>
             </Card>
-          )}
+          ) : null}
 
           <Card>
             <CardHeader>
-              <CardTitle>{activeBranch?.name} stock</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                {activeBranch?.name ? `${activeBranch.name} stock` : "Stock"}
+                {inventoryLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : null}
+              </CardTitle>
               <CardDescription>
                 {canEditStock
                   ? "Select items in the table, then change stock for the whole selection."
@@ -673,20 +783,29 @@ export default function AdminInventoryPage() {
                 <Input
                   placeholder="Search products, SKU, or variant..."
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
                   className="max-w-md"
+                  disabled={inventoryLoading}
                 />
                 <CategoryFilterPanel
                   categories={categories}
                   groups={categoryGroups}
                   selectedCategoryIds={selectedCategoryIds}
-                  onChange={setSelectedCategoryIds}
+                  onChange={(ids) => {
+                    setSelectedCategoryIds(ids);
+                    setPage(1);
+                  }}
                 />
                 <Select
                   value={stockFilter}
-                  onValueChange={(v) =>
-                    setStockFilter((v as StockFilter) ?? "all")
-                  }
+                  onValueChange={(v) => {
+                    setStockFilter((v as StockFilter) ?? "all");
+                    setPage(1);
+                  }}
+                  disabled={inventoryLoading}
                 >
                   <SelectTrigger className="w-full lg:w-48">
                     <SelectValue placeholder="All stock levels">
@@ -717,7 +836,62 @@ export default function AdminInventoryPage() {
                     canEditStock && selectedIds.length > 0 && "pb-24 lg:pb-0"
                   )}
                 >
-                  {filteredVariants.length === 0 ? (
+                  {inventoryLoading ? (
+                    <div className="overflow-x-auto rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            {canEditStock ? (
+                              <TableHead className="w-10">
+                                <Skeleton className="h-4 w-4" />
+                              </TableHead>
+                            ) : null}
+                            <TableHead>Product / variant</TableHead>
+                            <TableHead className="w-28">SKU</TableHead>
+                            <TableHead className="w-28">Cash</TableHead>
+                            <TableHead className="w-28">Retail</TableHead>
+                            <TableHead className="w-28">Stock</TableHead>
+                            <TableHead className="w-28">Low at</TableHead>
+                            <TableHead className="w-14 text-right">
+                              Actions
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {Array.from({ length: 8 }, (_, i) => (
+                            <TableRow key={i}>
+                              {canEditStock ? (
+                                <TableCell>
+                                  <Skeleton className="h-4 w-4" />
+                                </TableCell>
+                              ) : null}
+                              <TableCell>
+                                <Skeleton className="h-4 w-40" />
+                              </TableCell>
+                              <TableCell>
+                                <Skeleton className="h-4 w-16" />
+                              </TableCell>
+                              <TableCell>
+                                <Skeleton className="h-4 w-14" />
+                              </TableCell>
+                              <TableCell>
+                                <Skeleton className="h-4 w-14" />
+                              </TableCell>
+                              <TableCell>
+                                <Skeleton className="h-4 w-10" />
+                              </TableCell>
+                              <TableCell>
+                                <Skeleton className="h-4 w-10" />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Skeleton className="ml-auto h-8 w-8" />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : filteredVariants.length === 0 ? (
                     <p className="py-12 text-center text-muted-foreground">
                       {variantsWithStock.length === 0 ? (
                         isOwner || isInventoryViewer ? (

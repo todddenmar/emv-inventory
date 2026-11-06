@@ -14,7 +14,21 @@ import { branchInventoryConverter } from "@/lib/firestore/converters";
 import { defaultVariantId } from "@/lib/product-variants";
 import { normalizeRetailPrice } from "@/lib/product-pricing";
 import { roundMoney } from "@/lib/pos-payments";
+import {
+  cachedRead,
+  invalidateReadCache,
+  READ_CACHE_TTL,
+} from "@/lib/firestore/read-cache";
 import type { BranchInventory, InventoryLogReason, Product } from "@/types";
+
+function invalidateInventoryCaches(branchId?: string) {
+  invalidateReadCache("inventory:all");
+  if (branchId) {
+    invalidateReadCache(`inventory:branch:${branchId}`);
+  } else {
+    invalidateReadCache("inventory:branch:");
+  }
+}
 
 export function inventoryDocId(branchId: string, variantId: string): string {
   return `${branchId}_${variantId}`;
@@ -64,42 +78,50 @@ function resolveVariantId(
 export async function getBranchInventory(
   branchId: string
 ): Promise<BranchInventory[]> {
-  const q = query(
-    collection(getClientDb(), COLLECTIONS.branchInventory).withConverter(
-      branchInventoryConverter
-    ),
-    where("branchId", "==", branchId)
+  return cachedRead(
+    `inventory:branch:${branchId}`,
+    READ_CACHE_TTL.inventory,
+    async () => {
+      const q = query(
+        collection(getClientDb(), COLLECTIONS.branchInventory).withConverter(
+          branchInventoryConverter
+        ),
+        where("branchId", "==", branchId)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((d) => {
+        const data = d.data();
+        return {
+          ...data,
+          variantId: resolveVariantId(
+            d.data() as unknown as Record<string, unknown>,
+            d.id,
+            data.productId
+          ),
+        };
+      });
+    }
   );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => {
-    const data = d.data();
-    return {
-      ...data,
-      variantId: resolveVariantId(
-        d.data() as unknown as Record<string, unknown>,
-        d.id,
-        data.productId
-      ),
-    };
-  });
 }
 
 export async function getAllBranchInventory(): Promise<BranchInventory[]> {
-  const snapshot = await getDocs(
-    collection(getClientDb(), COLLECTIONS.branchInventory).withConverter(
-      branchInventoryConverter
-    )
-  );
-  return snapshot.docs.map((d) => {
-    const data = d.data();
-    return {
-      ...data,
-      variantId: resolveVariantId(
-        d.data() as unknown as Record<string, unknown>,
-        d.id,
-        data.productId
-      ),
-    };
+  return cachedRead("inventory:all", READ_CACHE_TTL.inventory, async () => {
+    const snapshot = await getDocs(
+      collection(getClientDb(), COLLECTIONS.branchInventory).withConverter(
+        branchInventoryConverter
+      )
+    );
+    return snapshot.docs.map((d) => {
+      const data = d.data();
+      return {
+        ...data,
+        variantId: resolveVariantId(
+          d.data() as unknown as Record<string, unknown>,
+          d.id,
+          data.productId
+        ),
+      };
+    });
   });
 }
 
@@ -195,6 +217,7 @@ async function applyStockDelta(
       createdAt: serverTimestamp(),
     });
   });
+  invalidateInventoryCaches(ctx.branchId);
 }
 
 export async function setBranchStockWithLog(
@@ -245,6 +268,7 @@ export async function setBranchStockWithLog(
         });
       }
     });
+    invalidateInventoryCaches(branchId);
     return;
   }
 
@@ -377,6 +401,7 @@ export async function setBranchVariantPrices(input: {
       updatedAt: serverTimestamp(),
     });
   });
+  invalidateInventoryCaches(input.branchId);
 }
 
 export async function setVariantSelling(
@@ -414,6 +439,7 @@ export async function setVariantSelling(
       updatedAt: serverTimestamp(),
     });
   });
+  invalidateInventoryCaches(branchId);
 }
 
 export interface VariantSellingTarget {

@@ -28,6 +28,11 @@ import {
   normalizeWholesalePrice,
 } from "@/lib/product-pricing";
 import { getDefaultVariant } from "@/lib/product-variants";
+import {
+  cachedRead,
+  invalidateReadCache,
+  READ_CACHE_TTL,
+} from "@/lib/firestore/read-cache";
 import { roundMoney } from "@/lib/pos-payments";
 import { setBranchVariantPrices } from "@/lib/firestore/inventory";
 import type { Category, Product, ProductVariant } from "@/types";
@@ -88,17 +93,27 @@ export async function getProducts(
   activeOnly = false,
   includeArchived = false
 ): Promise<Product[]> {
-  const ref = productsRef();
-  const snapshot = await getDocs(query(ref, orderBy("name")));
-  let products = snapshot.docs.map((d) => d.data());
+  return cachedRead(
+    `products:${activeOnly ? "1" : "0"}:${includeArchived ? "1" : "0"}`,
+    READ_CACHE_TTL.products,
+    async () => {
+      const ref = productsRef();
+      const snapshot = await getDocs(query(ref, orderBy("name")));
+      let products = snapshot.docs.map((d) => d.data());
 
-  if (!includeArchived) {
-    products = products.filter((p) => !p.isArchived);
-  }
-  if (activeOnly) {
-    products = products.filter((p) => isProductPublished(p));
-  }
-  return products;
+      if (!includeArchived) {
+        products = products.filter((p) => !p.isArchived);
+      }
+      if (activeOnly) {
+        products = products.filter((p) => isProductPublished(p));
+      }
+      return products;
+    }
+  );
+}
+
+function invalidateProductCaches() {
+  invalidateReadCache("products");
 }
 
 export async function getProductsByCategoryId(
@@ -245,6 +260,7 @@ export async function createProduct(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  invalidateProductCaches();
   return docRef.id;
 }
 
@@ -281,6 +297,7 @@ export async function updateProduct(
   }
 
   await updateDoc(doc(getClientDb(), COLLECTIONS.products, id), payload);
+  invalidateProductCaches();
 
   if (existing && actor && data.variants) {
     await logProductPriceChangesFromUpdate(
@@ -337,6 +354,7 @@ export async function archiveProduct(id: string): Promise<void> {
     archivedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  invalidateProductCaches();
 }
 
 export async function restoreProduct(id: string): Promise<void> {
@@ -345,6 +363,7 @@ export async function restoreProduct(id: string): Promise<void> {
     archivedAt: null,
     updatedAt: serverTimestamp(),
   });
+  invalidateProductCaches();
 }
 
 export async function setProductLocked(
@@ -451,4 +470,5 @@ export async function deleteProduct(id: string): Promise<void> {
 
   await stripProductFromCategoryFreebies(id);
   await deleteDoc(doc(getClientDb(), COLLECTIONS.products, id));
+  invalidateProductCaches();
 }

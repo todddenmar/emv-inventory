@@ -17,6 +17,10 @@ import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { categoryGroupConverter } from "@/lib/firestore/converters";
 import { ensureUniqueSlug, slugify } from "@/lib/slug";
+import {
+  cachedRead,
+  READ_CACHE_TTL,
+} from "@/lib/firestore/read-cache";
 import type { CategoryGroup } from "@/types";
 
 function categoryGroupsRef(): CollectionReference<CategoryGroup> {
@@ -53,11 +57,19 @@ export async function resolveCategoryGroupSlug(
 export async function getCategoryGroups(
   includeArchived = false
 ): Promise<CategoryGroup[]> {
-  const snapshot = await getDocs(query(categoryGroupsRef(), orderBy("name")));
-  const groups = snapshot.docs.map((d) => d.data());
-  return includeArchived
-    ? groups
-    : groups.filter((group) => !group.isArchived);
+  return cachedRead(
+    `categoryGroups:${includeArchived ? "1" : "0"}`,
+    READ_CACHE_TTL.categoryGroups,
+    async () => {
+      const snapshot = await getDocs(
+        query(categoryGroupsRef(), orderBy("name"))
+      );
+      const groups = snapshot.docs.map((d) => d.data());
+      return includeArchived
+        ? groups
+        : groups.filter((group) => !group.isArchived);
+    }
+  );
 }
 
 export async function getCategoryGroup(

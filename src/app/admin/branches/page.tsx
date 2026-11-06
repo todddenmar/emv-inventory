@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, Loader2, Pencil, Plus } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +35,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,6 +56,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TablePagination } from "@/components/admin/table-pagination";
+import { formatUserRole } from "@/components/layout/user-avatar";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import {
   archiveBranch,
@@ -50,7 +66,11 @@ import {
   restoreBranch,
   updateBranch,
 } from "@/lib/firestore/branches";
-import { assignUserBranch, getManagers } from "@/lib/firestore/users";
+import {
+  assignUserBranch,
+  getManagers,
+  getStaffUsers,
+} from "@/lib/firestore/users";
 import { parseCoordinate } from "@/lib/location";
 import { paginateItems } from "@/lib/pagination";
 import type { AppUser, Branch } from "@/types";
@@ -61,6 +81,7 @@ export default function AdminBranchesPage() {
   const { isElevatedAdmin } = useBranchAccess();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [managers, setManagers] = useState<AppUser[]>([]);
+  const [staffUsers, setStaffUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Branch | null>(null);
@@ -82,14 +103,41 @@ export default function AdminBranchesPage() {
   });
 
   const loadData = () => {
-    Promise.all([getBranches(), getManagers()])
-      .then(([b, m]) => {
+    Promise.all([getBranches(), getManagers(), getStaffUsers()])
+      .then(([b, m, staff]) => {
         setBranches(b);
         setManagers(m);
+        setStaffUsers(staff);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
+
+  const usersByBranchId = useMemo(() => {
+    const map = new Map<string, AppUser[]>();
+    for (const user of staffUsers) {
+      if (!user.branchId) continue;
+      const list = map.get(user.branchId) ?? [];
+      list.push(user);
+      map.set(user.branchId, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => {
+        const roleOrder = (role: string) => {
+          if (role === "admin" || role === "master-admin") return 0;
+          if (role === "staff") return 1;
+          if (role === "cashier") return 2;
+          return 3;
+        };
+        const byRole = roleOrder(a.role) - roleOrder(b.role);
+        if (byRole !== 0) return byRole;
+        const nameA = (a.displayName || a.email || a.uid).toLowerCase();
+        const nameB = (b.displayName || b.email || b.uid).toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    }
+    return map;
+  }, [staffUsers]);
 
   useEffect(() => {
     loadData();
@@ -283,71 +331,132 @@ export default function AdminBranchesPage() {
     return (
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {rows.map((branch) => (
-            <Card key={branch.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-base">{branch.name}</CardTitle>
-                    <CardDescription>{branch.code}</CardDescription>
+          {rows.map((branch) => {
+            const assigned = usersByBranchId.get(branch.id) ?? [];
+            return (
+              <Card key={branch.id} className="overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <CardTitle className="text-base leading-tight">
+                          {branch.name}
+                        </CardTitle>
+                        {!branch.isActive ? (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Archived
+                          </Badge>
+                        ) : null}
+                        {branch.supportsWholesale ? (
+                          <Badge variant="outline" className="text-[10px]">
+                            Wholesale
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <CardDescription className="font-mono text-xs tracking-wide">
+                        {branch.code}
+                      </CardDescription>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="shrink-0"
+                            aria-label={`${branch.name} actions`}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(branch)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {branch.isActive ? (
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setArchiveTarget(branch)}
+                          >
+                            <Archive className="mr-2 h-4 w-4" />
+                            Archive
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={() => setRestoreTarget(branch)}
+                          >
+                            <ArchiveRestore className="mr-2 h-4 w-4" />
+                            Restore
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-1">
-                    <Badge
-                      variant={branch.isActive ? "default" : "secondary"}
-                      className="text-xs"
-                    >
-                      {branch.isActive ? "Active" : "Archived"}
-                    </Badge>
-                    {branch.supportsWholesale ? (
-                      <Badge variant="outline" className="text-xs">
-                        Wholesale
-                      </Badge>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm">
+                  <div className="space-y-1">
+                    {branch.address ? (
+                      <p className="text-muted-foreground">{branch.address}</p>
+                    ) : (
+                      <p className="text-muted-foreground">No address set</p>
+                    )}
+                    {branch.phone ? (
+                      <p className="text-muted-foreground">{branch.phone}</p>
+                    ) : null}
+                    {branch.managerName ? (
+                      <p>
+                        <span className="text-muted-foreground">Manager: </span>
+                        {branch.managerName}
+                      </p>
                     ) : null}
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <p className="text-muted-foreground">{branch.address}</p>
-                {branch.phone ? <p>{branch.phone}</p> : null}
-                <p>
-                  <span className="text-muted-foreground">Manager: </span>
-                  {branch.managerName || "Unassigned"}
-                </p>
-                <div className="flex flex-col gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => openEdit(branch)}
-                  >
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit branch
-                  </Button>
-                  {branch.isActive ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => setArchiveTarget(branch)}
-                    >
-                      <Archive className="mr-2 h-4 w-4" />
-                      Archive
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => setRestoreTarget(branch)}
-                    >
-                      <ArchiveRestore className="mr-2 h-4 w-4" />
-                      Restore
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+
+                  <div className="space-y-2 border-t pt-3">
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Users className="h-3.5 w-3.5" />
+                      Assigned users
+                      <span className="tabular-nums">({assigned.length})</span>
+                    </div>
+                    {assigned.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No staff or cashiers assigned to this branch.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {assigned.map((user) => (
+                          <li
+                            key={user.uid}
+                            className="flex items-start justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium leading-snug">
+                                {user.displayName || user.email || user.uid}
+                              </p>
+                              {user.displayName && user.email ? (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {user.email}
+                                </p>
+                              ) : null}
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className="shrink-0 text-[10px] capitalize"
+                            >
+                              {formatUserRole(user.role, user.isAnonymous)}
+                            </Badge>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
         <TablePagination
           page={safePage}

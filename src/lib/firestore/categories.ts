@@ -23,6 +23,10 @@ import {
 } from "@/lib/firestore/category-groups";
 import { getProductsByCategoryId } from "@/lib/firestore/products";
 import { ensureUniqueSlug, slugify } from "@/lib/slug";
+import {
+  cachedRead,
+  READ_CACHE_TTL,
+} from "@/lib/firestore/read-cache";
 import type { Category } from "@/types";
 
 function categoriesRef(): CollectionReference<Category> {
@@ -57,11 +61,17 @@ export async function resolveCategorySlug(
 export async function getCategories(
   includeArchived = false
 ): Promise<Category[]> {
-  const snapshot = await getDocs(query(categoriesRef(), orderBy("name")));
-  const categories = snapshot.docs.map((d) => d.data());
-  return includeArchived
-    ? categories
-    : categories.filter((c) => !c.isArchived);
+  return cachedRead(
+    `categories:${includeArchived ? "1" : "0"}`,
+    READ_CACHE_TTL.categories,
+    async () => {
+      const snapshot = await getDocs(query(categoriesRef(), orderBy("name")));
+      const categories = snapshot.docs.map((d) => d.data());
+      return includeArchived
+        ? categories
+        : categories.filter((c) => !c.isArchived);
+    }
+  );
 }
 
 export async function getCategory(id: string): Promise<Category | null> {

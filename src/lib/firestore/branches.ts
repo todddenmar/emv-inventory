@@ -14,6 +14,11 @@ import {
 import { getClientDb } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/firestore/collections";
 import { branchConverter } from "@/lib/firestore/converters";
+import {
+  cachedRead,
+  invalidateReadCache,
+  READ_CACHE_TTL,
+} from "@/lib/firestore/read-cache";
 import type { Branch } from "@/types";
 
 function branchesRef(): CollectionReference<Branch> {
@@ -23,19 +28,25 @@ function branchesRef(): CollectionReference<Branch> {
 }
 
 export async function getBranches(activeOnly = false): Promise<Branch[]> {
-  const ref = branchesRef();
-  try {
-    const q = activeOnly
-      ? query(ref, where("isActive", "==", true), orderBy("name"))
-      : query(ref, orderBy("name"));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map((d) => d.data());
-  } catch (error) {
-    console.warn("getBranches indexed query failed, using fallback", error);
-    const snapshot = await getDocs(query(ref, orderBy("name")));
-    const rows = snapshot.docs.map((d) => d.data());
-    return activeOnly ? rows.filter((b) => b.isActive) : rows;
-  }
+  return cachedRead(
+    `branches:${activeOnly ? "1" : "0"}`,
+    READ_CACHE_TTL.branches,
+    async () => {
+      const ref = branchesRef();
+      try {
+        const q = activeOnly
+          ? query(ref, where("isActive", "==", true), orderBy("name"))
+          : query(ref, orderBy("name"));
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map((d) => d.data());
+      } catch (error) {
+        console.warn("getBranches indexed query failed, using fallback", error);
+        const snapshot = await getDocs(query(ref, orderBy("name")));
+        const rows = snapshot.docs.map((d) => d.data());
+        return activeOnly ? rows.filter((b) => b.isActive) : rows;
+      }
+    }
+  );
 }
 
 export async function getBranch(id: string): Promise<Branch | null> {
@@ -51,6 +62,7 @@ export async function createBranch(
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  invalidateReadCache("branches");
   return docRef.id;
 }
 
@@ -62,6 +74,7 @@ export async function updateBranch(
     ...data,
     updatedAt: serverTimestamp(),
   });
+  invalidateReadCache("branches");
 }
 
 export async function assignBranchManager(
