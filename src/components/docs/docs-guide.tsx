@@ -582,8 +582,9 @@ function DocsSections({
               receipts for the day.
             </li>
             <li>
-              On either daily page, elevated admins can edit tenders and archive
-              a mistaken sale. Archiving drops it from totals; restock is on by
+              On either daily page, elevated admins can edit or archive any sale.
+              Cashiers can edit or archive their own same-day sales from their
+              sales list. Archiving drops it from totals; restock is on by
               default. Open a receipt invoice when needed.
             </li>
             <li>

@@ -25,9 +25,37 @@ service cloud.firestore {
         userDoc().data.role in ['master-admin', 'admin'];
     }
 
+    function isCashier() {
+      return isSignedIn() &&
+        userDoc().data.role in ['cashier', 'manager'];
+    }
+
     function isOwner() {
       return isSignedIn() &&
         userDoc().data.role == 'owner';
+    }
+
+    // Asia/Manila (UTC+8) calendar day key — matches client same-day sale edits.
+    function manilaDayKey(ts) {
+      let local = ts + duration.value(8, 'h');
+      return local.year() * 10000 + local.month() * 100 + local.day();
+    }
+
+    function isSameManilaDay(ts) {
+      return manilaDayKey(ts) == manilaDayKey(request.time);
+    }
+
+    // Cashier may edit/archive own same-day sale at their assigned branch.
+    function canCashierEditPosSale() {
+      return isCashier() &&
+        resource.data.createdBy == request.auth.uid &&
+        resource.data.branchId == managerBranchId() &&
+        resource.data.archivedAt == null &&
+        isSameManilaDay(resource.data.createdAt) &&
+        request.resource.data.branchId == resource.data.branchId &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        manilaDayKey(request.resource.data.createdAt) ==
+          manilaDayKey(resource.data.createdAt);
     }
 
     function isInventoryViewer() {
@@ -289,9 +317,22 @@ service cloud.firestore {
       allow create: if isStaff() &&
         request.resource.data.branchId != null &&
         canAccessBranch(request.resource.data.branchId);
-      // Admins may correct tender / account details after a sale is completed.
-      allow update: if isElevatedAdmin();
+      // Admins: any sale. Cashiers: own same-day sale at assigned branch.
+      allow update: if isElevatedAdmin() || canCashierEditPosSale();
       allow delete: if false;
+    }
+
+    match /physicalPosSaleActivityLogs/{logId} {
+      allow read: if isStaff() &&
+        (canReadAllBranches() || resource.data.branchId == managerBranchId());
+      allow create: if isStaff() &&
+        request.resource.data.branchId != null &&
+        request.resource.data.saleId is string &&
+        request.resource.data.performedBy == request.auth.uid &&
+        (isElevatedAdmin() ||
+          (isCashier() &&
+            request.resource.data.branchId == managerBranchId()));
+      allow update, delete: if false;
     }
 
     match /physicalDailyExpenses/{expenseId} {
