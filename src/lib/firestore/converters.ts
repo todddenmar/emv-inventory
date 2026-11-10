@@ -379,6 +379,7 @@ export const userConverter: FirestoreDataConverter<AppUser> = {
       photoURL: user.photoURL,
       role: user.role,
       branchId: user.branchId,
+      trackedSoldCategoryIds: user.trackedSoldCategoryIds,
       isAnonymous: user.isAnonymous,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -389,6 +390,11 @@ export const userConverter: FirestoreDataConverter<AppUser> = {
     options: SnapshotOptions
   ): AppUser {
     const data = snapshot.data(options);
+    const trackedSoldCategoryIds = Array.isArray(data.trackedSoldCategoryIds)
+      ? data.trackedSoldCategoryIds.filter(
+          (id): id is string => typeof id === "string" && id.trim().length > 0
+        )
+      : [];
     return {
       uid: snapshot.id,
       email: data.email ?? null,
@@ -396,6 +402,7 @@ export const userConverter: FirestoreDataConverter<AppUser> = {
       photoURL: data.photoURL ?? null,
       role: parseUserRole(data.role),
       branchId: data.branchId ?? null,
+      trackedSoldCategoryIds,
       isAnonymous: data.isAnonymous ?? false,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),

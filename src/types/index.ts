@@ -13,6 +13,8 @@ export interface AppUser {
   photoURL: string | null;
   role: UserRole;
   branchId: string | null;
+  /** Dashboard: category IDs this user tracks for monthly sold totals. */
+  trackedSoldCategoryIds: string[];
   isAnonymous: boolean;
   createdAt: Date;
   updatedAt: Date;

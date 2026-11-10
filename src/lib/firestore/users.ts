@@ -105,6 +105,7 @@ export async function upsertUserOnLogin(
     photoURL: firebaseUser.photoURL,
     role,
     branchId,
+    trackedSoldCategoryIds: [],
     isAnonymous: firebaseUser.isAnonymous,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -116,12 +117,32 @@ export async function upsertUserOnLogin(
     photoURL: newUser.photoURL,
     role: newUser.role,
     branchId: newUser.branchId,
+    trackedSoldCategoryIds: [],
     isAnonymous: newUser.isAnonymous,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 
   return newUser;
+}
+
+/** Per-user dashboard preference: categories to auto-load sold totals for. */
+export async function updateTrackedSoldCategoryIds(
+  uid: string,
+  categoryIds: string[]
+): Promise<string[]> {
+  const unique = [
+    ...new Set(
+      categoryIds
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0)
+    ),
+  ];
+  await updateDoc(doc(getClientDb(), "users", uid), {
+    trackedSoldCategoryIds: unique,
+    updatedAt: serverTimestamp(),
+  });
+  return unique;
 }
 
 export async function assignUserBranch(

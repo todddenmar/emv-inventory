@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Loader2, ShoppingBag } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight, Loader2, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
+import { CategoryMultiSelect } from "@/components/admin/category-multi-select";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,13 +15,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -29,17 +23,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useBranchAccess } from "@/hooks/use-branch-access";
-import { toMonthKey } from "@/lib/dates";
 import {
-  getCategoryMonthSoldReport,
+  getTrackedCategoryMonthSoldReports,
   type CategoryMonthSoldReport,
 } from "@/lib/category-month-sales";
-import { getBranches } from "@/lib/firestore/branches";
+import { formatMonthLabel, toMonthKey } from "@/lib/dates";
 import { getCategories } from "@/lib/firestore/categories";
-import type { Branch, Category } from "@/types";
+import { updateTrackedSoldCategoryIds } from "@/lib/firestore/users";
+import { useAuthStore } from "@/stores/auth-store";
+import type { Category } from "@/types";
 
 type CategoryMonthSoldCardProps = {
-  /** When set, locks the report to this branch (staff). */
+  /** When set, locks totals to this branch (staff). */
   lockedBranchId?: string | null;
   lockedBranchName?: string | null;
 };
@@ -48,280 +43,298 @@ export function CategoryMonthSoldCard({
   lockedBranchId = null,
   lockedBranchName = null,
 }: CategoryMonthSoldCardProps) {
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
   const { canViewAllBranches } = useBranchAccess();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [optionsReady, setOptionsReady] = useState(false);
-  const [categoryId, setCategoryId] = useState("");
-  const [monthKey, setMonthKey] = useState(() => toMonthKey());
-  const [selectedBranchId, setSelectedBranchId] = useState("all");
-  const [generating, setGenerating] = useState(false);
-  const [report, setReport] = useState<CategoryMonthSoldReport | null>(null);
 
-  const branchId = lockedBranchId ?? selectedBranchId;
+  const trackedIds = useMemo(
+    () => user?.trackedSoldCategoryIds ?? [],
+    [user?.trackedSoldCategoryIds]
+  );
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesReady, setCategoriesReady] = useState(false);
+  const [managing, setManaging] = useState(false);
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [monthKey, setMonthKey] = useState(() => toMonthKey());
+  const [loadingTotals, setLoadingTotals] = useState(false);
+  const [reports, setReports] = useState<CategoryMonthSoldReport[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const branchId = lockedBranchId;
+  const branchLabel = lockedBranchId
+    ? lockedBranchName?.trim() || "Your branch"
+    : canViewAllBranches
+      ? "All branches"
+      : lockedBranchName?.trim() || "Your branch";
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadOptions() {
+    async function loadCategories() {
       try {
-        const categoryList = await getCategories();
-        if (cancelled) return;
-        setCategories(categoryList);
-
-        if (canViewAllBranches && !lockedBranchId) {
-          const branchList = await getBranches(true);
-          if (cancelled) return;
-          setBranches(branchList);
-        }
+        const list = await getCategories();
+        if (!cancelled) setCategories(list);
       } catch (error) {
         console.error(error);
-        if (!cancelled) {
-          toast.error("Failed to load categories");
-        }
+        if (!cancelled) toast.error("Failed to load categories");
       } finally {
-        if (!cancelled) setOptionsReady(true);
+        if (!cancelled) setCategoriesReady(true);
       }
     }
 
-    void loadOptions();
+    void loadCategories();
     return () => {
       cancelled = true;
     };
-  }, [canViewAllBranches, lockedBranchId]);
+  }, []);
 
-  const selectedCategory = useMemo(
-    () => categories.find((category) => category.id === categoryId) ?? null,
-    [categories, categoryId]
-  );
+  const trackedCategories = useMemo(() => {
+    const byId = new Map(categories.map((category) => [category.id, category]));
+    return trackedIds
+      .map((id) => byId.get(id))
+      .filter((category): category is Category => category != null);
+  }, [categories, trackedIds]);
 
-  const branchLabel = useMemo(() => {
-    if (lockedBranchId) {
-      return lockedBranchName?.trim() || "Your branch";
-    }
-    if (branchId === "all") return "All branches";
-    return branches.find((branch) => branch.id === branchId)?.name ?? "Branch";
-  }, [branchId, branches, lockedBranchId, lockedBranchName]);
+  useEffect(() => {
+    let cancelled = false;
 
-  const handleGenerate = async () => {
-    if (!categoryId) {
-      toast.error("Select a category");
-      return;
-    }
-    if (!monthKey) {
-      toast.error("Select a month");
-      return;
-    }
-
-    setGenerating(true);
-    try {
-      const next = await getCategoryMonthSoldReport({
-        categoryId,
-        categoryName: selectedCategory?.name ?? "Category",
-        monthKey,
-        branchId: branchId === "all" ? null : branchId,
-      });
-      setReport(next);
-      if (next.truncated) {
-        toast.message(
-          "Month has many sales — count may be incomplete. Narrow by branch if needed."
-        );
+    async function loadTotals() {
+      if (!categoriesReady) return;
+      if (trackedCategories.length === 0) {
+        setReports([]);
+        setLoadingTotals(false);
+        return;
       }
+      if (!monthKey) return;
+
+      setLoadingTotals(true);
+      try {
+        const next = await getTrackedCategoryMonthSoldReports({
+          categories: trackedCategories.map((category) => ({
+            id: category.id,
+            name: category.name,
+          })),
+          monthKey,
+          branchId,
+        });
+        if (cancelled) return;
+        setReports(next);
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Failed to load category sold totals"
+          );
+        }
+      } finally {
+        if (!cancelled) setLoadingTotals(false);
+      }
+    }
+
+    void loadTotals();
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, categoriesReady, monthKey, trackedCategories]);
+
+  const handleTrackedChange = async (ids: string[]) => {
+    if (!user?.uid) {
+      toast.error("Sign in to save tracked categories");
+      return;
+    }
+    setSavingPrefs(true);
+    try {
+      const saved = await updateTrackedSoldCategoryIds(user.uid, ids);
+      setUser({ ...user, trackedSoldCategoryIds: saved });
     } catch (error) {
       console.error(error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to generate report"
-      );
+      toast.error("Failed to save tracked categories");
     } finally {
-      setGenerating(false);
+      setSavingPrefs(false);
     }
   };
 
   return (
     <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <ShoppingBag className="h-4 w-4 shrink-0" />
-          Category sold this month
-        </CardTitle>
-        <CardDescription>
-          Pick a category and month, then generate. Nothing loads until you
-          click.
-        </CardDescription>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShoppingBag className="h-4 w-4 shrink-0" />
+            Tracked category sales
+          </CardTitle>
+          <CardDescription>
+            Your selected categories load automatically for{" "}
+            {formatMonthLabel(monthKey)} · {branchLabel}
+          </CardDescription>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full shrink-0 sm:w-auto"
+          onClick={() => setManaging((open) => !open)}
+          disabled={!categoriesReady}
+        >
+          {managing ? "Done" : "Select categories"}
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="category-month-sold-category">Category</Label>
-            <Select
-              value={categoryId || "none"}
-              onValueChange={(value) => {
-                setCategoryId(!value || value === "none" ? "" : value);
-                setReport(null);
-              }}
-              disabled={!optionsReady || generating}
-            >
-              <SelectTrigger id="category-month-sold-category">
-                <SelectValue placeholder="Select category">
-                  {(value) => {
-                    if (!value || value === "none") return null;
-                    return (
-                      categories.find((category) => category.id === value)
-                        ?.name ?? null
-                    );
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Select category</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
+        <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
           <div className="space-y-2">
-            <Label htmlFor="category-month-sold-month">Month</Label>
+            <Label htmlFor="tracked-category-month">Month</Label>
             <Input
-              id="category-month-sold-month"
+              id="tracked-category-month"
               type="month"
               value={monthKey}
               onChange={(e) => {
                 setMonthKey(e.target.value);
-                setReport(null);
+                setExpandedId(null);
               }}
-              disabled={generating}
+              disabled={loadingTotals}
             />
           </div>
-
-          {canViewAllBranches && !lockedBranchId ? (
-            <div className="space-y-2">
-              <Label htmlFor="category-month-sold-branch">Branch</Label>
-              <Select
-                value={selectedBranchId}
-                onValueChange={(value) => {
-                  setSelectedBranchId(value ?? "all");
-                  setReport(null);
-                }}
-                disabled={generating}
-              >
-                <SelectTrigger id="category-month-sold-branch">
-                  <SelectValue placeholder="All branches">
-                    {(value) => {
-                      if (!value || value === "all") return "All branches";
-                      return (
-                        branches.find((branch) => branch.id === value)?.name ??
-                        null
-                      );
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All branches</SelectItem>
-                  {branches.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label>Branch</Label>
-              <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-                {branchLabel}
-              </p>
-            </div>
-          )}
+          <p className="text-sm text-muted-foreground sm:pb-2">
+            {trackedIds.length === 0
+              ? "No categories tracked yet."
+              : `${trackedCategories.length} categor${
+                  trackedCategories.length === 1 ? "y" : "ies"
+                } tracked`}
+            {savingPrefs ? " · Saving…" : ""}
+          </p>
         </div>
 
-        <Button
-          type="button"
-          onClick={() => void handleGenerate()}
-          disabled={generating || !optionsReady || !categoryId || !monthKey}
-        >
-          {generating ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : null}
-          Generate report
-        </Button>
+        {managing ? (
+          <div className="space-y-2">
+            <Label>Categories to track</Label>
+            <CategoryMultiSelect
+              categories={categories}
+              selectedIds={trackedIds}
+              onChange={(ids) => void handleTrackedChange(ids)}
+              idPrefix="tracked-sold-cat"
+              maxHeightClassName="max-h-56"
+              disabled={savingPrefs || !user}
+            />
+            <p className="text-xs text-muted-foreground">
+              Saved to your account. Other users keep their own list.
+            </p>
+          </div>
+        ) : null}
 
-        {!report ? (
+        {loadingTotals ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading sold totals…
+          </div>
+        ) : trackedCategories.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Results appear here after you generate.
+            Select categories to track and their sold totals will show here on
+            every refresh.
+          </p>
+        ) : reports.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No totals yet for this month.
           </p>
         ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">Units sold</p>
-                <p className="text-2xl font-semibold tabular-nums">
-                  {report.unitsSold}
-                </p>
-              </div>
-              <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">Products sold</p>
-                <p className="text-2xl font-semibold tabular-nums">
-                  {report.productsSold}
-                </p>
-              </div>
-              <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">Receipts</p>
-                <p className="text-2xl font-semibold tabular-nums">
-                  {report.receipts}
-                </p>
-              </div>
-              <div className="rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">In category</p>
-                <p className="text-2xl font-semibold tabular-nums">
-                  {report.catalogProductCount}
-                </p>
-              </div>
-            </div>
-
-            <p className="text-sm text-muted-foreground">
-              {report.categoryName} · {report.monthLabel} · {branchLabel}
-              {report.truncated ? " · may be incomplete" : ""}
-            </p>
-
-            {report.rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No items from this category were sold in that month.
-              </p>
-            ) : (
-              <div className="max-h-72 overflow-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12 text-right">#</TableHead>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Units</TableHead>
-                      <TableHead className="text-right">Receipts</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {report.rows.map((row, index) => (
-                      <TableRow key={row.productId}>
+          <div className="max-h-[28rem] overflow-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12 text-right">#</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="text-right">Units</TableHead>
+                  <TableHead className="text-right">Products</TableHead>
+                  <TableHead className="text-right">Receipts</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reports.map((report, index) => {
+                  const expanded = expandedId === report.categoryId;
+                  return (
+                    <Fragment key={report.categoryId}>
+                      <TableRow>
                         <TableCell className="text-right tabular-nums text-muted-foreground">
                           {index + 1}
                         </TableCell>
-                        <TableCell className="font-medium">{row.name}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {row.quantity}
+                        <TableCell>
+                          <button
+                            type="button"
+                            className="flex items-center gap-1.5 text-left font-medium hover:underline"
+                            onClick={() =>
+                              setExpandedId(expanded ? null : report.categoryId)
+                            }
+                          >
+                            {expanded ? (
+                              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                            )}
+                            {report.categoryName}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">
+                          {report.unitsSold}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {row.receipts}
+                          {report.productsSold}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {report.receipts}
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+                      {expanded ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="bg-muted/30 p-0">
+                            {report.rows.length === 0 ? (
+                              <p className="px-4 py-3 text-sm text-muted-foreground">
+                                No items sold in this category for{" "}
+                                {report.monthLabel}.
+                              </p>
+                            ) : (
+                              <div className="max-h-56 overflow-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="w-12 text-right">
+                                        #
+                                      </TableHead>
+                                      <TableHead>Product</TableHead>
+                                      <TableHead className="text-right">
+                                        Units
+                                      </TableHead>
+                                      <TableHead className="text-right">
+                                        Receipts
+                                      </TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {report.rows.map((row, rowIndex) => (
+                                      <TableRow key={row.productId}>
+                                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                                          {rowIndex + 1}
+                                        </TableCell>
+                                        <TableCell>{row.name}</TableCell>
+                                        <TableCell className="text-right tabular-nums">
+                                          {row.quantity}
+                                        </TableCell>
+                                        <TableCell className="text-right tabular-nums">
+                                          {row.receipts}
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         )}
       </CardContent>

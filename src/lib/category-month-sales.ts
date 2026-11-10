@@ -3,9 +3,9 @@ import {
   formatMonthLabel,
   startOfMonthDateInput,
 } from "@/lib/dates";
-import { getProductsByCategoryId } from "@/lib/firestore/products";
+import { getProducts } from "@/lib/firestore/products";
 import { getPosSales } from "@/lib/firestore/pos-sales";
-import type { PosSale } from "@/types";
+import type { PosSale, Product } from "@/types";
 
 const SALE_FETCH_MAX = 5000;
 
@@ -78,48 +78,64 @@ function summarizeCategorySales(
   return { unitsSold, receipts, rows };
 }
 
-/** On-demand: units sold in a category for one calendar month. */
-export async function getCategoryMonthSoldReport(options: {
-  categoryId: string;
-  categoryName: string;
+function productIdsForCategory(
+  products: Pick<Product, "id" | "categoryIds">[],
+  categoryId: string
+): Set<string> {
+  const ids = new Set<string>();
+  for (const product of products) {
+    if (product.categoryIds.includes(categoryId)) ids.add(product.id);
+  }
+  return ids;
+}
+
+/** Load monthly sold totals for one or more tracked categories (one sales fetch). */
+export async function getTrackedCategoryMonthSoldReports(options: {
+  categories: Array<{ id: string; name: string }>;
   monthKey: string;
   branchId?: string | null;
-}): Promise<CategoryMonthSoldReport> {
-  const categoryId = options.categoryId.trim();
+}): Promise<CategoryMonthSoldReport[]> {
   const monthKey = options.monthKey.trim();
-  if (!categoryId) throw new Error("Select a category");
   if (!/^\d{4}-\d{2}$/.test(monthKey)) throw new Error("Select a valid month");
+
+  const categories = options.categories.filter((category) => category.id.trim());
+  if (categories.length === 0) return [];
 
   const fromDate = startOfMonthDateInput(monthKey);
   const toDate = endOfMonthDateInput(monthKey);
+  const monthLabel = formatMonthLabel(monthKey);
+  const branchId = options.branchId ?? null;
 
   const [products, sales] = await Promise.all([
-    getProductsByCategoryId(categoryId, true),
+    getProducts(false, true),
     getPosSales({
-      branchId: options.branchId ?? null,
+      branchId,
       fromDate,
       toDate,
       max: SALE_FETCH_MAX,
     }),
   ]);
 
-  const productIds = new Set(products.map((product) => product.id));
-  const { unitsSold, receipts, rows } = summarizeCategorySales(
-    sales,
-    productIds
-  );
+  const truncated = sales.length >= SALE_FETCH_MAX;
 
-  return {
-    categoryId,
-    categoryName: options.categoryName,
-    monthKey,
-    monthLabel: formatMonthLabel(monthKey),
-    branchId: options.branchId ?? null,
-    catalogProductCount: products.length,
-    unitsSold,
-    receipts,
-    productsSold: rows.length,
-    truncated: sales.length >= SALE_FETCH_MAX,
-    rows,
-  };
+  return categories.map((category) => {
+    const productIds = productIdsForCategory(products, category.id);
+    const { unitsSold, receipts, rows } = summarizeCategorySales(
+      sales,
+      productIds
+    );
+    return {
+      categoryId: category.id,
+      categoryName: category.name,
+      monthKey,
+      monthLabel,
+      branchId,
+      catalogProductCount: productIds.size,
+      unitsSold,
+      receipts,
+      productsSold: rows.length,
+      truncated,
+      rows,
+    };
+  });
 }
