@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/link-button";
+import { CategoryMonthSoldCard } from "@/components/admin/category-month-sold-card";
 import { InventoryActivityFeed } from "@/components/admin/inventory-activity-feed";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { catalogCountsByCategoryGroup } from "@/lib/catalog-stats";
@@ -205,6 +206,11 @@ export default function StaffDashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      <CategoryMonthSoldCard
+        lockedBranchId={assignedBranchId}
+        lockedBranchName={branch?.name ?? null}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <Card className="min-w-0">
