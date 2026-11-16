@@ -61,6 +61,7 @@ import {
   normalizeRetailPrice,
   normalizeWholesalePrice,
   resolveEffectivePrices,
+  unitPriceForPaymentMethod,
   type EffectiveSalePrices,
 } from "@/lib/product-pricing";
 import {
@@ -165,6 +166,9 @@ export function PosWorkspace({
   const [loadingBootstrap, setLoadingBootstrap] = useState(true);
   const [loadingCategory, setLoadingCategory] = useState(false);
   const [search, setSearch] = useState("");
+  const [catalogSort, setCatalogSort] = useState<
+    "default" | "stock-asc" | "stock-desc" | "price-asc" | "price-desc"
+  >("default");
   const [page, setPage] = useState(1);
   const [cart, setCart] = useState<PosCartLine[]>([]);
   const productListRef = useRef<HTMLDivElement>(null);
@@ -358,21 +362,72 @@ export function PosWorkspace({
 
   const filteredVariants = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return sellingVariants;
-    return sellingVariants.filter((row) => {
-      const product = productsById.get(row.productId);
-      const label = formatVariantLabel(row, product?.options ?? []);
-      return (
-        row.productName.toLowerCase().includes(q) ||
-        row.sku.toLowerCase().includes(q) ||
-        label.toLowerCase().includes(q)
+    const matched = !q
+      ? sellingVariants
+      : sellingVariants.filter((row) => {
+          const product = productsById.get(row.productId);
+          const label = formatVariantLabel(row, product?.options ?? []);
+          return (
+            row.productName.toLowerCase().includes(q) ||
+            row.sku.toLowerCase().includes(q) ||
+            label.toLowerCase().includes(q)
+          );
+        });
+
+    if (catalogSort === "default") return matched;
+
+    const sortPrice = (row: VariantWithStock): number | null => {
+      if (isWholesale) {
+        return normalizeWholesalePrice(row.wholesalePrice);
+      }
+      const effective = resolveEffectivePrices(row, promoMap, row.id);
+      return unitPriceForPaymentMethod(
+        {
+          price: effective.price,
+          retailPrice: effective.retailPrice,
+        },
+        paymentMethod
       );
+    };
+
+    const dir = catalogSort.endsWith("-asc") ? 1 : -1;
+    const byStock = catalogSort.startsWith("stock-");
+
+    return [...matched].sort((a, b) => {
+      if (byStock) {
+        const diff = (a.stock - b.stock) * dir;
+        if (diff !== 0) return diff;
+      } else {
+        const priceA = sortPrice(a);
+        const priceB = sortPrice(b);
+        if (priceA == null && priceB == null) {
+          // keep name tie-break
+        } else if (priceA == null) {
+          return 1;
+        } else if (priceB == null) {
+          return -1;
+        } else {
+          const diff = (priceA - priceB) * dir;
+          if (diff !== 0) return diff;
+        }
+      }
+      return a.productName.localeCompare(b.productName, undefined, {
+        sensitivity: "base",
+      });
     });
-  }, [sellingVariants, search, productsById]);
+  }, [
+    sellingVariants,
+    search,
+    productsById,
+    catalogSort,
+    isWholesale,
+    promoMap,
+    paymentMethod,
+  ]);
 
   useEffect(() => {
     setPage(1);
-  }, [selectedCategoryId, search, activeBranchId, pageSize]);
+  }, [selectedCategoryId, search, catalogSort, activeBranchId, pageSize]);
 
   const {
     page: safePage,
@@ -390,7 +445,7 @@ export function PosWorkspace({
 
   useEffect(() => {
     productListRef.current?.scrollTo({ top: 0 });
-  }, [safePage, selectedCategoryId, search]);
+  }, [safePage, selectedCategoryId, search, catalogSort]);
 
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
 
@@ -1054,18 +1109,63 @@ export function PosWorkspace({
                 })
               )}
             </div>
-            <div className="relative max-w-md">
-              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder={
-                  selectedCategoryId === ALL_CATEGORIES_ID
-                    ? "Search products..."
-                    : "Search in this category..."
-                }
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1 max-w-md">
+                <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder={
+                    selectedCategoryId === ALL_CATEGORIES_ID
+                      ? "Search products..."
+                      : "Search in this category..."
+                  }
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Select
+                value={catalogSort}
+                onValueChange={(value) => {
+                  if (
+                    value === "default" ||
+                    value === "stock-asc" ||
+                    value === "stock-desc" ||
+                    value === "price-asc" ||
+                    value === "price-desc"
+                  ) {
+                    setCatalogSort(value);
+                  }
+                }}
+              >
+                <SelectTrigger
+                  className="w-full sm:w-[11.5rem]"
+                  aria-label="Sort products"
+                >
+                  <SelectValue>
+                    {(value) => {
+                      switch (value) {
+                        case "stock-asc":
+                          return "Stock: low → high";
+                        case "stock-desc":
+                          return "Stock: high → low";
+                        case "price-asc":
+                          return "Price: low → high";
+                        case "price-desc":
+                          return "Price: high → low";
+                        default:
+                          return "Sort: default";
+                      }
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="default">Sort: default</SelectItem>
+                  <SelectItem value="stock-desc">Stock: high → low</SelectItem>
+                  <SelectItem value="stock-asc">Stock: low → high</SelectItem>
+                  <SelectItem value="price-desc">Price: high → low</SelectItem>
+                  <SelectItem value="price-asc">Price: low → high</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
