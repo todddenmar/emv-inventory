@@ -261,6 +261,37 @@ export type TransferRequestStatus =
   | "cancelled"
   | "declined";
 
+export type AssortmentRequestStatus =
+  | "requested"
+  | "assigned"
+  | "declined"
+  | "cancelled";
+
+export interface AssortmentRequest {
+  id: string;
+  productId: string;
+  productName: string;
+  variantId: string;
+  variantLabel: string;
+  sku: string;
+  requestedBranchId: string;
+  requestedBranchName: string;
+  status: AssortmentRequestStatus;
+  requestedBy: string;
+  requestedByName: string | null;
+  requestedAt: Date;
+  assignedBy: string | null;
+  assignedByName: string | null;
+  assignedAt: Date | null;
+  assignedBranchIds: string[];
+  declinedBy: string | null;
+  declinedByName: string | null;
+  declinedAt: Date | null;
+  cancelledBy: string | null;
+  cancelledByName: string | null;
+  cancelledAt: Date | null;
+}
+
 export interface TransferRequest {
   id: string;
   /** Shared by every line submitted together from one request cart. */

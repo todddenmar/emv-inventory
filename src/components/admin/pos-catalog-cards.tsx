@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { CircleHelp, Expand, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -102,6 +103,19 @@ function StockBadge({
   );
 }
 
+function UnassignedStockBadge({ stock }: { stock: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Badge variant="outline" className="text-xs text-muted-foreground">
+        Unassigned
+      </Badge>
+      <span className="text-xs tabular-nums text-muted-foreground">
+        {stock}
+      </span>
+    </span>
+  );
+}
+
 function DisabledReasonHelp({
   reason,
   canCheckOtherBranches,
@@ -155,6 +169,12 @@ export function PosCatalogVariantCard({
   promoMap,
   onAdd,
   onPreviewImage,
+  pendingRequest = false,
+  requesting = false,
+  canRequest = false,
+  canAssign = false,
+  onRequest,
+  onAssign,
 }: {
   row: VariantWithStock;
   product: Product | undefined;
@@ -166,6 +186,12 @@ export function PosCatalogVariantCard({
   promoMap: Map<string, EffectiveSalePrices>;
   onAdd: (row: VariantWithStock) => void;
   onPreviewImage: (url: string, title: string) => void;
+  pendingRequest?: boolean;
+  requesting?: boolean;
+  canRequest?: boolean;
+  canAssign?: boolean;
+  onRequest?: (row: VariantWithStock) => void;
+  onAssign?: (row: VariantWithStock) => void;
 }) {
   const thumb = resolvePosCatalogThumb(product, row, catalogImageSource);
   const showImage = showCatalogImages(catalogImageSource);
@@ -175,6 +201,7 @@ export function PosCatalogVariantCard({
       ? `${row.productName} — ${variantLabel}`
       : row.productName;
   const effective = resolveEffectivePrices(row, promoMap, row.id);
+  const unassigned = !row.isSelling;
   const outOfStock = row.stock <= 0;
   const inCart =
     cart.find((line) => line.variantId === row.id)?.quantity ?? 0;
@@ -183,12 +210,17 @@ export function PosCatalogVariantCard({
     : null;
 
   const topRightActions =
-    (outOfStock ? 1 : 0) + (findStockHref ? 1 : 0);
+    (unassigned || outOfStock ? 1 : 0) + (findStockHref ? 1 : 0);
 
   return (
     <div className="relative flex min-h-0 flex-row items-stretch gap-3 overflow-hidden rounded-xl border bg-card p-3 sm:min-h-0 sm:flex-col sm:gap-0 sm:p-0">
       <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
-        {outOfStock ? (
+        {unassigned ? (
+          <DisabledReasonHelp
+            reason="This variant is not assigned to this branch yet. Request assignment so it can be sold here."
+            canCheckOtherBranches={findStockHref != null}
+          />
+        ) : outOfStock ? (
           <DisabledReasonHelp
             reason="Out of stock at this branch, so it can't be added to the cart."
             canCheckOtherBranches={findStockHref != null}
@@ -222,7 +254,7 @@ export function PosCatalogVariantCard({
       ) : null}
       <button
         type="button"
-        disabled={outOfStock}
+        disabled={unassigned || outOfStock}
         onClick={() => onAdd(row)}
         className="flex min-h-0 min-w-0 flex-1 flex-row items-stretch gap-3 text-left transition hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-col sm:gap-0"
       >
@@ -274,10 +306,49 @@ export function PosCatalogVariantCard({
                 promoMap={promoMap}
               />
             </span>
-            <StockBadge stock={row.stock} inCart={inCart} />
+            {unassigned ? (
+              <UnassignedStockBadge stock={row.stock} />
+            ) : (
+              <StockBadge stock={row.stock} inCart={inCart} />
+            )}
           </div>
         </div>
       </button>
+      {unassigned && (canRequest || canAssign) ? (
+        <div className="flex shrink-0 flex-col justify-end gap-1.5 sm:px-3 sm:pb-3">
+          {canAssign ? (
+            <Button
+              type="button"
+              size="sm"
+              className="w-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAssign?.(row);
+              }}
+            >
+              Assign
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="w-full"
+              disabled={pendingRequest || requesting || !onRequest}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRequest?.(row);
+              }}
+            >
+              {pendingRequest
+                ? "Requested"
+                : requesting
+                  ? "Requesting…"
+                  : "Request"}
+            </Button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

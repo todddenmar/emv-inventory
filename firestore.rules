@@ -277,6 +277,28 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /physicalAssortmentRequests/{requestId} {
+      allow read: if isStaff();
+      allow create: if canMutateStock() &&
+        request.resource.data.status == 'requested' &&
+        request.resource.data.productId is string &&
+        request.resource.data.variantId is string &&
+        request.resource.data.requestedBranchId is string &&
+        (isElevatedAdmin() ||
+          request.resource.data.requestedBranchId == managerBranchId());
+      allow update: if canMutateStock() &&
+        resource.data.status == 'requested' &&
+        (
+          (isElevatedAdmin() &&
+            request.resource.data.status in ['assigned', 'declined']) ||
+          (request.resource.data.status == 'cancelled' &&
+            (resource.data.requestedBy == request.auth.uid ||
+              resource.data.requestedBranchId == managerBranchId() ||
+              isElevatedAdmin()))
+        );
+      allow delete: if false;
+    }
+
     match /physicalTransferRequests/{requestId} {
       // Staff may list/read all requests so branch-scoped listeners work.
       // Writes stay constrained to the involved branch below.

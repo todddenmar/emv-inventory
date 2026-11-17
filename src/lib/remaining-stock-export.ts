@@ -73,10 +73,11 @@ export function buildRemainingStockCsv(
           variant.sku || "",
         ];
         for (const branch of branches) {
+          const stock = variant.stocks[branch.id] ?? 0;
           row.push(
             variant.assigned[branch.id] === true
-              ? (variant.stocks[branch.id] ?? 0)
-              : "Unassigned"
+              ? stock
+              : `${stock} (Unassigned)`
           );
           row.push("");
         }
@@ -140,9 +141,10 @@ function buildPrintHtml(
               const cells = branches
                 .map((branch) => {
                   const assigned = variant.assigned[branch.id] === true;
+                  const amount = variant.stocks[branch.id] ?? 0;
                   const stock = assigned
-                    ? escapeHtml(variant.stocks[branch.id] ?? 0)
-                    : `<span class="muted">—</span>`;
+                    ? escapeHtml(amount)
+                    : `${escapeHtml(amount)} <span class="muted">(Unassigned)</span>`;
                   return `<td class="num">${stock}</td><td class="count"></td>`;
                 })
                 .join("");

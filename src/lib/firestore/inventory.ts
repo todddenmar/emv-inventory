@@ -442,6 +442,30 @@ export async function setVariantSelling(
   invalidateInventoryCaches(branchId);
 }
 
+/**
+ * Turn a variant on for POS on the given branches. Existing stock is kept.
+ * Does not mark any other variant or branch as not selling.
+ */
+export async function enableVariantSellingOnBranches(
+  productId: string,
+  variantId: string,
+  branchIds: string[]
+): Promise<number> {
+  const unique = [...new Set(branchIds.filter(Boolean))];
+  if (unique.length === 0) return 0;
+
+  const chunkSize = 40;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    await Promise.all(
+      chunk.map((branchId) =>
+        setVariantSelling(branchId, productId, variantId, true)
+      )
+    );
+  }
+  return unique.length;
+}
+
 export interface VariantSellingTarget {
   productId: string;
   variantId: string;

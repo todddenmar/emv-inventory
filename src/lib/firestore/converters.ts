@@ -13,6 +13,7 @@ import type {
   BranchInventory,
   BranchTransfer,
   TransferRequest,
+  AssortmentRequest,
   Category,
   CategoryGroup,
   DailyExpense,
@@ -673,6 +674,70 @@ export const transferRequestConverter: FirestoreDataConverter<TransferRequest> =
         declinedBy: data.declinedBy ?? null,
         declinedByName: data.declinedByName ?? null,
         declinedAt: data.declinedAt ? toDate(data.declinedAt) : null,
+      };
+    },
+  };
+
+export const assortmentRequestConverter: FirestoreDataConverter<AssortmentRequest> =
+  {
+    toFirestore(request: AssortmentRequest): DocumentData {
+      return {
+        productId: request.productId,
+        productName: request.productName,
+        variantId: request.variantId,
+        variantLabel: request.variantLabel,
+        sku: request.sku,
+        requestedBranchId: request.requestedBranchId,
+        requestedBranchName: request.requestedBranchName,
+        status: request.status,
+        requestedBy: request.requestedBy,
+        requestedByName: request.requestedByName,
+        requestedAt: request.requestedAt,
+        assignedBy: request.assignedBy,
+        assignedByName: request.assignedByName,
+        assignedAt: request.assignedAt,
+        assignedBranchIds: request.assignedBranchIds,
+        declinedBy: request.declinedBy,
+        declinedByName: request.declinedByName,
+        declinedAt: request.declinedAt,
+        cancelledBy: request.cancelledBy,
+        cancelledByName: request.cancelledByName,
+        cancelledAt: request.cancelledAt,
+      };
+    },
+    fromFirestore(
+      snapshot: QueryDocumentSnapshot,
+      options: SnapshotOptions
+    ): AssortmentRequest {
+      const data = snapshot.data(options);
+      const assignedBranchIds = Array.isArray(data.assignedBranchIds)
+        ? data.assignedBranchIds.filter(
+            (id: unknown): id is string => typeof id === "string"
+          )
+        : [];
+      return {
+        id: snapshot.id,
+        productId: data.productId,
+        productName: data.productName ?? "",
+        variantId: data.variantId,
+        variantLabel: data.variantLabel ?? "",
+        sku: data.sku ?? "",
+        requestedBranchId: data.requestedBranchId,
+        requestedBranchName: data.requestedBranchName ?? "",
+        status: data.status,
+        requestedBy: data.requestedBy,
+        requestedByName: data.requestedByName ?? null,
+        requestedAt: toDate(data.requestedAt),
+        assignedBy: data.assignedBy ?? null,
+        assignedByName: data.assignedByName ?? null,
+        assignedAt: data.assignedAt ? toDate(data.assignedAt) : null,
+        assignedBranchIds,
+        declinedBy: data.declinedBy ?? null,
+        declinedByName: data.declinedByName ?? null,
+        declinedAt: data.declinedAt ? toDate(data.declinedAt) : null,
+        cancelledBy: data.cancelledBy ?? null,
+        cancelledByName: data.cancelledByName ?? null,
+        cancelledAt: data.cancelledAt ? toDate(data.cancelledAt) : null,
       };
     },
   };

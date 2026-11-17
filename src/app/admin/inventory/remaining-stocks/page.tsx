@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, FileSpreadsheet, Loader2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { TablePagination } from "@/components/admin/table-pagination";
@@ -44,6 +44,7 @@ import { getCategoryGroups } from "@/lib/firestore/category-groups";
 import { getAllBranchInventory } from "@/lib/firestore/inventory";
 import { getProducts } from "@/lib/firestore/products";
 import { paginateItems } from "@/lib/pagination";
+import { formatVariantLabel } from "@/lib/product-variants";
 import {
   UNCATEGORIZED_CATEGORY_ID,
   buildRemainingStockGroups,
@@ -62,6 +63,15 @@ import {
 } from "@/lib/remaining-stock-export";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { useAuthStore } from "@/stores/auth-store";
+import {
+  createAssortmentRequest,
+  subscribeAssortmentRequests,
+} from "@/lib/firestore/assortment-requests";
+import {
+  AssignVariantStockDialog,
+  type AssignVariantStockTarget,
+} from "@/components/admin/assign-variant-stock-dialog";
 import type {
   Branch,
   BranchInventory,
@@ -122,31 +132,62 @@ function StockCell({
   amount,
   assigned,
   lowStockThreshold,
+  pendingRequest,
+  requesting,
+  canRequest,
+  canAssign,
+  onRequest,
+  onAssign,
 }: {
   amount: number;
   assigned: boolean;
   lowStockThreshold: number;
+  pendingRequest?: boolean;
+  requesting?: boolean;
+  canRequest?: boolean;
+  canAssign?: boolean;
+  onRequest?: () => void;
+  onAssign?: () => void;
 }) {
-  if (!assigned) {
-    return (
-      <TableCell className="text-right">
-        <Badge variant="outline" className="text-muted-foreground">
-          Unassigned
-        </Badge>
-      </TableCell>
-    );
-  }
   const isZero = amount <= 0;
-  const isLow = amount > 0 && amount <= lowStockThreshold;
+  const isLow = assigned && amount > 0 && amount <= lowStockThreshold;
   return (
     <TableCell
       className={cn(
-        "text-right tabular-nums",
+        "text-right",
         isZero && "text-muted-foreground",
         isLow && "font-medium text-amber-700"
       )}
     >
-      {amount}
+      <div className="flex flex-col items-end gap-1">
+        <span className="tabular-nums">{amount}</span>
+        {!assigned ? (
+          <>
+            <Badge variant="outline" className="text-muted-foreground">
+              Unassigned
+            </Badge>
+            {canAssign ? (
+              <Button type="button" size="xs" onClick={onAssign}>
+                Assign
+              </Button>
+            ) : canRequest ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                disabled={pendingRequest || requesting}
+                onClick={onRequest}
+              >
+                {pendingRequest
+                  ? "Requested"
+                  : requesting
+                    ? "Requesting…"
+                    : "Request"}
+              </Button>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </TableCell>
   );
 }
@@ -154,9 +195,21 @@ function StockCell({
 function CategoryBlock({
   group,
   branches,
+  pendingVariantIds,
+  requestingVariantId,
+  canRequest,
+  canAssign,
+  onRequest,
+  onAssign,
 }: {
   group: RemainingStockCategoryGroup;
   branches: Branch[];
+  pendingVariantIds: Set<string>;
+  requestingVariantId: string | null;
+  canRequest: boolean;
+  canAssign: boolean;
+  onRequest: (productId: string, variantId: string, branchId: string) => void;
+  onAssign: (productId: string, variantId: string) => void;
 }) {
   const colCount = 2 + branches.length;
 
@@ -194,6 +247,16 @@ function CategoryBlock({
                   amount={variant.stocks[branch.id] ?? 0}
                   assigned={variant.assigned[branch.id] === true}
                   lowStockThreshold={variant.lowStockThreshold}
+                  pendingRequest={pendingVariantIds.has(variant.variantId)}
+                  requesting={requestingVariantId === variant.variantId}
+                  canRequest={canRequest}
+                  canAssign={canAssign}
+                  onRequest={() =>
+                    onRequest(product.productId, variant.variantId, branch.id)
+                  }
+                  onAssign={() =>
+                    onAssign(product.productId, variant.variantId)
+                  }
                 />
               ))}
             </TableRow>
@@ -205,7 +268,9 @@ function CategoryBlock({
 }
 
 export default function RemainingStocksPage() {
-  const { canViewAllBranches, assignedBranchId } = useBranchAccess();
+  const { canViewAllBranches, assignedBranchId, isElevatedAdmin, canEditStock } =
+    useBranchAccess();
+  const user = useAuthStore((s) => s.user);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
@@ -220,6 +285,14 @@ export default function RemainingStocksPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const { sort, toggleSort } = useTableSort<RemainingStockSortKey>();
+  const [pendingVariantIds, setPendingVariantIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [requestingVariantId, setRequestingVariantId] = useState<string | null>(
+    null
+  );
+  const [assignTarget, setAssignTarget] =
+    useState<AssignVariantStockTarget | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -254,6 +327,82 @@ export default function RemainingStocksPage() {
       })
       .finally(() => setLoading(false));
   }, [assignedBranchId, canViewAllBranches]);
+
+  const reloadInventory = useCallback(() => {
+    getAllBranchInventory()
+      .then(setInventory)
+      .catch((error) => {
+        console.error(error);
+        toast.error("Failed to refresh remaining stocks");
+      });
+  }, []);
+
+  useEffect(() => {
+    return subscribeAssortmentRequests(
+      (rows) => {
+        setPendingVariantIds(new Set(rows.map((row) => row.variantId)));
+      },
+      (err) => console.error(err),
+      "requested"
+    );
+  }, []);
+
+  const handleRequestAssignment = async (
+    productId: string,
+    variantId: string,
+    branchId: string
+  ) => {
+    const product = products.find((item) => item.id === productId);
+    const variant = product?.variants.find((item) => item.id === variantId);
+    const requestBranchId = assignedBranchId || branchId;
+    const branch = branches.find((item) => item.id === requestBranchId);
+    if (!product || !variant || !branch) {
+      toast.error("Could not find that variant");
+      return;
+    }
+    if (!user?.uid) {
+      toast.error("Sign in to request assignment");
+      return;
+    }
+    setRequestingVariantId(variantId);
+    try {
+      await createAssortmentRequest({
+        productId: product.id,
+        productName: product.name,
+        variantId: variant.id,
+        variantLabel: formatVariantLabel(variant, product.options),
+        sku: variant.sku,
+        requestedBranchId: branch.id,
+        requestedBranchName: branch.name,
+        requestedBy: user.uid,
+        requestedByName: user.displayName ?? user.email ?? null,
+      });
+      toast.success("Assignment requested");
+    } catch (err) {
+      console.error(err);
+      toast.error(
+        err instanceof Error ? err.message : "Failed to request assignment"
+      );
+    } finally {
+      setRequestingVariantId(null);
+    }
+  };
+
+  const handleAssignVariant = (productId: string, variantId: string) => {
+    const product = products.find((item) => item.id === productId);
+    const variant = product?.variants.find((item) => item.id === variantId);
+    if (!product || !variant) {
+      toast.error("Could not find that variant");
+      return;
+    }
+    setAssignTarget({
+      productId: product.id,
+      productName: product.name,
+      variantId: variant.id,
+      variantLabel: formatVariantLabel(variant, product.options),
+      sku: variant.sku,
+    });
+  };
 
   useEffect(() => {
     if (!canViewAllBranches && assignedBranchId) {
@@ -724,6 +873,18 @@ export default function RemainingStocksPage() {
                         key={group.categoryId}
                         group={group}
                         branches={selectedBranches}
+                        pendingVariantIds={pendingVariantIds}
+                        requestingVariantId={requestingVariantId}
+                        canRequest={canEditStock && !isElevatedAdmin}
+                        canAssign={isElevatedAdmin}
+                        onRequest={(productId, variantId, branchId) => {
+                          void handleRequestAssignment(
+                            productId,
+                            variantId,
+                            branchId
+                          );
+                        }}
+                        onAssign={handleAssignVariant}
                       />
                     ))}
                   </TableBody>
@@ -739,6 +900,16 @@ export default function RemainingStocksPage() {
           </CardContent>
         </Card>
       )}
+
+      <AssignVariantStockDialog
+        open={assignTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setAssignTarget(null);
+        }}
+        target={assignTarget}
+        branches={branches}
+        onAssigned={reloadInventory}
+      />
     </div>
   );
 }

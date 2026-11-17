@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,12 +18,14 @@ import {
   Receipt,
   Search,
   ArrowLeftRight,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
 import { useAppSettings } from "@/hooks/use-app-settings";
 import { Badge } from "@/components/ui/badge";
 import { isOwnerNavHref } from "@/lib/post-login-redirect";
+import { subscribeAssortmentRequests } from "@/lib/firestore/assortment-requests";
 
 export const adminNavItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, masterOnly: false },
@@ -44,6 +47,12 @@ export const adminNavItems = [
     href: "/admin/transfer-requests",
     label: "Transfer requests",
     icon: ArrowLeftRight,
+    masterOnly: false,
+  },
+  {
+    href: "/admin/assignment-requests",
+    label: "Assignment requests",
+    icon: ClipboardCheck,
     masterOnly: false,
   },
   {
@@ -88,6 +97,15 @@ export function AdminNavLinks({
 }) {
   const pathname = usePathname();
   const { isElevatedAdmin, isOwner, assignedBranchId } = useBranchAccess();
+  const [pendingAssignmentCount, setPendingAssignmentCount] = useState(0);
+
+  useEffect(() => {
+    return subscribeAssortmentRequests(
+      (rows) => setPendingAssignmentCount(rows.length),
+      () => setPendingAssignmentCount(0),
+      "requested"
+    );
+  }, []);
 
   const items = adminNavItems.filter((item) => {
     if (isOwner) return isOwnerNavHref(item.href);
@@ -142,6 +160,18 @@ export function AdminNavLinks({
             >
               {item.label}
             </span>
+            {item.href === "/admin/assignment-requests" &&
+            pendingAssignmentCount > 0 ? (
+              <Badge
+                variant={isActive ? "secondary" : "outline"}
+                className={cn(
+                  "ml-auto text-[10px]",
+                  compactLabels && "hidden group-hover/sidebar:inline-flex"
+                )}
+              >
+                {pendingAssignmentCount}
+              </Badge>
+            ) : null}
           </Link>
         );
       })}

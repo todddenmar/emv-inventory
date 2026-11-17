@@ -113,6 +113,22 @@ export function mergeSellingVariantsWithInventory(
   );
 }
 
+/**
+ * POS catalog: selling variants plus sibling variants of products that
+ * already sell at this branch (new SKUs that are not assigned yet).
+ */
+export function mergePosCatalogVariantsWithInventory(
+  products: Product[],
+  inventory: BranchInventory[],
+  categories: Array<Pick<Category, "id" | "lowStockThreshold">> = []
+): VariantWithStock[] {
+  const rows = mergeVariantsWithInventory(products, inventory, categories);
+  const sellingProductIds = new Set(
+    rows.filter((row) => row.isSelling).map((row) => row.productId)
+  );
+  return rows.filter((row) => sellingProductIds.has(row.productId));
+}
+
 export function mergeProductsWithInventory(
   products: Product[],
   inventory: BranchInventory[],

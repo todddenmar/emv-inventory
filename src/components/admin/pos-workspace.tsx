@@ -33,6 +33,10 @@ import {
 } from "@/components/admin/pos-cart";
 import { PosCatalogVariantCard } from "@/components/admin/pos-catalog-cards";
 import {
+  AssignVariantStockDialog,
+  type AssignVariantStockTarget,
+} from "@/components/admin/assign-variant-stock-dialog";
+import {
   FreebieShortfallDialog,
   type FreebieShortfall,
 } from "@/components/admin/freebie-shortfall-dialog";
@@ -40,6 +44,7 @@ import {
   VariantSearchDialog,
 } from "@/components/admin/variant-search-dialog";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { useAuthStore } from "@/stores/auth-store";
 import { getBranches } from "@/lib/firestore/branches";
 import { getCategories } from "@/lib/firestore/categories";
 import { getBranchInventory } from "@/lib/firestore/inventory";
@@ -52,11 +57,16 @@ import {
   getActivePricePromotions,
 } from "@/lib/firestore/price-promotions";
 import {
+  mergePosCatalogVariantsWithInventory,
   mergeSellingVariantsWithInventory,
   type VariantWithStock,
 } from "@/lib/inventory";
-import { isProductPublished } from "@/lib/products-catalog";
+import {
+  createAssortmentRequest,
+  subscribeAssortmentRequests,
+} from "@/lib/firestore/assortment-requests";
 import { formatVariantLabel } from "@/lib/product-variants";
+import { isProductPublished } from "@/lib/products-catalog";
 import {
   normalizeRetailPrice,
   normalizeWholesalePrice,
@@ -146,8 +156,9 @@ export function PosWorkspace({
   saleLock?: PosSaleLock | null;
 }) {
   const isWholesale = saleChannel === "wholesale";
-  const { isElevatedAdmin, assignedBranchId, isCashier, canAccessBranch } =
+  const { isElevatedAdmin, assignedBranchId, isCashier, canAccessBranch, canEditStock } =
     useBranchAccess();
+  const user = useAuthStore((s) => s.user);
   const { catalogImageSource } = useAppSettings();
   const router = useRouter();
   const pageSize = usePosPageSize();
@@ -199,6 +210,13 @@ export function PosWorkspace({
     url: string;
     title: string;
   } | null>(null);
+  const [pendingAssortmentVariantIds, setPendingAssortmentVariantIds] =
+    useState<Set<string>>(() => new Set());
+  const [requestingVariantId, setRequestingVariantId] = useState<string | null>(
+    null
+  );
+  const [assignTarget, setAssignTarget] =
+    useState<AssignVariantStockTarget | null>(null);
 
   const lockDenied = Boolean(
     saleLock && !canAccessBranch(saleLock.branchId)
@@ -303,6 +321,31 @@ export function PosWorkspace({
     }
   }, [activeBranchId, saleChannel, saleLock?.branchId, saleLock?.saleDate]);
 
+  const reloadInventory = useCallback(() => {
+    if (!activeBranchId) {
+      setInventory([]);
+      return;
+    }
+    getBranchInventory(activeBranchId)
+      .then(setInventory)
+      .catch((err) => {
+        console.error(err);
+        toast.error("Failed to load branch stock");
+      });
+  }, [activeBranchId]);
+
+  useEffect(() => {
+    return subscribeAssortmentRequests(
+      (rows) => {
+        setPendingAssortmentVariantIds(
+          new Set(rows.map((row) => row.variantId))
+        );
+      },
+      (err) => console.error(err),
+      "requested"
+    );
+  }, []);
+
   const resetSaleExtras = () => {
     setCustomer(emptyPosCustomerDraft());
     setCustomerType("walk_in");
@@ -347,9 +390,13 @@ export function PosWorkspace({
 
   const categoryProducts = categoryCache[selectedCategoryId] ?? [];
 
-  const sellingVariants = useMemo(
-    () => mergeSellingVariantsWithInventory(categoryProducts, inventory),
+  const catalogVariants = useMemo(
+    () => mergePosCatalogVariantsWithInventory(categoryProducts, inventory),
     [categoryProducts, inventory]
+  );
+  const sellingVariants = useMemo(
+    () => catalogVariants.filter((row) => row.isSelling),
+    [catalogVariants]
   );
 
   const productsById = useMemo(() => {
@@ -363,8 +410,8 @@ export function PosWorkspace({
   const filteredVariants = useMemo(() => {
     const q = search.trim().toLowerCase();
     const matched = !q
-      ? sellingVariants
-      : sellingVariants.filter((row) => {
+      ? catalogVariants
+      : catalogVariants.filter((row) => {
           const product = productsById.get(row.productId);
           const label = formatVariantLabel(row, product?.options ?? []);
           return (
@@ -416,7 +463,7 @@ export function PosWorkspace({
       });
     });
   }, [
-    sellingVariants,
+    catalogVariants,
     search,
     productsById,
     catalogSort,
@@ -596,6 +643,10 @@ export function PosWorkspace({
   };
 
   const addVariant = (row: VariantWithStock) => {
+    if (!row.isSelling) {
+      toast.error("This variant is not assigned to this branch yet");
+      return;
+    }
     const stock = stockForVariant(row.id);
     if (stock <= 0) {
       toast.error("Out of stock");
@@ -673,6 +724,53 @@ export function PosWorkspace({
         });
       }
       return nextCart;
+    });
+  };
+
+  const requestAssignment = async (row: VariantWithStock) => {
+    if (!activeBranchId || !activeBranch) {
+      toast.error("Select a branch first");
+      return;
+    }
+    if (!user?.uid) {
+      toast.error("Sign in to request assignment");
+      return;
+    }
+    const product = productsById.get(row.productId);
+    const variantLabel = formatVariantLabel(row, product?.options ?? []);
+    setRequestingVariantId(row.id);
+    try {
+      await createAssortmentRequest({
+        productId: row.productId,
+        productName: row.productName,
+        variantId: row.id,
+        variantLabel,
+        sku: row.sku,
+        requestedBranchId: activeBranchId,
+        requestedBranchName: activeBranch.name,
+        requestedBy: user.uid,
+        requestedByName: user.displayName ?? user.email ?? null,
+      });
+      toast.success("Assignment requested");
+    } catch (err) {
+      console.error(err);
+      toast.error(
+        err instanceof Error ? err.message : "Failed to request assignment"
+      );
+    } finally {
+      setRequestingVariantId(null);
+    }
+  };
+
+  const openAssign = (row: VariantWithStock) => {
+    const product = productsById.get(row.productId);
+    setAssignTarget({
+      productId: row.productId,
+      productName: row.productName,
+      variantId: row.id,
+      variantLabel: formatVariantLabel(row, product?.options ?? []),
+      sku: row.sku,
+      requestedBranchId: activeBranchId || null,
     });
   };
 
@@ -1207,6 +1305,14 @@ export function PosWorkspace({
                     onPreviewImage={(url, title) =>
                       setImagePreview({ url, title })
                     }
+                    pendingRequest={pendingAssortmentVariantIds.has(row.id)}
+                    requesting={requestingVariantId === row.id}
+                    canRequest={canEditStock && !isElevatedAdmin}
+                    canAssign={isElevatedAdmin}
+                    onRequest={(item) => {
+                      void requestAssignment(item);
+                    }}
+                    onAssign={openAssign}
                   />
                 ))}
               </div>
@@ -1318,6 +1424,16 @@ export function PosWorkspace({
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <AssignVariantStockDialog
+        open={assignTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setAssignTarget(null);
+        }}
+        target={assignTarget}
+        branches={branches}
+        onAssigned={reloadInventory}
+      />
     </div>
   );
 }

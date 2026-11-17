@@ -1,5 +1,5 @@
 import { resolveCategoryLowStockThreshold } from "@/lib/inventory";
-import { defaultVariantId, formatVariantLabel } from "@/lib/product-variants";
+import { formatVariantLabel } from "@/lib/product-variants";
 import type {
   Branch,
   BranchInventory,
@@ -99,13 +99,15 @@ export function primaryCategoryForProduct(
   return { id: named[0].id, name: named[0].name };
 }
 
-function isVariantSellingAnywhere(
-  variantId: string,
-  productId: string,
-  sellingIds: Set<string>
-): boolean {
-  if (sellingIds.has(variantId)) return true;
-  return sellingIds.has(defaultVariantId(productId));
+function sellingProductIdsFromInventory(
+  inventory: BranchInventory[]
+): Set<string> {
+  const ids = new Set<string>();
+  for (const row of inventory) {
+    if (row.isSelling === false) continue;
+    ids.add(row.productId);
+  }
+  return ids;
 }
 
 export function buildRemainingStockGroups(input: {
@@ -114,36 +116,28 @@ export function buildRemainingStockGroups(input: {
   branches: Array<Pick<Branch, "id">>;
   inventory: BranchInventory[];
 }): RemainingStockCategoryGroup[] {
-  const sellingIds = sellingVariantIdsFromInventory(input.inventory);
+  const assignedProductIds = sellingProductIdsFromInventory(input.inventory);
   const byKey = buildInventoryByBranchVariant(input.inventory);
   const branchIds = input.branches.map((branch) => branch.id);
   const categoryGroups = new Map<string, RemainingStockCategoryGroup>();
 
   for (const product of input.products) {
+    if (!assignedProductIds.has(product.id)) continue;
+
     const threshold = resolveCategoryLowStockThreshold(
       product.categoryIds,
       input.categories
     );
-    const fallbackId = defaultVariantId(product.id);
     const variants: RemainingStockVariantRow[] = [];
 
     for (const variant of [...product.variants].sort(
       (a, b) => a.position - b.position || a.sku.localeCompare(b.sku)
     )) {
-      if (!isVariantSellingAnywhere(variant.id, product.id, sellingIds)) {
-        continue;
-      }
-
       const byBranch: Record<string, number> = {};
       const assigned: Record<string, boolean> = {};
       let total = 0;
       for (const branchId of branchIds) {
-        const row = resolveBranchInventoryRow(
-          byKey,
-          branchId,
-          variant.id,
-          fallbackId === variant.id ? null : fallbackId
-        );
+        const row = byKey.get(inventoryKey(branchId, variant.id));
         const isAssigned = isAssignedAtBranch(row);
         const amount = row?.stock ?? 0;
         assigned[branchId] = isAssigned;
