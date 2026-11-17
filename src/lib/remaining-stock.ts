@@ -322,6 +322,31 @@ export function filterRemainingStockByLevel(
     .filter((group) => group.products.length > 0);
 }
 
+export function sumRemainingStockAcrossBranches(
+  stocks: Record<string, number>,
+  branchIds: string[]
+): number {
+  let total = 0;
+  for (const branchId of branchIds) {
+    total += stocks[branchId] ?? 0;
+  }
+  return total;
+}
+
+export function sumRemainingStockByBranch(
+  variants: Array<{ stocks: Record<string, number> }>,
+  branchIds: string[]
+): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const branchId of branchIds) totals[branchId] = 0;
+  for (const variant of variants) {
+    for (const branchId of branchIds) {
+      totals[branchId] += variant.stocks[branchId] ?? 0;
+    }
+  }
+  return totals;
+}
+
 export function flattenRemainingStockProducts(
   groups: RemainingStockCategoryGroup[]
 ): RemainingStockProductEntry[] {

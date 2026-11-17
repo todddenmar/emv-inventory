@@ -53,6 +53,8 @@ import {
   flattenRemainingStockProducts,
   regroupRemainingStockProducts,
   remainingStockLevelLabel,
+  sumRemainingStockAcrossBranches,
+  sumRemainingStockByBranch,
   type RemainingStockCategoryGroup,
   type RemainingStockLevelFilter,
 } from "@/lib/remaining-stock";
@@ -86,24 +88,38 @@ type RemainingStockSortKey = string;
 /** Sorts products within each category and variants within each product. */
 function sortRemainingStockGroups(
   groups: RemainingStockCategoryGroup[],
-  sort: SortState<RemainingStockSortKey>
+  sort: SortState<RemainingStockSortKey>,
+  selectedBranchIds: string[]
 ): RemainingStockCategoryGroup[] {
   if (!sort) return groups;
-  const branchId = sort.key.startsWith("stock:")
-    ? sort.key.slice("stock:".length)
-    : null;
+  const isRowTotal = sort.key === "stock:total";
+  const branchId =
+    sort.key.startsWith("stock:") && !isRowTotal
+      ? sort.key.slice("stock:".length)
+      : null;
 
   type Variant = RemainingStockCategoryGroup["products"][number]["variants"][number];
   type ProductRow = RemainingStockCategoryGroup["products"][number];
 
-  const variantValue = (variant: Variant) =>
-    branchId == null
-      ? variant.label
-      : variant.assigned[branchId] === true
-        ? (variant.stocks[branchId] ?? 0)
-        : null;
+  const variantValue = (variant: Variant) => {
+    if (isRowTotal) {
+      return sumRemainingStockAcrossBranches(variant.stocks, selectedBranchIds);
+    }
+    if (branchId == null) return variant.label;
+    return variant.assigned[branchId] === true
+      ? (variant.stocks[branchId] ?? 0)
+      : null;
+  };
 
   const productValue = (product: ProductRow) => {
+    if (isRowTotal) {
+      return product.variants.reduce(
+        (sum, variant) =>
+          sum +
+          sumRemainingStockAcrossBranches(variant.stocks, selectedBranchIds),
+        0
+      );
+    }
     if (branchId == null) return product.productName;
     let total: number | null = null;
     for (const variant of product.variants) {
@@ -192,6 +208,19 @@ function StockCell({
   );
 }
 
+function TotalCell({ amount }: { amount: number }) {
+  return (
+    <TableCell
+      className={cn(
+        "text-right tabular-nums font-medium",
+        amount <= 0 && "text-muted-foreground"
+      )}
+    >
+      {amount}
+    </TableCell>
+  );
+}
+
 function CategoryBlock({
   group,
   branches,
@@ -211,7 +240,15 @@ function CategoryBlock({
   onRequest: (productId: string, variantId: string, branchId: string) => void;
   onAssign: (productId: string, variantId: string) => void;
 }) {
-  const colCount = 2 + branches.length;
+  const showTotalColumn = branches.length > 1;
+  const branchIds = branches.map((branch) => branch.id);
+  const colCount = 2 + branches.length + (showTotalColumn ? 1 : 0);
+  const categoryVariants = group.products.flatMap((product) => product.variants);
+  const categoryByBranch = sumRemainingStockByBranch(categoryVariants, branchIds);
+  const categoryGrand = sumRemainingStockAcrossBranches(
+    categoryByBranch,
+    branchIds
+  );
 
   return (
     <>
@@ -223,46 +260,100 @@ function CategoryBlock({
           {group.categoryName}
         </TableCell>
       </TableRow>
-      {group.products.map((product) => (
-        <Fragment key={product.productId}>
-          <TableRow className="bg-accent hover:bg-accent">
-            <TableCell
-              colSpan={colCount}
-              className="sticky left-0 whitespace-normal bg-accent py-2 pl-4 text-sm font-medium text-accent-foreground"
-            >
-              {product.productName}
-            </TableCell>
-          </TableRow>
-          {product.variants.map((variant) => (
-            <TableRow key={variant.variantId}>
-              <TableCell className="sticky left-0 z-10 whitespace-normal bg-background font-medium">
-                {variant.label}
+      {group.products.map((product) => {
+        const productByBranch = sumRemainingStockByBranch(
+          product.variants,
+          branchIds
+        );
+        const productGrand = sumRemainingStockAcrossBranches(
+          productByBranch,
+          branchIds
+        );
+        return (
+          <Fragment key={product.productId}>
+            <TableRow className="bg-accent hover:bg-accent">
+              <TableCell
+                colSpan={colCount}
+                className="sticky left-0 whitespace-normal bg-accent py-2 pl-4 text-sm font-medium text-accent-foreground"
+              >
+                {product.productName}
               </TableCell>
-              <TableCell className="text-muted-foreground">
-                {variant.sku || "—"}
-              </TableCell>
-              {branches.map((branch) => (
-                <StockCell
-                  key={branch.id}
-                  amount={variant.stocks[branch.id] ?? 0}
-                  assigned={variant.assigned[branch.id] === true}
-                  lowStockThreshold={variant.lowStockThreshold}
-                  pendingRequest={pendingVariantIds.has(variant.variantId)}
-                  requesting={requestingVariantId === variant.variantId}
-                  canRequest={canRequest}
-                  canAssign={canAssign}
-                  onRequest={() =>
-                    onRequest(product.productId, variant.variantId, branch.id)
-                  }
-                  onAssign={() =>
-                    onAssign(product.productId, variant.variantId)
-                  }
-                />
-              ))}
             </TableRow>
+            {product.variants.map((variant) => (
+              <TableRow key={variant.variantId}>
+                <TableCell className="sticky left-0 z-10 whitespace-normal bg-background font-medium">
+                  {variant.label}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {variant.sku || "—"}
+                </TableCell>
+                {branches.map((branch) => (
+                  <StockCell
+                    key={branch.id}
+                    amount={variant.stocks[branch.id] ?? 0}
+                    assigned={variant.assigned[branch.id] === true}
+                    lowStockThreshold={variant.lowStockThreshold}
+                    pendingRequest={pendingVariantIds.has(variant.variantId)}
+                    requesting={requestingVariantId === variant.variantId}
+                    canRequest={canRequest}
+                    canAssign={canAssign}
+                    onRequest={() =>
+                      onRequest(product.productId, variant.variantId, branch.id)
+                    }
+                    onAssign={() =>
+                      onAssign(product.productId, variant.variantId)
+                    }
+                  />
+                ))}
+                {showTotalColumn ? (
+                  <TotalCell
+                    amount={sumRemainingStockAcrossBranches(
+                      variant.stocks,
+                      branchIds
+                    )}
+                  />
+                ) : null}
+              </TableRow>
+            ))}
+            {product.variants.length > 1 ? (
+              <TableRow className="bg-muted/60 hover:bg-muted/60">
+                <TableCell className="sticky left-0 z-10 whitespace-normal bg-muted/60 font-medium">
+                  <span className="block leading-tight">Product Total</span>
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    {product.productName}
+                  </span>
+                </TableCell>
+                <TableCell />
+                {branches.map((branch) => (
+                  <TotalCell
+                    key={branch.id}
+                    amount={productByBranch[branch.id] ?? 0}
+                  />
+                ))}
+                {showTotalColumn ? <TotalCell amount={productGrand} /> : null}
+              </TableRow>
+            ) : null}
+          </Fragment>
+        );
+      })}
+      {categoryVariants.length > 1 ? (
+        <TableRow className="bg-muted hover:bg-muted">
+          <TableCell className="sticky left-0 z-10 whitespace-normal bg-muted font-semibold">
+            <span className="block leading-tight">Category Total</span>
+            <span className="block text-xs font-normal text-muted-foreground">
+              {group.categoryName}
+            </span>
+          </TableCell>
+          <TableCell />
+          {branches.map((branch) => (
+            <TotalCell
+              key={branch.id}
+              amount={categoryByBranch[branch.id] ?? 0}
+            />
           ))}
-        </Fragment>
-      ))}
+          {showTotalColumn ? <TotalCell amount={categoryGrand} /> : null}
+        </TableRow>
+      ) : null}
     </>
   );
 }
@@ -460,7 +551,8 @@ export default function RemainingStocksPage() {
     });
     return sortRemainingStockGroups(
       filterRemainingStockByLevel(matched, stockLevel, selectedBranchIds),
-      sort
+      sort,
+      selectedBranchIds
     );
   }, [
     sort,
@@ -838,18 +930,20 @@ export default function RemainingStocksPage() {
                 No selling variants match these filters.
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
+              <div className="max-h-[calc(100dvh-16rem)] overflow-auto rounded-md border">
+                <Table containerClassName="overflow-visible">
+                  <TableHeader className="sticky top-0 z-30 bg-background shadow-[inset_0_-1px_0_0_var(--border)]">
+                    <TableRow className="hover:bg-background">
                       <SortableTableHead
                         label="Name"
                         sortKey="name"
                         sort={sort}
                         onSort={toggleSort}
-                        className="sticky left-0 z-20 min-w-[8rem] bg-background sm:min-w-[10rem]"
+                        className="sticky top-0 left-0 z-40 min-w-[8rem] bg-background sm:min-w-[10rem]"
                       />
-                      <TableHead className="min-w-[6rem]">SKU</TableHead>
+                      <TableHead className="sticky top-0 z-30 min-w-[6rem] bg-background">
+                        SKU
+                      </TableHead>
                       {selectedBranches.map((branch) => (
                         <SortableTableHead
                           key={branch.id}
@@ -862,9 +956,19 @@ export default function RemainingStocksPage() {
                           sort={sort}
                           onSort={toggleSort}
                           align="right"
-                          className="min-w-[7rem]"
+                          className="sticky top-0 z-30 min-w-[7rem] bg-background"
                         />
                       ))}
+                      {selectedBranches.length > 1 ? (
+                        <SortableTableHead
+                          label="Total"
+                          sortKey="stock:total"
+                          sort={sort}
+                          onSort={toggleSort}
+                          align="right"
+                          className="sticky top-0 z-30 min-w-[7rem] bg-background"
+                        />
+                      ) : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>

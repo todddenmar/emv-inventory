@@ -1,4 +1,8 @@
-import type { RemainingStockCategoryGroup } from "@/lib/remaining-stock";
+import {
+  sumRemainingStockAcrossBranches,
+  sumRemainingStockByBranch,
+  type RemainingStockCategoryGroup,
+} from "@/lib/remaining-stock";
 import type { Branch } from "@/types";
 
 type ExportBranch = Pick<Branch, "id" | "name" | "code">;
@@ -56,12 +60,34 @@ export function buildRemainingStockCsv(
   if (meta.filterSummary) lines.push(csvCell(meta.filterSummary));
   lines.push("");
 
+  const showTotalColumn = branches.length > 1;
+  const branchIds = branches.map((branch) => branch.id);
   const header = ["Category", "Product", "Variant", "SKU"];
   for (const branch of branches) {
     header.push(`${branchHeading(branch)} stock`);
     header.push(`${branchHeading(branch)} actual count`);
   }
+  if (showTotalColumn) header.push("Total stock");
   lines.push(header.map(csvCell).join(","));
+
+  const pushStockCells = (
+    row: Array<string | number>,
+    stocks: Record<string, number>,
+    assigned?: Record<string, boolean>
+  ) => {
+    for (const branch of branches) {
+      const stock = stocks[branch.id] ?? 0;
+      row.push(
+        assigned && assigned[branch.id] !== true
+          ? `${stock} (Unassigned)`
+          : stock
+      );
+      row.push("");
+    }
+    if (showTotalColumn) {
+      row.push(sumRemainingStockAcrossBranches(stocks, branchIds));
+    }
+  };
 
   for (const group of groups) {
     for (const product of group.products) {
@@ -72,17 +98,34 @@ export function buildRemainingStockCsv(
           variant.label,
           variant.sku || "",
         ];
-        for (const branch of branches) {
-          const stock = variant.stocks[branch.id] ?? 0;
-          row.push(
-            variant.assigned[branch.id] === true
-              ? stock
-              : `${stock} (Unassigned)`
-          );
-          row.push("");
-        }
+        pushStockCells(row, variant.stocks, variant.assigned);
         lines.push(row.map(csvCell).join(","));
       }
+      if (product.variants.length > 1) {
+        const totals = sumRemainingStockByBranch(product.variants, branchIds);
+        const row: Array<string | number> = [
+          group.categoryName,
+          product.productName,
+          "Product Total",
+          "",
+        ];
+        pushStockCells(row, totals);
+        lines.push(row.map(csvCell).join(","));
+      }
+    }
+    const categoryVariants = group.products.flatMap(
+      (product) => product.variants
+    );
+    if (categoryVariants.length > 1) {
+      const totals = sumRemainingStockByBranch(categoryVariants, branchIds);
+        const row: Array<string | number> = [
+          group.categoryName,
+          "Category Total",
+          "",
+          "",
+        ];
+      pushStockCells(row, totals);
+      lines.push(row.map(csvCell).join(","));
     }
   }
 
@@ -119,18 +162,44 @@ function buildPrintHtml(
   meta: RemainingStockExportMeta
 ): string {
   const landscape = branches.length > 2;
-  const colCount = 2 + branches.length * 2;
+  const showTotalColumn = branches.length > 1;
+  const branchIds = branches.map((branch) => branch.id);
+  const colCount = 2 + branches.length * 2 + (showTotalColumn ? 1 : 0);
 
-  const branchHeads = branches
-    .map(
-      (branch) =>
-        `<th class="num">${escapeHtml(branch.name)}<span class="sub">${escapeHtml(
-          branch.code ?? ""
-        )} · Stock</span></th><th class="count">${escapeHtml(
-          branch.name
-        )}<span class="sub">Actual count</span></th>`
-    )
-    .join("");
+  const branchHeads =
+    branches
+      .map(
+        (branch) =>
+          `<th class="num">${escapeHtml(branch.name)}<span class="sub">${escapeHtml(
+            branch.code ?? ""
+          )} · Stock</span></th><th class="count">${escapeHtml(
+            branch.name
+          )}<span class="sub">Actual count</span></th>`
+      )
+      .join("") +
+    (showTotalColumn ? `<th class="num">Total<span class="sub">Stock</span></th>` : "");
+
+  const stockCells = (
+    stocks: Record<string, number>,
+    assigned?: Record<string, boolean>
+  ) => {
+    const cells = branches
+      .map((branch) => {
+        const amount = stocks[branch.id] ?? 0;
+        const assignedHere = assigned ? assigned[branch.id] === true : true;
+        const stock = assignedHere
+          ? escapeHtml(amount)
+          : `${escapeHtml(amount)} <span class="muted">(Unassigned)</span>`;
+        return `<td class="num">${stock}</td><td class="count"></td>`;
+      })
+      .join("");
+    const total = showTotalColumn
+      ? `<td class="num">${escapeHtml(
+          sumRemainingStockAcrossBranches(stocks, branchIds)
+        )}</td>`
+      : "";
+    return `${cells}${total}`;
+  };
 
   const body = groups
     .map((group) => {
@@ -138,29 +207,38 @@ function buildPrintHtml(
         .map((product) => {
           const variants = product.variants
             .map((variant) => {
-              const cells = branches
-                .map((branch) => {
-                  const assigned = variant.assigned[branch.id] === true;
-                  const amount = variant.stocks[branch.id] ?? 0;
-                  const stock = assigned
-                    ? escapeHtml(amount)
-                    : `${escapeHtml(amount)} <span class="muted">(Unassigned)</span>`;
-                  return `<td class="num">${stock}</td><td class="count"></td>`;
-                })
-                .join("");
               return `<tr><td>${escapeHtml(variant.label)}</td><td class="sku">${escapeHtml(
                 variant.sku || "—"
-              )}</td>${cells}</tr>`;
+              )}</td>${stockCells(variant.stocks, variant.assigned)}</tr>`;
             })
             .join("");
+          const productTotal =
+            product.variants.length > 1
+              ? `<tr class="total"><td>Product Total<span class="sub">${escapeHtml(
+                  product.productName
+                )}</span></td><td></td>${stockCells(
+                  sumRemainingStockByBranch(product.variants, branchIds)
+                )}</tr>`
+              : "";
           return `<tr class="product"><td colspan="${colCount}">${escapeHtml(
             product.productName
-          )}</td></tr>${variants}`;
+          )}</td></tr>${variants}${productTotal}`;
         })
         .join("");
+      const categoryVariants = group.products.flatMap(
+        (product) => product.variants
+      );
+      const categoryTotal =
+        categoryVariants.length > 1
+          ? `<tr class="total category-total"><td>Category Total<span class="sub">${escapeHtml(
+              group.categoryName
+            )}</span></td><td></td>${stockCells(
+              sumRemainingStockByBranch(categoryVariants, branchIds)
+            )}</tr>`
+          : "";
       return `<tr class="category"><td colspan="${colCount}">${escapeHtml(
         group.categoryName
-      )}</td></tr>${products}`;
+      )}</td></tr>${products}${categoryTotal}`;
     })
     .join("");
 
@@ -180,7 +258,7 @@ function buildPrintHtml(
   tr { page-break-inside: avoid; break-inside: avoid; }
   th, td { border: 1px solid #999; padding: 4px 6px; text-align: left; vertical-align: top; }
   th { background: #eee; font-size: 10px; }
-  th .sub { display: block; font-weight: normal; color: #555; }
+  th .sub, td .sub { display: block; font-weight: normal; color: #555; font-size: 10px; }
   td.num, th.num { text-align: right; white-space: nowrap; }
   th.count, td.count { min-width: 70px; width: 70px; }
   td.sku { color: #555; }
@@ -189,6 +267,9 @@ function buildPrintHtml(
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   tr.product td { background: #e8e8e8; font-weight: bold; padding-left: 10px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tr.total td { background: #f3f3f3; font-weight: bold;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tr.category-total td { background: #ddd; }
   .signatures { display: flex; gap: 32px; margin-top: 24px; font-size: 12px; }
   .signatures span { flex: 1; border-top: 1px solid #333; padding-top: 4px; }
 </style>
