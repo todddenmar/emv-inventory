@@ -137,8 +137,7 @@ export function loadPosCheckoutDraft(
       ...parsed,
       voucherAppliedOverride,
       customerType: parsedType === "delivery" ? "walk_in" : parsedType,
-      isDelivery:
-        parsed.isDelivery === true || parsed.customerType === "delivery",
+      isDelivery: parsed.isDelivery === true,
       lines: parsed.lines.map((line) => ensureCartLinePaymentFields(line)),
       paymentGroups: sanitizePaymentGroups(
         parsed.paymentGroups,

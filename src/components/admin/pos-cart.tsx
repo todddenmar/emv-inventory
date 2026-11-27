@@ -1786,7 +1786,7 @@ export function PosCheckoutDialog({
 
                 <label className="flex items-start gap-3 rounded-md border p-3">
                   <Checkbox
-                    checked={isDelivery}
+                    checked={isDelivery === true}
                     disabled={charging}
                     onCheckedChange={(checked) =>
                       onIsDeliveryChange(checked === true)
