@@ -1,4 +1,4 @@
-import type { PosCustomerType } from "@/types";
+import type { PosCustomerType, PosSale } from "@/types";
 
 export function parsePosCustomerType(value: unknown): PosCustomerType {
   if (
@@ -12,6 +12,15 @@ export function parsePosCustomerType(value: unknown): PosCustomerType {
   }
   return "walk_in";
 }
+
+/** Customer types shown in POS / edit-sale pickers (delivery is a separate flag). */
+export const POS_CHECKOUT_CUSTOMER_TYPES: PosCustomerType[] = [
+  "walk_in",
+  "reservation",
+  "warranty",
+  "replacement",
+  "co_owner",
+];
 
 export function posCustomerTypeLabel(type: PosCustomerType): string {
   switch (type) {
@@ -30,13 +39,25 @@ export function posCustomerTypeLabel(type: PosCustomerType): string {
   }
 }
 
-export function requiresPosCustomerDetails(type: PosCustomerType): boolean {
-  return type === "reservation" || type === "delivery";
+export function isPosSaleDelivery(
+  sale: Pick<PosSale, "isDelivery" | "customerType">
+): boolean {
+  return sale.isDelivery === true || sale.customerType === "delivery";
+}
+
+export function requiresPosCustomerDetails(
+  type: PosCustomerType,
+  isDelivery = false
+): boolean {
+  return type === "reservation" || type === "delivery" || isDelivery;
 }
 
 /** Name (or owner note) is required before checkout can proceed. */
-export function requiresPosCustomerName(type: PosCustomerType): boolean {
-  return requiresPosCustomerDetails(type) || type === "co_owner";
+export function requiresPosCustomerName(
+  type: PosCustomerType,
+  isDelivery = false
+): boolean {
+  return requiresPosCustomerDetails(type, isDelivery) || type === "co_owner";
 }
 
 export function isNonRevenueCustomerType(

@@ -95,6 +95,7 @@ export function PosCheckoutWorkspace({
   const [tenderMethods, setTenderMethods] = useState<PaymentMethod[]>([]);
   const [customerType, setCustomerType] =
     useState<PosCustomerType>("walk_in");
+  const [isDelivery, setIsDelivery] = useState(false);
   const [customer, setCustomer] = useState<PosCustomerDraft>(
     emptyPosCustomerDraft
   );
@@ -146,6 +147,7 @@ export function PosCheckoutWorkspace({
     );
     setPaymentMethod(draft.paymentMethod);
     setCustomerType(draft.customerType);
+    setIsDelivery(draft.isDelivery === true);
     setCustomer(draft.customer);
     setAppliedVoucher(draft.appliedVoucher);
     setVoucherAppliedOverride(draft.voucherAppliedOverride ?? null);
@@ -180,6 +182,7 @@ export function PosCheckoutWorkspace({
         lines,
         paymentMethod,
         customerType,
+        isDelivery,
         customer,
         appliedVoucher,
         voucherAppliedOverride,
@@ -194,6 +197,7 @@ export function PosCheckoutWorkspace({
       appliedVoucher,
       customer,
       customerType,
+      isDelivery,
       draftMeta,
       lines,
       paymentGroups,
@@ -430,7 +434,10 @@ export function PosCheckoutWorkspace({
       return;
     }
 
-    if (requiresPosCustomerName(customerType) && !customer.name.trim()) {
+    if (
+      requiresPosCustomerName(customerType, isDelivery) &&
+      !customer.name.trim()
+    ) {
       toast.error(
         customerType === "co_owner"
           ? "Enter owner note (who the owner is)"
@@ -485,8 +492,9 @@ export function PosCheckoutWorkspace({
             })(),
         payments,
         customerType,
+        isDelivery,
         customer:
-          requiresPosCustomerName(customerType) || appliedVoucher
+          requiresPosCustomerName(customerType, isDelivery) || appliedVoucher
             ? normalizePosCustomer(customer)
             : null,
         resellerId: noCharge ? null : (appliedVoucher?.resellerId ?? null),
@@ -653,6 +661,7 @@ export function PosCheckoutWorkspace({
         paymentAccounts={paymentAccounts}
         tenderMethods={tenderMethods}
         customerType={customerType}
+        isDelivery={isDelivery}
         customer={customer}
         appliedVoucher={appliedVoucher}
         voucherAppliedOverride={voucherAppliedOverride}
@@ -714,13 +723,17 @@ export function PosCheckoutWorkspace({
         }}
         onCustomerTypeChange={(type) => {
           setCustomerType(type);
-          if (!requiresPosCustomerName(type)) {
+          if (!requiresPosCustomerName(type, isDelivery)) {
             const empty = emptyPosCustomerDraft();
             setCustomer(empty);
             persistDraft({ customerType: type, customer: empty });
           } else {
             persistDraft({ customerType: type });
           }
+        }}
+        onIsDeliveryChange={(next) => {
+          setIsDelivery(next);
+          persistDraft({ isDelivery: next });
         }}
         onApplyVoucherId={handleApplyVoucherId}
         onVoucherAppliedOverrideChange={handleVoucherAppliedOverrideChange}

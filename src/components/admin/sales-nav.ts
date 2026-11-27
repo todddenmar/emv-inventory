@@ -1,7 +1,6 @@
 import {
   Footprints,
   CalendarCheck,
-  Truck,
   Ticket,
   ClipboardList,
   type LucideIcon,
@@ -26,12 +25,6 @@ export const salesNavItems: SalesNavItem[] = [
     label: "Reservation",
     icon: CalendarCheck,
     description: "Reservation sales with customer details",
-  },
-  {
-    href: "/admin/sales/delivery",
-    label: "Delivery",
-    icon: Truck,
-    description: "Delivery sales with customer details",
   },
   {
     href: "/admin/sales/vouchers",

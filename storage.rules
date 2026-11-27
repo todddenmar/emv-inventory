@@ -18,5 +18,11 @@ service firebase.storage {
       allow read: if true;
       allow write: if isElevatedAdmin();
     }
+
+    // Per-branch delivery receipt logos
+    match /delivery-receipts/{branchId}/{fileName} {
+      allow read: if true;
+      allow write: if isElevatedAdmin();
+    }
   }
 }

@@ -45,6 +45,7 @@ import { migrateLegacyProductVariants, getDefaultVariant, defaultVariantId } fro
 import { specsToText } from "@/lib/specs";
 import { parseOptionalPosTenderMethod, parsePosTenderMethod } from "@/lib/pos-payments";
 import { parsePosCustomerType } from "@/lib/pos-customer-type";
+import { normalizeDeliveryReceiptCompany } from "@/lib/delivery-receipt";
 
 function toDate(value: Timestamp | Date | undefined | null): Date {
   if (!value) return new Date();
@@ -198,6 +199,7 @@ export const branchConverter: FirestoreDataConverter<Branch> = {
       managerName: branch.managerName,
       isActive: branch.isActive,
       supportsWholesale: branch.supportsWholesale,
+      deliveryReceipt: branch.deliveryReceipt ?? null,
       createdAt: branch.createdAt,
       updatedAt: branch.updatedAt,
     };
@@ -219,6 +221,9 @@ export const branchConverter: FirestoreDataConverter<Branch> = {
       managerName: data.managerName ?? null,
       isActive: data.isActive ?? true,
       supportsWholesale: data.supportsWholesale === true,
+      deliveryReceipt: data.deliveryReceipt
+        ? normalizeDeliveryReceiptCompany(data.deliveryReceipt)
+        : null,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
     };
@@ -752,7 +757,8 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       tenderMethod: sale.tenderMethod,
       paymentAccount: sale.paymentAccount,
       payments: sale.payments,
-      customerType: sale.customerType,
+      customerType: sale.customerType === "delivery" ? "walk_in" : sale.customerType,
+      isDelivery: sale.isDelivery === true || sale.customerType === "delivery",
       customer: sale.customer,
       resellerId: sale.resellerId,
       resellerName: sale.resellerName,
@@ -790,7 +796,11 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
         ? Number(data.amountDue)
         : Math.max(0, total - voucherAmountApplied);
     const tenderMethod = parsePosTenderMethod(data.tenderMethod);
-    const customerType = parsePosCustomerType(data.customerType);
+    const rawCustomerType = parsePosCustomerType(data.customerType);
+    const isDelivery =
+      data.isDelivery === true || rawCustomerType === "delivery";
+    const customerType =
+      rawCustomerType === "delivery" ? "walk_in" : rawCustomerType;
     const paymentAccount: PosSale["paymentAccount"] = rawAccount
       ? {
           id: String(rawAccount.id ?? ""),
@@ -868,6 +878,7 @@ export const posSaleConverter: FirestoreDataConverter<PosSale> = {
       paymentAccount,
       payments,
       customerType,
+      isDelivery,
       customer: rawCustomer
         ? {
             name: rawCustomer.name?.trim() || null,

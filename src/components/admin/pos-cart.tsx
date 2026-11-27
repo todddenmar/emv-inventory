@@ -670,6 +670,7 @@ interface PosCheckoutDialogProps {
   paymentAccounts: PaymentAccount[];
   tenderMethods?: PaymentMethod[];
   customerType: PosCustomerType;
+  isDelivery: boolean;
   customer: PosCustomerDraft;
   appliedVoucher: Voucher | null;
   voucherAppliedOverride: number | null;
@@ -685,6 +686,7 @@ interface PosCheckoutDialogProps {
     >
   ) => void;
   onCustomerTypeChange: (type: PosCustomerType) => void;
+  onIsDeliveryChange: (isDelivery: boolean) => void;
   onApplyVoucherId: (voucherId: string | null) => void;
   onVoucherAppliedOverrideChange: (amount: number | null) => void;
   onVoucherCodeInputChange: (code: string) => void;
@@ -710,6 +712,7 @@ export function PosCheckoutDialog({
   paymentAccounts,
   tenderMethods,
   customerType,
+  isDelivery,
   customer,
   appliedVoucher,
   voucherAppliedOverride,
@@ -717,6 +720,7 @@ export function PosCheckoutDialog({
   charging,
   onLineChange,
   onCustomerTypeChange,
+  onIsDeliveryChange,
   onApplyVoucherId,
   onVoucherAppliedOverrideChange,
   onVoucherCodeInputChange,
@@ -836,8 +840,12 @@ export function PosCheckoutDialog({
       (line) => line.priceList === "retail" && line.retailPrice == null
     );
   const showCustomerForm =
-    requiresPosCustomerName(customerType) ||
+    requiresPosCustomerName(customerType, isDelivery) ||
     (!noCharge && appliedVoucher != null);
+  const showDeliveryDetails = requiresPosCustomerDetails(
+    customerType,
+    isDelivery
+  );
   const customerSummary = showCustomerForm
     ? normalizePosCustomer(customer)
     : null;
@@ -1769,13 +1777,30 @@ export function PosCheckoutDialog({
                     <SelectContent>
                       <SelectItem value="walk_in">Walk in</SelectItem>
                       <SelectItem value="reservation">Reservation</SelectItem>
-                      <SelectItem value="delivery">Delivery</SelectItem>
                       <SelectItem value="warranty">Warranty</SelectItem>
                       <SelectItem value="replacement">Replacement</SelectItem>
                       <SelectItem value="co_owner">C/O Owner</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                <label className="flex items-start gap-3 rounded-md border p-3">
+                  <Checkbox
+                    checked={isDelivery}
+                    disabled={charging}
+                    onCheckedChange={(checked) =>
+                      onIsDeliveryChange(checked === true)
+                    }
+                  />
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium leading-none">
+                      For delivery
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Adds this sale to Deliveries and prints a delivery receipt.
+                    </span>
+                  </span>
+                </label>
 
                 {showCustomerForm ? (
                   <div className="space-y-3">
@@ -1789,9 +1814,13 @@ export function PosCheckoutDialog({
                         {customerType === "co_owner"
                           ? "Note who the owner is (free giveaway to a friend)"
                           : appliedVoucher &&
-                              !requiresPosCustomerDetails(customerType)
+                              !showDeliveryDetails
                             ? "Customer name is required when redeeming a voucher"
-                            : `Required for ${customerTypeLabel(customerType).toLowerCase()}`}
+                            : isDelivery && customerType === "walk_in"
+                              ? "Required for delivery"
+                              : isDelivery
+                                ? `Required for ${customerTypeLabel(customerType).toLowerCase()} and delivery`
+                                : `Required for ${customerTypeLabel(customerType).toLowerCase()}`}
                       </p>
                     </div>
                     <div className="grid gap-2">
@@ -1813,7 +1842,7 @@ export function PosCheckoutDialog({
                           }
                         />
                       </div>
-                      {requiresPosCustomerDetails(customerType) ? (
+                      {showDeliveryDetails ? (
                         <>
                           <div className="space-y-1">
                             <Label
@@ -1863,7 +1892,7 @@ export function PosCheckoutDialog({
                               value={customer.address}
                               disabled={charging}
                               placeholder={
-                                customerType === "delivery"
+                                isDelivery
                                   ? "Delivery address"
                                   : "Optional contact address"
                               }
@@ -2052,6 +2081,12 @@ export function PosCheckoutDialog({
                     {customerTypeLabel(customerType)}
                   </span>
                 </div>
+                {isDelivery ? (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">Delivery</span>
+                    <span className="font-medium">Yes</span>
+                  </div>
+                ) : null}
                 {appliedVoucher && !noCharge ? (
                   <>
                     <div className="flex justify-between gap-2">

@@ -474,10 +474,11 @@ function DocsSections({
             <li>
               At checkout, set <strong>Customer type</strong> to{" "}
               <strong>Walk in</strong>, <strong>Reservation</strong>,{" "}
-              <strong>Delivery</strong>, <strong>Warranty</strong>, or{" "}
-              <strong>Replacement</strong>. Warranty and replacement receipts
-              still deduct stock and appear on sales reports with no peso
-              value. They have no charge at checkout.
+              <strong>Warranty</strong>, or <strong>Replacement</strong>. Check{" "}
+              <strong>For delivery</strong> when the order should be delivered —
+              that adds the sale to Deliveries and a delivery receipt. Warranty
+              and replacement receipts still deduct stock and appear on sales
+              reports with no peso value. They have no charge at checkout.
             </li>
             <li>
               Freebies, vouchers, resellers, and payment accounts are configured

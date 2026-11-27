@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, MoreHorizontal, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,12 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -29,10 +35,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AddDeliveryDetailsDialog } from "@/components/admin/add-delivery-details-dialog";
 import { CategoryFilterPanel } from "@/components/admin/category-filter-panel";
-import { SaleInvoiceButton } from "@/components/admin/sale-invoice-dialog";
+import {
+  SaleInvoiceButton,
+  SaleInvoiceDialog,
+} from "@/components/admin/sale-invoice-dialog";
 import { TablePagination } from "@/components/admin/table-pagination";
 import { useBranchAccess } from "@/hooks/use-branch-access";
+import { canEditPosSale } from "@/lib/pos-sale-edit";
 import { shiftDateInput, toDateInputValue } from "@/lib/dates";
 import {
   filterSalesByProducts,
@@ -45,7 +56,10 @@ import { getPosSales } from "@/lib/firestore/pos-sales";
 import { getProducts } from "@/lib/firestore/products";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { paginateItems } from "@/lib/pagination";
-import { posCustomerTypeLabel } from "@/lib/pos-customer-type";
+import {
+  isPosSaleDelivery,
+  posCustomerTypeLabel,
+} from "@/lib/pos-customer-type";
 import {
   formatSaleItemsSummary,
   saleMatchesItemNameSearch,
@@ -82,8 +96,10 @@ export function CustomerTypeSalesPage({
   title: string;
   description: string;
 }) {
-  const { canViewAllBranches, assignedBranchId, scopedBranchId } =
+  const { canViewAllBranches, assignedBranchId, scopedBranchId, user } =
     useBranchAccess();
+  const [invoiceSale, setInvoiceSale] = useState<PosSale | null>(null);
+  const [deliverySale, setDeliverySale] = useState<PosSale | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
@@ -204,6 +220,13 @@ export function CustomerTypeSalesPage({
   }, [page, safePage]);
 
   const showCustomer = customerType !== "walk_in";
+  const isWalkIn = customerType === "walk_in";
+
+  const handleDeliverySaved = (updated: PosSale) => {
+    setSales((rows) =>
+      rows.map((row) => (row.id === updated.id ? updated : row))
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -366,7 +389,7 @@ export function CustomerTypeSalesPage({
                     {showCustomer ? <TableHead>Customer</TableHead> : null}
                     <TableHead>Items</TableHead>
                     <TableHead className="text-right">Amount due</TableHead>
-                    <TableHead className="w-20 text-right">
+                    <TableHead className="w-12 text-right">
                       <span className="sr-only">Actions</span>
                     </TableHead>
                   </TableRow>
@@ -403,12 +426,55 @@ export function CustomerTypeSalesPage({
                             {sale.voucherCode}
                           </Badge>
                         ) : null}
+                        {isWalkIn && isPosSaleDelivery(sale) ? (
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            Delivery
+                          </Badge>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
                         {formatCurrency(sale.amountDue ?? sale.total)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <SaleInvoiceButton sale={sale} />
+                        {isWalkIn ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              render={
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                  <span className="sr-only">Actions</span>
+                                </Button>
+                              }
+                            />
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => setInvoiceSale(sale)}
+                              >
+                                View invoice
+                              </DropdownMenuItem>
+                              {canEditPosSale({
+                                sale,
+                                role: user?.role,
+                                userId: user?.uid,
+                                assignedBranchId,
+                              }) ? (
+                                <DropdownMenuItem
+                                  onClick={() => setDeliverySale(sale)}
+                                >
+                                  {isPosSaleDelivery(sale)
+                                    ? "Edit delivery details"
+                                    : "Add delivery details"}
+                                </DropdownMenuItem>
+                              ) : null}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <SaleInvoiceButton sale={sale} />
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -426,6 +492,22 @@ export function CustomerTypeSalesPage({
           ) : null}
         </CardContent>
       </Card>
+
+      <SaleInvoiceDialog
+        sale={invoiceSale}
+        open={invoiceSale != null}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceSale(null);
+        }}
+      />
+      <AddDeliveryDetailsDialog
+        sale={deliverySale}
+        open={deliverySale != null}
+        onOpenChange={(open) => {
+          if (!open) setDeliverySale(null);
+        }}
+        onSaved={handleDeliverySaved}
+      />
     </div>
   );
 }

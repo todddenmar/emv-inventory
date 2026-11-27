@@ -187,6 +187,7 @@ export function PosWorkspace({
     useState<PosPaymentMethod>("cash");
   const [customerType, setCustomerType] =
     useState<PosCustomerType>("walk_in");
+  const [isDelivery, setIsDelivery] = useState(false);
   const [customer, setCustomer] = useState<PosCustomerDraft>(emptyPosCustomerDraft);
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
   const [voucherCodeInput, setVoucherCodeInput] = useState("");
@@ -308,6 +309,7 @@ export function PosWorkspace({
       setCart(draft.lines);
       setPaymentMethod(draft.paymentMethod);
       setCustomerType(draft.customerType);
+      setIsDelivery(draft.isDelivery === true);
       setCustomer(draft.customer);
       setAppliedVoucher(draft.appliedVoucher);
       setVoucherCodeInput(draft.voucherCodeInput);
@@ -315,6 +317,7 @@ export function PosWorkspace({
       setCart([]);
       setPaymentMethod("cash");
       setCustomerType("walk_in");
+      setIsDelivery(false);
       setCustomer(emptyPosCustomerDraft());
       setAppliedVoucher(null);
       setVoucherCodeInput("");
@@ -1048,6 +1051,7 @@ export function PosWorkspace({
         lines,
         paymentMethod,
         customerType,
+        isDelivery,
         customer,
         appliedVoucher,
         voucherAppliedOverride: null,

@@ -19,6 +19,7 @@ import {
   Search,
   ArrowLeftRight,
   ClipboardCheck,
+  Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBranchAccess } from "@/hooks/use-branch-access";
@@ -65,6 +66,12 @@ export const adminNavItems = [
     href: "/admin/sales",
     label: "Sales",
     icon: Receipt,
+    masterOnly: false,
+  },
+  {
+    href: "/admin/deliveries",
+    label: "Deliveries",
+    icon: Truck,
     masterOnly: false,
   },
   {

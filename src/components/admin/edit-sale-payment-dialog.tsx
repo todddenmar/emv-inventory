@@ -41,7 +41,9 @@ import {
 } from "@/lib/pos-sale-edit";
 import { formatVariantLabel } from "@/lib/product-variants";
 import {
+  POS_CHECKOUT_CUSTOMER_TYPES,
   isNonRevenueCustomerType,
+  isPosSaleDelivery,
   parsePosCustomerType,
   posCustomerTypeLabel,
   requiresPosCustomerName,
@@ -100,14 +102,7 @@ type LineEditor = {
   draft: PosCheckoutPaymentLine;
 };
 
-const CUSTOMER_TYPES: PosCustomerType[] = [
-  "walk_in",
-  "reservation",
-  "delivery",
-  "warranty",
-  "replacement",
-  "co_owner",
-];
+const CUSTOMER_TYPES = POS_CHECKOUT_CUSTOMER_TYPES;
 
 function accountsForTender(
   accounts: PaymentAccount[],
@@ -189,6 +184,7 @@ export function EditSalePaymentDialog({
   const [saleDate, setSaleDate] = useState("");
   const [allowUnequalPayments, setAllowUnequalPayments] = useState(false);
   const [customerType, setCustomerType] = useState<PosCustomerType>("walk_in");
+  const [isDelivery, setIsDelivery] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerMobile, setCustomerMobile] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -227,7 +223,9 @@ export function EditSalePaymentDialog({
       setLoaded(row);
       setSaleDate(toDateInputValue(row.createdAt));
       setItemLines(buildItemLines(row));
-      setCustomerType(parsePosCustomerType(row.customerType));
+      const loadedType = parsePosCustomerType(row.customerType);
+      setCustomerType(loadedType === "delivery" ? "walk_in" : loadedType);
+      setIsDelivery(isPosSaleDelivery(row));
       setCustomerName(row.customer?.name ?? "");
       setCustomerMobile(row.customer?.mobile ?? "");
       setCustomerEmail(row.customer?.email ?? "");
@@ -454,7 +452,10 @@ export function EditSalePaymentDialog({
       toast.error("Add at least one item");
       return;
     }
-    if (requiresPosCustomerName(customerType) && !customerName.trim()) {
+    if (
+      requiresPosCustomerName(customerType, isDelivery) &&
+      !customerName.trim()
+    ) {
       toast.error(
         customerType === "co_owner"
           ? "Owner note is required for C/O Owner"
@@ -508,6 +509,7 @@ export function EditSalePaymentDialog({
         items,
         payments,
         customerType,
+        isDelivery,
         customer: {
           name: customerName.trim() || null,
           mobile: customerMobile.trim() || null,
@@ -1009,6 +1011,23 @@ export function EditSalePaymentDialog({
                     </SelectContent>
                   </Select>
                 </div>
+                <label className="flex items-start gap-3 rounded-md border p-3">
+                  <Checkbox
+                    checked={isDelivery}
+                    disabled={saving}
+                    onCheckedChange={(checked) =>
+                      setIsDelivery(checked === true)
+                    }
+                  />
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium leading-none">
+                      For delivery
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Shows this sale on Deliveries so you can print a receipt.
+                    </span>
+                  </span>
+                </label>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="edit-customer-name">
@@ -1045,6 +1064,7 @@ export function EditSalePaymentDialog({
                       id="edit-customer-address"
                       value={customerAddress}
                       disabled={saving}
+                      placeholder={isDelivery ? "Delivery address" : undefined}
                       onChange={(e) => setCustomerAddress(e.target.value)}
                     />
                   </div>

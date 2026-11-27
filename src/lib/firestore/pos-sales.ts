@@ -68,6 +68,7 @@ export interface CompletePosSaleInput {
   paymentAccount?: PosSalePaymentAccount | null;
   payments?: PosPaymentLine[];
   customerType: PosCustomerType;
+  isDelivery?: boolean;
   customer?: PosSaleCustomer | null;
   resellerId?: string | null;
   resellerName?: string | null;
@@ -284,9 +285,12 @@ export async function completePosSale(
     }
   }
 
-  const customerType = parsePosCustomerType(input.customerType);
+  const rawCustomerType = parsePosCustomerType(input.customerType);
+  const isDelivery = input.isDelivery === true || rawCustomerType === "delivery";
+  const customerType =
+    rawCustomerType === "delivery" ? "walk_in" : rawCustomerType;
   const noCharge = isNonRevenueCustomerType(customerType);
-  if (requiresPosCustomerName(customerType)) {
+  if (requiresPosCustomerName(customerType, isDelivery)) {
     if (!input.customer?.name?.trim()) {
       throw new Error(
         customerType === "co_owner"
@@ -554,8 +558,9 @@ export async function completePosSale(
       paymentAccount: primaryAccount,
       payments,
       customerType,
+      isDelivery,
       customer:
-        requiresPosCustomerName(customerType) || voucherId
+        requiresPosCustomerName(customerType, isDelivery) || voucherId
           ? (input.customer ?? null)
           : null,
       resellerId: noCharge ? null : (input.resellerId ?? null),
@@ -678,6 +683,7 @@ export interface UpdatePosSaleInput {
   items: PosSaleItem[];
   payments: PosPaymentLine[];
   customerType?: PosCustomerType;
+  isDelivery?: boolean;
   customer?: PosSaleCustomer | null;
   /** Local `YYYY-MM-DD` — admin only. */
   saleDate?: string | null;
@@ -787,11 +793,18 @@ export async function updatePosSale(
     throw new Error("Only admins can change the sale date");
   }
 
-  const customerType = parsePosCustomerType(
+  const rawCustomerType = parsePosCustomerType(
     input.customerType ?? existing.customerType
   );
+  const isDelivery =
+    input.isDelivery ??
+    (existing.isDelivery === true ||
+      existing.customerType === "delivery" ||
+      rawCustomerType === "delivery");
+  const customerType =
+    rawCustomerType === "delivery" ? "walk_in" : rawCustomerType;
   const noCharge = isNonRevenueCustomerType(customerType);
-  if (requiresPosCustomerName(customerType)) {
+  if (requiresPosCustomerName(customerType, isDelivery)) {
     if (!input.customer?.name?.trim() && !existing.customer?.name?.trim()) {
       throw new Error(
         customerType === "co_owner"
@@ -801,17 +814,22 @@ export async function updatePosSale(
     }
   }
 
+  const keepCustomer =
+    requiresPosCustomerName(customerType, isDelivery) ||
+    Boolean(existing.voucherId);
   const customer =
     input.customer === undefined
       ? existing.customer
-      : input.customer
+      : keepCustomer && input.customer
         ? {
             name: input.customer.name?.trim() || null,
             mobile: input.customer.mobile?.trim() || null,
             email: input.customer.email?.trim() || null,
             address: input.customer.address?.trim() || null,
           }
-        : null;
+        : keepCustomer
+          ? existing.customer
+          : null;
 
   const rawItems = input.items.map((item) => {
     const quantity = Math.max(0, Math.floor(Number(item.quantity) || 0));
@@ -991,6 +1009,7 @@ export async function updatePosSale(
       tenderMethod: primary?.tenderMethod ?? existing.tenderMethod,
       paymentAccount: primary?.paymentAccount ?? null,
       customerType,
+      isDelivery,
       customer,
     };
 
@@ -1005,6 +1024,56 @@ export async function updatePosSale(
     }
 
     tx.update(saleDoc, patch);
+  });
+
+  const updated = await getPosSale(saleId);
+  if (!updated) {
+    throw new Error("Sale not found after update");
+  }
+
+  await logPosSaleEdit({
+    previous: existing,
+    next: updated,
+    performedBy: input.actor.userId,
+    performedByName: input.actor.name,
+    performedByRole: input.actor.role ?? null,
+  });
+
+  return updated;
+}
+
+/** Mark a sale for delivery without changing customer type, items, or payments. */
+export async function updatePosSaleDeliveryDetails(
+  saleId: string,
+  input: {
+    customer: PosSaleCustomer;
+    actor: UpdatePosSaleActor;
+  }
+): Promise<PosSale> {
+  const existing = await getPosSale(saleId);
+  if (!existing) {
+    throw new Error("Sale not found");
+  }
+  if (isPosSaleArchived(existing)) {
+    throw new Error("Archived sales cannot be edited");
+  }
+  assertCanEditSale(existing, input.actor);
+
+  const name = input.customer.name?.trim() || "";
+  if (!name) {
+    throw new Error("Customer name is required");
+  }
+
+  const customer: PosSaleCustomer = {
+    name,
+    mobile: input.customer.mobile?.trim() || null,
+    email: input.customer.email?.trim() || null,
+    address: input.customer.address?.trim() || null,
+  };
+
+  await updateDoc(doc(getClientDb(), COLLECTIONS.posSales, saleId), {
+    isDelivery: true,
+    customer,
   });
 
   const updated = await getPosSale(saleId);

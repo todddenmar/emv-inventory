@@ -34,7 +34,11 @@ import { getPosSale, isPosSaleArchived } from "@/lib/firestore/pos-sales";
 import { paymentAccountTypeLabel } from "@/lib/firestore/payment-accounts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { tenderMethodLabel, formatPaymentLineNote, paymentKindLabel } from "@/lib/pos-payments";
-import { posCustomerTypeLabel, isNonRevenueCustomerType } from "@/lib/pos-customer-type";
+import {
+  isNonRevenueCustomerType,
+  isPosSaleDelivery,
+  posCustomerTypeLabel,
+} from "@/lib/pos-customer-type";
 import { cn } from "@/lib/utils";
 import type { PosSale } from "@/types";
 
@@ -111,6 +115,9 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
         ) : null}
         <Badge variant="secondary">{paymentSummary}</Badge>
         <Badge variant="outline">{posCustomerTypeLabel(sale.customerType)}</Badge>
+        {isPosSaleDelivery(sale) ? (
+          <Badge variant="outline">Delivery</Badge>
+        ) : null}
         <Badge variant="outline" className="font-mono text-[10px]">
           {sale.id.slice(0, 8)}…
         </Badge>
@@ -394,7 +401,9 @@ function SaleInvoiceBody({ sale }: { sale: PosSale }) {
             </dl>
           </section>
 
-          {hasCustomer || sale.customerType !== "walk_in" ? (
+          {hasCustomer ||
+          sale.customerType !== "walk_in" ||
+          isPosSaleDelivery(sale) ? (
             <section className="rounded-xl border p-4">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
                 <User className="h-4 w-4 text-muted-foreground" />

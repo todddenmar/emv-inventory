@@ -20,6 +20,17 @@ export interface AppUser {
   updatedAt: Date;
 }
 
+export interface DeliveryReceiptCompany {
+  companyName: string;
+  tagline: string;
+  address: string;
+  phone: string;
+  email: string;
+  footerNote: string;
+  logoUrl: string;
+  logoStoragePath: string;
+}
+
 export interface Branch {
   id: string;
   name: string;
@@ -33,6 +44,8 @@ export interface Branch {
   isActive: boolean;
   /** When true, this branch can run wholesale POS. */
   supportsWholesale: boolean;
+  /** Company header printed on this branch’s delivery receipts. */
+  deliveryReceipt?: DeliveryReceiptCompany | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -458,6 +471,8 @@ export interface PosSale {
   /** Full tender split covering amountDue. */
   payments: PosPaymentLine[];
   customerType: PosCustomerType;
+  /** When true, this sale is a delivery and appears on Deliveries. */
+  isDelivery: boolean;
   customer: PosSaleCustomer | null;
   resellerId: string | null;
   resellerName: string | null;

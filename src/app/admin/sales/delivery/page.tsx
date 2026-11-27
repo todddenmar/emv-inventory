@@ -1,13 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { CustomerTypeSalesPage } from "@/components/admin/customer-type-sales-page";
-
-export default function AdminDeliverySalesPage() {
-  return (
-    <CustomerTypeSalesPage
-      customerType="delivery"
-      title="Delivery sales"
-      description="Sales marked as delivery, newest first"
-    />
-  );
+export default function AdminSalesDeliveryRedirectPage() {
+  redirect("/admin/deliveries/sales");
 }

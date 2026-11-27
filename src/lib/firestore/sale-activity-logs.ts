@@ -18,6 +18,7 @@ import {
   paymentKindLabel,
   tenderMethodLabel,
 } from "@/lib/pos-payments";
+import { isPosSaleDelivery } from "@/lib/pos-customer-type";
 import type {
   PosPaymentLine,
   PosSale,
@@ -106,12 +107,18 @@ export async function logPosSaleEdit(options: {
   const nextItems = summarizePosItems(options.next.items);
   const previousDetails = [
     options.previous.customerType,
+    isPosSaleDelivery(options.previous) ? "delivery" : null,
     summarizeCustomer(options.previous.customer),
-  ].join(" · ");
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const nextDetails = [
     options.next.customerType,
+    isPosSaleDelivery(options.next) ? "delivery" : null,
     summarizeCustomer(options.next.customer),
-  ].join(" · ");
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const paymentsChanged = previousPayments !== nextPayments;
   const dateChanged = previousSaleDate !== nextSaleDate;

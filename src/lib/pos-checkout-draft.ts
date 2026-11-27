@@ -23,6 +23,7 @@ export interface PosCheckoutDraft {
   lines: PosCartLine[];
   paymentMethod: PosPaymentMethod;
   customerType: PosCustomerType;
+  isDelivery: boolean;
   customer: PosCustomerDraft;
   appliedVoucher: Voucher | null;
   /** Manual less amount; null = use full voucher entitlement. */
@@ -131,10 +132,13 @@ export function loadPosCheckoutDraft(
           ? Number(overrideRaw)
           : null;
 
+    const parsedType = parsePosCustomerType(parsed.customerType);
     return {
       ...parsed,
       voucherAppliedOverride,
-      customerType: parsePosCustomerType(parsed.customerType),
+      customerType: parsedType === "delivery" ? "walk_in" : parsedType,
+      isDelivery:
+        parsed.isDelivery === true || parsed.customerType === "delivery",
       lines: parsed.lines.map((line) => ensureCartLinePaymentFields(line)),
       paymentGroups: sanitizePaymentGroups(
         parsed.paymentGroups,
