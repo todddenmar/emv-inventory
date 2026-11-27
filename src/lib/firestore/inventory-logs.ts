@@ -267,6 +267,8 @@ export function inventoryLogReasonLabel(reason: InventoryLogReason): string {
       return "Supplier stock in";
     case "reseller_transfer_out":
       return "Reseller transfer";
+    case "consignment_out":
+      return "Consignment delivery";
     case "undo":
       return "Undo";
   }

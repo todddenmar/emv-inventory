@@ -93,6 +93,7 @@ const REASON_OPTIONS: { value: ReasonFilter; label: string }[] = [
   { value: "transfer_in", label: "Transfer in" },
   { value: "transfer_out", label: "Transfer out" },
   { value: "reseller_transfer_out", label: "Reseller transfer" },
+  { value: "consignment_out", label: "Consignment delivery" },
   { value: "undo", label: "Undo" },
 ];
 

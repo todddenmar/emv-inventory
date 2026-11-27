@@ -1,6 +1,7 @@
 import {
   ArrowLeftRight,
   FileText,
+  Package,
   Settings,
   Truck,
   type LucideIcon,
@@ -25,6 +26,12 @@ export const deliveriesNavItems: DeliveriesNavItem[] = [
     label: "Delivery Transfers",
     icon: ArrowLeftRight,
     description: "Completed branch-to-branch transfers",
+  },
+  {
+    href: "/admin/deliveries/consignment",
+    label: "Consignment",
+    icon: Package,
+    description: "Deliveries to reusable consignees",
   },
   {
     href: "/admin/deliveries/receipts",

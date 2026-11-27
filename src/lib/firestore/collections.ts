@@ -18,6 +18,8 @@ export const COLLECTIONS = {
   supplierStockIns: "physicalSupplierStockIns",
   resellerTransfers: "physicalResellerTransfers",
   resellers: "physicalResellers",
+  consignees: "physicalConsignees",
+  consignmentDeliveries: "physicalConsignmentDeliveries",
   loyaltyCards: "physicalLoyaltyCards",
   vouchers: "physicalVouchers",
   voucherRedemptions: "physicalVoucherRedemptions",

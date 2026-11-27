@@ -237,6 +237,7 @@ export function summarizeStockMovements(
     "transfer_in",
     "transfer_out",
     "reseller_transfer_out",
+    "consignment_out",
     "manual_adjustment",
     "undo",
   ];

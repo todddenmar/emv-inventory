@@ -412,6 +412,21 @@ service cloud.firestore {
       allow delete: if isElevatedAdmin();
     }
 
+    match /physicalConsignees/{consigneeId} {
+      allow read: if isStaff();
+      allow create, update: if isStaff();
+      allow delete: if isElevatedAdmin();
+    }
+
+    match /physicalConsignmentDeliveries/{deliveryId} {
+      allow read: if isStaff() &&
+        (canReadAllBranches() || resource.data.branchId == managerBranchId());
+      allow create: if canMutateStock() &&
+        request.resource.data.branchId != null &&
+        canAccessBranch(request.resource.data.branchId);
+      allow update, delete: if false;
+    }
+
     match /physicalLoyaltyCards/{cardId} {
       allow read: if isStaff();
       allow create, update: if isElevatedAdmin();

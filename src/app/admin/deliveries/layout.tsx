@@ -53,7 +53,7 @@ export default function AdminDeliveriesLayout({
         <div className="mb-3 md:mb-4">
           <h2 className="text-sm font-semibold">Deliveries</h2>
           <p className="hidden text-xs text-muted-foreground md:block">
-            Delivery sales, transfers, receipts, and company details
+            Delivery sales, transfers, consignment, and company details
           </p>
         </div>
         <DeliveriesNav className="flex-row overflow-x-auto md:flex-col md:overflow-visible" />

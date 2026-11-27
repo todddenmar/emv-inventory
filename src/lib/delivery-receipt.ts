@@ -1,6 +1,7 @@
 import { formatCurrency } from "@/lib/format";
 import type {
   BranchTransfer,
+  ConsignmentDelivery,
   DeliveryReceiptCompany,
   PosSale,
 } from "@/types";
@@ -567,6 +568,89 @@ export async function printTransferDeliveryReceipt(
 ): Promise<void> {
   await printReceiptHtml(
     buildTransferDeliveryReceiptHtml(transfer, company, destination, options),
+    options?.title
+  );
+}
+
+export function buildConsignmentDeliveryReceiptHtml(
+  delivery: ConsignmentDelivery,
+  company?: DeliveryReceiptCompany | null,
+  options?: { title?: string }
+): string {
+  const details = normalizeDeliveryReceiptCompany(company);
+  const { brand, footer } = companyHeaderHtml(details);
+  const consignor = details.companyName.trim();
+  const consigneeName = delivery.consigneeName?.trim() || "";
+  const consigneeMobile = delivery.consigneeMobile?.trim() || "";
+  const consigneeAddress = delivery.consigneeAddress?.trim() || "";
+  const processedBy = delivery.createdByName?.trim() || "";
+  const receiptNo = delivery.drNumber || delivery.id;
+
+  const items = (delivery.items ?? [])
+    .map((item) => {
+      return `<tr>
+        <td>${escapeHtml(item.productName)}</td>
+        <td class="num">${escapeHtml(item.quantity)}</td>
+        <td>${escapeHtml(item.unit || "pcs")}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const consigneeLines = [
+    consigneeName
+      ? `<p class="bill-name">${escapeHtml(consigneeName)}</p>`
+      : "",
+    consigneeMobile
+      ? `<p class="bill-line">${escapeHtml(consigneeMobile)}</p>`
+      : "",
+    consigneeAddress
+      ? `<p class="bill-line">${escapeHtml(consigneeAddress)}</p>`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("");
+
+  const title =
+    options?.title || `Consignment Delivery Receipt ${receiptNo}`;
+  return wrapReceiptHtml(
+    title,
+    `  <div class="header">
+    ${brand}
+    <div class="doc">
+      <p class="doc-title">Consignment Delivery Receipt</p>
+      <table class="meta">
+        ${metaRow("DR Number", receiptNo)}
+        ${metaRow("Date", formatReceiptDate(delivery.createdAt))}
+        ${metaRow("Reference No", delivery.referenceNumber?.trim() || "")}
+        ${metaRow("Consignor", consignor)}
+      </table>
+    </div>
+  </div>
+  <div class="bill-to">
+    <p class="bill-label">Consignee :</p>
+    ${consigneeLines || `<p class="bill-line">—</p>`}
+  </div>
+  <table class="items">
+    <thead>
+      <tr>
+        <th>PRODUCT NAME</th>
+        <th class="num">QTY DELIVERED</th>
+        <th>UNIT</th>
+      </tr>
+    </thead>
+    <tbody>${items || `<tr><td colspan="3">—</td></tr>`}</tbody>
+  </table>
+  ${signatureBlockHtml(processedBy, footer)}`
+  );
+}
+
+export async function printConsignmentDeliveryReceipt(
+  delivery: ConsignmentDelivery,
+  company?: DeliveryReceiptCompany | null,
+  options?: { title?: string }
+): Promise<void> {
+  await printReceiptHtml(
+    buildConsignmentDeliveryReceiptHtml(delivery, company, options),
     options?.title
   );
 }

@@ -33,6 +33,8 @@ import type {
   ProductSpec,
   ProductVariant,
   Reseller,
+  Consignee,
+  ConsignmentDelivery,
   ResellerTransfer,
   LoyaltyCard,
   SupplierStockIn,
@@ -1152,6 +1154,36 @@ export const paymentMethodConverter: FirestoreDataConverter<PaymentMethod> = {
   },
 };
 
+export const consigneeConverter: FirestoreDataConverter<Consignee> = {
+  toFirestore(consignee: Consignee): DocumentData {
+    return {
+      name: consignee.name,
+      mobile: consignee.mobile,
+      address: consignee.address,
+      notes: consignee.notes,
+      isActive: consignee.isActive,
+      createdAt: consignee.createdAt,
+      updatedAt: consignee.updatedAt,
+    };
+  },
+  fromFirestore(
+    snapshot: QueryDocumentSnapshot,
+    options: SnapshotOptions
+  ): Consignee {
+    const data = snapshot.data(options);
+    return {
+      id: snapshot.id,
+      name: data.name ?? "",
+      mobile: data.mobile ?? null,
+      address: data.address ?? null,
+      notes: data.notes ?? null,
+      isActive: data.isActive !== false,
+      createdAt: toDate(data.createdAt),
+      updatedAt: toDate(data.updatedAt),
+    };
+  },
+};
+
 export const resellerConverter: FirestoreDataConverter<Reseller> = {
   toFirestore(reseller: Reseller): DocumentData {
     return {
@@ -1330,6 +1362,58 @@ export const supplierStockInConverter: FirestoreDataConverter<SupplierStockIn> =
     };
   },
 };
+
+export const consignmentDeliveryConverter: FirestoreDataConverter<ConsignmentDelivery> =
+  {
+    toFirestore(entry: ConsignmentDelivery): DocumentData {
+      return {
+        drNumber: entry.drNumber,
+        branchId: entry.branchId,
+        branchName: entry.branchName,
+        consigneeId: entry.consigneeId,
+        consigneeName: entry.consigneeName,
+        consigneeMobile: entry.consigneeMobile,
+        consigneeAddress: entry.consigneeAddress,
+        referenceNumber: entry.referenceNumber,
+        items: entry.items,
+        itemCount: entry.itemCount,
+        notes: entry.notes,
+        createdBy: entry.createdBy,
+        createdByName: entry.createdByName,
+        createdAt: entry.createdAt,
+      };
+    },
+    fromFirestore(
+      snapshot: QueryDocumentSnapshot,
+      options: SnapshotOptions
+    ): ConsignmentDelivery {
+      const data = snapshot.data(options);
+      const rawItems = (data.items ?? []) as ConsignmentDelivery["items"];
+      return {
+        id: snapshot.id,
+        drNumber: data.drNumber ?? snapshot.id,
+        branchId: data.branchId,
+        branchName: data.branchName ?? "",
+        consigneeId: data.consigneeId,
+        consigneeName: data.consigneeName ?? "",
+        consigneeMobile: data.consigneeMobile ?? null,
+        consigneeAddress: data.consigneeAddress ?? null,
+        referenceNumber: data.referenceNumber ?? null,
+        items: rawItems.map((item) => ({
+          productId: item.productId,
+          variantId: item.variantId,
+          productName: item.productName,
+          quantity: item.quantity,
+          unit: item.unit?.trim() || "pcs",
+        })),
+        itemCount: data.itemCount ?? 0,
+        notes: data.notes ?? null,
+        createdBy: data.createdBy,
+        createdByName: data.createdByName ?? null,
+        createdAt: toDate(data.createdAt),
+      };
+    },
+  };
 
 export const resellerTransferConverter: FirestoreDataConverter<ResellerTransfer> = {
   toFirestore(entry: ResellerTransfer): DocumentData {

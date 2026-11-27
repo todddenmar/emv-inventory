@@ -200,6 +200,7 @@ export type InventoryLogReason =
   | "pos_sale_restock"
   | "supplier_stock_in"
   | "reseller_transfer_out"
+  | "consignment_out"
   | "undo";
 
 export interface InventoryLog {
@@ -581,6 +582,18 @@ export interface Reseller {
   updatedAt: Date;
 }
 
+/** External store/recipient for consignment deliveries. */
+export interface Consignee {
+  id: string;
+  name: string;
+  mobile: string | null;
+  address: string | null;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 /** Customer loyalty card / membership profile. */
 export interface LoyaltyCard {
   id: string;
@@ -694,6 +707,33 @@ export interface ResellerTransfer {
   resellerId: string;
   resellerName: string;
   items: ResellerTransferItem[];
+  itemCount: number;
+  notes: string | null;
+  createdBy: string;
+  createdByName: string | null;
+  createdAt: Date;
+}
+
+export interface ConsignmentDeliveryItem {
+  productId: string;
+  productName: string;
+  variantId: string;
+  quantity: number;
+  unit: string;
+}
+
+/** Stock issued from a branch to a consignee (one-way out). */
+export interface ConsignmentDelivery {
+  id: string;
+  drNumber: string;
+  branchId: string;
+  branchName: string;
+  consigneeId: string;
+  consigneeName: string;
+  consigneeMobile: string | null;
+  consigneeAddress: string | null;
+  referenceNumber: string | null;
+  items: ConsignmentDeliveryItem[];
   itemCount: number;
   notes: string | null;
   createdBy: string;
