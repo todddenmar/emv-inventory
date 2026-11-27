@@ -1,5 +1,9 @@
 import { formatCurrency } from "@/lib/format";
-import type { DeliveryReceiptCompany, PosSale } from "@/types";
+import type {
+  BranchTransfer,
+  DeliveryReceiptCompany,
+  PosSale,
+} from "@/types";
 
 export type { DeliveryReceiptCompany };
 
@@ -166,102 +170,8 @@ function metaRow(label: string, value: string): string {
   </tr>`;
 }
 
-function waitForImages(doc: Document): Promise<void> {
-  const pending = Array.from(doc.images).filter((img) => !img.complete);
-  if (pending.length === 0) return Promise.resolve();
-
-  return Promise.race([
-    Promise.all(
-      pending.map(
-        (img) =>
-          new Promise<void>((resolve) => {
-            img.addEventListener("load", () => resolve(), { once: true });
-            img.addEventListener("error", () => resolve(), { once: true });
-          })
-      )
-    ).then(() => undefined),
-    new Promise<void>((resolve) => {
-      window.setTimeout(resolve, 4000);
-    }),
-  ]);
-}
-
-export function buildDeliveryReceiptHtml(
-  sale: PosSale,
-  company?: DeliveryReceiptCompany | null,
-  options?: { title?: string }
-): string {
-  const details = normalizeDeliveryReceiptCompany(company);
-  const merchandiseTotal = sale.total ?? 0;
-  const discount = sale.voucherAmountApplied ?? 0;
-  const amountDue = sale.amountDue ?? merchandiseTotal;
-  const customerName = customerText(sale, "name");
-  const customerAddress = customerText(sale, "address");
-  const customerMobile = customerText(sale, "mobile");
-  const customerEmail = customerText(sale, "email");
-  const processedBy = sale.createdByName?.trim() || "";
-  const footer = details.footerNote || "Thank you for doing business with us!";
-  const receiptNo = sale.id;
-
-  const items = (sale.items ?? [])
-    .map((item) => {
-      return `<tr>
-        <td>${escapeHtml(item.productName)}</td>
-        <td class="num">${escapeHtml(item.quantity)}</td>
-        <td class="num">${escapeHtml(formatCurrency(item.unitPrice))}</td>
-        <td class="num">${escapeHtml(formatCurrency(item.lineTotal))}</td>
-      </tr>`;
-    })
-    .join("");
-
-  const billToLines = [
-    customerName
-      ? `<p class="bill-name">${escapeHtml(customerName)}</p>`
-      : "",
-    customerAddress
-      ? `<p class="bill-line">${escapeHtml(customerAddress)}</p>`
-      : "",
-    customerMobile
-      ? `<p class="bill-line">${escapeHtml(customerMobile)}</p>`
-      : "",
-    customerEmail
-      ? `<p class="bill-line">${escapeHtml(customerEmail)}</p>`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("");
-
-  const totalsRows = [
-    `<tr><td>SUBTOTAL</td><td class="num">${escapeHtml(formatCurrency(merchandiseTotal))}</td></tr>`,
-    discount > 0
-      ? `<tr><td>Discount</td><td class="num">${escapeHtml(formatCurrency(discount))}</td></tr>`
-      : "",
-    `<tr class="due"><td>AMOUNT DUE</td><td class="num">${escapeHtml(formatCurrency(amountDue))}</td></tr>`,
-  ]
-    .filter(Boolean)
-    .join("");
-
-  const companyName = details.companyName;
-  const contactLines = [
-    details.address
-      ? `<p class="contact">${escapeHtml(details.address)}</p>`
-      : "",
-    details.phone
-      ? `<p class="contact">${escapeHtml(details.phone)}</p>`
-      : "",
-    details.email
-      ? `<p class="contact">${escapeHtml(details.email)}</p>`
-      : "",
-  ]
-    .filter(Boolean)
-    .join("");
-
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<title>${escapeHtml(options?.title || `Delivery receipt ${receiptNo}`)}</title>
-<style>
+function receiptDocumentCss(): string {
+  return `
   @page { size: A4 portrait; margin: 12mm; }
   * { box-sizing: border-box; }
   html, body { background: #fff; }
@@ -342,12 +252,28 @@ export function buildDeliveryReceiptHtml(
     margin-top: 16px;
     color: #555;
     font-size: 11px;
-  }
-</style>
-</head>
-<body>
-  <div class="header">
-    <div class="brand">
+  }`;
+}
+
+function companyHeaderHtml(details: DeliveryReceiptCompany): {
+  brand: string;
+  footer: string;
+} {
+  const companyName = details.companyName;
+  const contactLines = [
+    details.address
+      ? `<p class="contact">${escapeHtml(details.address)}</p>`
+      : "",
+    details.phone
+      ? `<p class="contact">${escapeHtml(details.phone)}</p>`
+      : "",
+    details.email
+      ? `<p class="contact">${escapeHtml(details.email)}</p>`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("");
+  const brand = `<div class="brand">
       ${
         details.logoUrl
           ? `<img class="logo" src="${escapeHtml(details.logoUrl)}" alt="" />`
@@ -356,7 +282,128 @@ export function buildDeliveryReceiptHtml(
       ${companyName ? `<p class="company-name">${escapeHtml(companyName)}</p>` : ""}
       ${details.tagline ? `<p class="tagline">${escapeHtml(details.tagline)}</p>` : ""}
       ${contactLines}
+    </div>`;
+  const footer = details.footerNote || "Thank you for doing business with us!";
+  return { brand, footer };
+}
+
+function signatureBlockHtml(processedBy: string, footer: string): string {
+  return `<div class="sign-block">
+    <div class="sign-row">
+      <div class="sign-line">Date: <span></span></div>
+      <div class="sign-line">Time : <span></span></div>
     </div>
+    <div class="sign-row">
+      <div class="sign-line">Receiving Signature : <span></span></div>
+      <div class="sign-line">Print Name : <span></span></div>
+    </div>
+    ${
+      processedBy
+        ? `<div class="processed"><div>Processed by</div><div class="name">${escapeHtml(processedBy)}</div></div>`
+        : ""
+    }
+  </div>
+  <p class="footer-note">${escapeHtml(footer)}</p>
+  <div class="bottom">
+    <span>System Generated</span>
+    <span>${escapeHtml(formatReceiptDate(new Date()))}</span>
+  </div>`;
+}
+
+function waitForImages(doc: Document): Promise<void> {
+  const pending = Array.from(doc.images).filter((img) => !img.complete);
+  if (pending.length === 0) return Promise.resolve();
+
+  return Promise.race([
+    Promise.all(
+      pending.map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            img.addEventListener("load", () => resolve(), { once: true });
+            img.addEventListener("error", () => resolve(), { once: true });
+          })
+      )
+    ).then(() => undefined),
+    new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 4000);
+    }),
+  ]);
+}
+
+function wrapReceiptHtml(title: string, body: string): string {
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(title)}</title>
+<style>${receiptDocumentCss()}</style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+}
+
+export function buildDeliveryReceiptHtml(
+  sale: PosSale,
+  company?: DeliveryReceiptCompany | null,
+  options?: { title?: string }
+): string {
+  const details = normalizeDeliveryReceiptCompany(company);
+  const { brand, footer } = companyHeaderHtml(details);
+  const merchandiseTotal = sale.total ?? 0;
+  const discount = sale.voucherAmountApplied ?? 0;
+  const amountDue = sale.amountDue ?? merchandiseTotal;
+  const customerName = customerText(sale, "name");
+  const customerAddress = customerText(sale, "address");
+  const customerMobile = customerText(sale, "mobile");
+  const customerEmail = customerText(sale, "email");
+  const processedBy = sale.createdByName?.trim() || "";
+  const receiptNo = sale.id;
+
+  const items = (sale.items ?? [])
+    .map((item) => {
+      return `<tr>
+        <td>${escapeHtml(item.productName)}</td>
+        <td class="num">${escapeHtml(item.quantity)}</td>
+        <td class="num">${escapeHtml(formatCurrency(item.unitPrice))}</td>
+        <td class="num">${escapeHtml(formatCurrency(item.lineTotal))}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const billToLines = [
+    customerName
+      ? `<p class="bill-name">${escapeHtml(customerName)}</p>`
+      : "",
+    customerAddress
+      ? `<p class="bill-line">${escapeHtml(customerAddress)}</p>`
+      : "",
+    customerMobile
+      ? `<p class="bill-line">${escapeHtml(customerMobile)}</p>`
+      : "",
+    customerEmail
+      ? `<p class="bill-line">${escapeHtml(customerEmail)}</p>`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("");
+
+  const totalsRows = [
+    `<tr><td>SUBTOTAL</td><td class="num">${escapeHtml(formatCurrency(merchandiseTotal))}</td></tr>`,
+    discount > 0
+      ? `<tr><td>Discount</td><td class="num">${escapeHtml(formatCurrency(discount))}</td></tr>`
+      : "",
+    `<tr class="due"><td>AMOUNT DUE</td><td class="num">${escapeHtml(formatCurrency(amountDue))}</td></tr>`,
+  ]
+    .filter(Boolean)
+    .join("");
+
+  const title = options?.title || `Delivery receipt ${receiptNo}`;
+  return wrapReceiptHtml(
+    title,
+    `  <div class="header">
+    ${brand}
     <div class="doc">
       <p class="doc-title">Delivery receipt</p>
       <table class="meta">
@@ -383,34 +430,85 @@ export function buildDeliveryReceiptHtml(
   <div class="totals-wrap">
     <table class="totals">${totalsRows}</table>
   </div>
-  <div class="sign-block">
-    <div class="sign-row">
-      <div class="sign-line">Date: <span></span></div>
-      <div class="sign-line">Time : <span></span></div>
-    </div>
-    <div class="sign-row">
-      <div class="sign-line">Receiving Signature : <span></span></div>
-      <div class="sign-line">Print Name : <span></span></div>
-    </div>
-    ${
-      processedBy
-        ? `<div class="processed"><div>Processed by</div><div class="name">${escapeHtml(processedBy)}</div></div>`
-        : ""
-    }
-  </div>
-  <p class="footer-note">${escapeHtml(footer)}</p>
-  <div class="bottom">
-    <span>System Generated</span>
-    <span>${escapeHtml(formatReceiptDate(new Date()))}</span>
-  </div>
-</body>
-</html>`;
+  ${signatureBlockHtml(processedBy, footer)}`
+  );
 }
 
-export async function printDeliveryReceipt(
-  sale: PosSale,
+export type TransferReceiptDestination = {
+  name: string;
+  address?: string;
+  phone?: string | null;
+};
+
+export function buildTransferDeliveryReceiptHtml(
+  transfer: BranchTransfer,
   company?: DeliveryReceiptCompany | null,
+  destination?: TransferReceiptDestination | null,
   options?: { title?: string }
+): string {
+  const details = normalizeDeliveryReceiptCompany(company);
+  const { brand, footer } = companyHeaderHtml(details);
+  const destName =
+    destination?.name?.trim() || transfer.toBranchName?.trim() || "";
+  const destAddress = destination?.address?.trim() || "";
+  const destPhone = destination?.phone?.trim() || "";
+  const processedBy = transfer.createdByName?.trim() || "";
+  const receiptNo = transfer.id;
+
+  const items = (transfer.items ?? [])
+    .map((item) => {
+      return `<tr>
+        <td>${escapeHtml(item.productName)}</td>
+        <td class="num">${escapeHtml(item.quantity)}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const billToLines = [
+    destName ? `<p class="bill-name">${escapeHtml(destName)}</p>` : "",
+    destAddress
+      ? `<p class="bill-line">${escapeHtml(destAddress)}</p>`
+      : "",
+    destPhone ? `<p class="bill-line">${escapeHtml(destPhone)}</p>` : "",
+  ]
+    .filter(Boolean)
+    .join("");
+
+  const title = options?.title || `Delivery receipt ${receiptNo}`;
+  return wrapReceiptHtml(
+    title,
+    `  <div class="header">
+    ${brand}
+    <div class="doc">
+      <p class="doc-title">Delivery receipt</p>
+      <table class="meta">
+        ${metaRow("Receipt Date", formatReceiptDate(transfer.createdAt))}
+        ${metaRow("Transfer No", receiptNo)}
+        ${metaRow("From", transfer.fromBranchName?.trim() || "")}
+        ${metaRow("To", destName)}
+      </table>
+    </div>
+  </div>
+  <div class="bill-to">
+    <p class="bill-label">Bill To :</p>
+    ${billToLines || `<p class="bill-line">—</p>`}
+  </div>
+  <table class="items">
+    <thead>
+      <tr>
+        <th>DESCRIPTION</th>
+        <th class="num">QTY</th>
+      </tr>
+    </thead>
+    <tbody>${items || `<tr><td colspan="2">—</td></tr>`}</tbody>
+  </table>
+  ${signatureBlockHtml(processedBy, footer)}`
+  );
+}
+
+async function printReceiptHtml(
+  html: string,
+  title?: string
 ): Promise<void> {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
@@ -430,10 +528,10 @@ export async function printDeliveryReceipt(
   }
 
   doc.open();
-  doc.write(buildDeliveryReceiptHtml(sale, company, options));
+  doc.write(html);
   doc.close();
-  if (options?.title) {
-    doc.title = options.title;
+  if (title) {
+    doc.title = title;
   }
 
   let removed = false;
@@ -448,4 +546,27 @@ export async function printDeliveryReceipt(
   await waitForImages(doc);
   win.focus();
   win.print();
+}
+
+export async function printDeliveryReceipt(
+  sale: PosSale,
+  company?: DeliveryReceiptCompany | null,
+  options?: { title?: string }
+): Promise<void> {
+  await printReceiptHtml(
+    buildDeliveryReceiptHtml(sale, company, options),
+    options?.title
+  );
+}
+
+export async function printTransferDeliveryReceipt(
+  transfer: BranchTransfer,
+  company?: DeliveryReceiptCompany | null,
+  destination?: TransferReceiptDestination | null,
+  options?: { title?: string }
+): Promise<void> {
+  await printReceiptHtml(
+    buildTransferDeliveryReceiptHtml(transfer, company, destination, options),
+    options?.title
+  );
 }

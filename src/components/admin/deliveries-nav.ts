@@ -1,4 +1,10 @@
-import { FileText, Settings, Truck, type LucideIcon } from "lucide-react";
+import {
+  ArrowLeftRight,
+  FileText,
+  Settings,
+  Truck,
+  type LucideIcon,
+} from "lucide-react";
 
 export type DeliveriesNavItem = {
   href: string;
@@ -13,6 +19,12 @@ export const deliveriesNavItems: DeliveriesNavItem[] = [
     label: "Delivery sales",
     icon: Truck,
     description: "Sales marked for delivery",
+  },
+  {
+    href: "/admin/deliveries/transfers",
+    label: "Delivery Transfers",
+    icon: ArrowLeftRight,
+    description: "Completed branch-to-branch transfers",
   },
   {
     href: "/admin/deliveries/receipts",
